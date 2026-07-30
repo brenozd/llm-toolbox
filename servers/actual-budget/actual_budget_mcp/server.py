@@ -23,7 +23,9 @@ mcp = FastMCP("actual-budget", lifespan=lifespan)
 
 
 def _actual(ctx: Context) -> Actual:
-    return ctx.request_context.lifespan_context
+    actual = ctx.request_context.lifespan_context
+    actual.sync()
+    return actual
 
 
 def _session(ctx: Context):
