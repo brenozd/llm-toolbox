@@ -46,7 +46,7 @@ def transaction_to_dict(t: Transactions) -> dict:
     }
 
 
-def budget_to_dict(b: BaseBudgets, month: datetime.date, category_name: str | None) -> dict:
+def budget_to_dict(b: BaseBudgets | None, month: datetime.date, category_name: str | None) -> dict:
     return {
         "month": month.strftime("%Y-%m"),
         "category_id": b.category_id if b else None,
