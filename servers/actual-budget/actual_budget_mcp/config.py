@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 DEFAULT_CONFIG_PATH = "/config/config.json"
@@ -18,9 +18,9 @@ class ConfigError(ValueError):
 @dataclass(frozen=True)
 class ActualConfig:
     server_url: str
-    password: str
+    password: str = field(repr=False)
     file: str
-    encryption_password: str | None = None
+    encryption_password: str | None = field(default=None, repr=False)
     data_dir: str = DEFAULT_DATA_DIR
     cert: bool | str = True
 
