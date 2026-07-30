@@ -26,10 +26,20 @@ budget itself is end-to-end encrypted; omit or set to `null` otherwise.
 is kept between runs — mount a volume there so restarts sync incrementally
 instead of re-downloading the whole budget.
 
-## Build
+## Image
+
+CI (`.forgejo/workflows/build-actual-budget.yml`) builds and pushes this on
+every push to `master` touching `servers/actual-budget/**`, and on
+`actual-budget-v*` tags:
 
 ```bash
-docker build -t actual-budget-mcp .
+docker pull git.bzd.gg/bzd/actual-budget-mcp:latest
+```
+
+To build locally instead:
+
+```bash
+docker build -t git.bzd.gg/bzd/actual-budget-mcp:latest .
 ```
 
 ## Run
@@ -47,7 +57,7 @@ Register it with a command like:
         "run", "-i", "--rm",
         "-v", "/path/to/config.json:/config/config.json:ro",
         "-v", "actual-budget-data:/data",
-        "actual-budget-mcp"
+        "git.bzd.gg/bzd/actual-budget-mcp:latest"
       ]
     }
   }
@@ -60,7 +70,7 @@ To try it by hand:
 docker run -i --rm \
   -v $(pwd)/config.json:/config/config.json:ro \
   -v actual-budget-data:/data \
-  actual-budget-mcp
+  git.bzd.gg/bzd/actual-budget-mcp:latest
 ```
 
 ## Tools
