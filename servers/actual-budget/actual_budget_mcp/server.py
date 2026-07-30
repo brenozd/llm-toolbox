@@ -22,9 +22,12 @@ async def lifespan(server: FastMCP) -> AsyncIterator[Actual]:
 mcp = FastMCP("actual-budget", lifespan=lifespan)
 
 
+def _actual(ctx: Context) -> Actual:
+    return ctx.request_context.lifespan_context
+
+
 def _session(ctx: Context):
-    actual: Actual = ctx.request_context.lifespan_context
-    return actual.session
+    return _actual(ctx).session
 
 
 @mcp.tool()
@@ -55,6 +58,41 @@ def list_transactions(
 def get_budget_amount(ctx: Context, month: str, category: str) -> dict:
     """Get the budgeted amount for a category in a given month (month as YYYY-MM)."""
     return t.get_budget_amount(_session(ctx), month, category)
+
+
+@mcp.tool()
+def create_new_transaction(
+    ctx: Context,
+    account: str,
+    date: str,
+    amount: float,
+    payee: str | None = None,
+    category: str | None = None,
+    notes: str | None = None,
+    cleared: bool = False,
+) -> dict:
+    """Create a transaction (date as YYYY-MM-DD, amount positive for deposits, negative for payments)."""
+    return t.create_new_transaction(_actual(ctx), account, date, amount, payee, category, notes, cleared)
+
+
+@mcp.tool()
+def update_existing_transaction(
+    ctx: Context,
+    transaction_id: str,
+    payee: str | None = None,
+    category: str | None = None,
+    amount: float | None = None,
+    notes: str | None = None,
+    cleared: bool | None = None,
+) -> dict:
+    """Update fields on an existing transaction by id. Only provided fields are changed."""
+    return t.update_existing_transaction(_actual(ctx), transaction_id, payee, category, amount, notes, cleared)
+
+
+@mcp.tool()
+def set_category_budget_amount(ctx: Context, month: str, category: str, amount: float) -> dict:
+    """Set the budgeted amount for a category in a given month (month as YYYY-MM). Creates the category if missing."""
+    return t.set_category_budget_amount(_actual(ctx), month, category, amount)
 
 
 def main() -> None:

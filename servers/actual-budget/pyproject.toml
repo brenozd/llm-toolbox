@@ -1,6 +1,6 @@
 [project]
 name = "actual-budget-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "MCP server exposing Actual Budget (actualbudget.org) accounts, transactions, categories, and budgets."
 requires-python = ">=3.11"
 dependencies = [
