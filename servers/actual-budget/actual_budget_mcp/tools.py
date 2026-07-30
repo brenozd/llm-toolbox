@@ -9,7 +9,9 @@ from actual.database import Transactions
 from actual.exceptions import ActualError
 from actual.queries import (
     create_budget,
+    create_rule as _create_rule,
     create_transaction,
+    get_account,
     get_accounts,
     get_budget,
     get_categories,
@@ -18,6 +20,7 @@ from actual.queries import (
     get_transactions,
     set_transaction_payee,
 )
+from actual.rules import Action, Condition, ConditionType, Rule, ValueType
 from actual.utils.conversions import decimal_to_cents
 
 from .serialize import account_to_dict, budget_to_dict, category_to_dict, transaction_to_dict
@@ -109,3 +112,45 @@ def set_category_budget_amount(actual: Actual, month: str, category: str, amount
     budget = create_budget(actual.session, month_date, resolved_category, amount)
     actual.commit()
     return budget_to_dict(budget, month_date, resolved_category.name)
+
+
+def mark_transaction_transfer(actual: Actual, transaction_id: str, counterpart_transaction_id: str) -> dict:
+    """Link two existing transactions (one per account) as a transfer pair, clearing their category."""
+    session = actual.session
+    txn = session.get(Transactions, transaction_id)
+    other = session.get(Transactions, counterpart_transaction_id)
+    if txn is None:
+        raise ActualError(f"Transaction '{transaction_id}' not found")
+    if other is None:
+        raise ActualError(f"Transaction '{counterpart_transaction_id}' not found")
+    if txn.acct == other.acct:
+        raise ActualError("Transactions must belong to different accounts to form a transfer")
+    txn_account = get_account(session, txn.acct)
+    other_account = get_account(session, other.acct)
+    set_transaction_payee(session, txn, other_account.payee)
+    set_transaction_payee(session, other, txn_account.payee)
+    txn.transferred_id = other.id
+    other.transferred_id = txn.id
+    txn.category_id = None
+    other.category_id = None
+    actual.commit()
+    return {"transaction": transaction_to_dict(txn), "counterpart": transaction_to_dict(other)}
+
+
+def create_payee_rule(actual: Actual, contains: str, category: str, run_immediately: bool = True) -> dict:
+    """Create a rule that sets `category` on any transaction whose imported bank description contains `contains`."""
+    resolved_category = get_or_create_category(actual.session, category)
+    rule = Rule(
+        conditions=[
+            Condition(field="imported_description", op=ConditionType.CONTAINS, value=contains, type=ValueType.STRING)
+        ],
+        actions=[Action(field="category", value=resolved_category.id)],
+    )
+    database_rule = _create_rule(actual.session, rule, run_immediately=run_immediately)
+    actual.commit()
+    return {
+        "rule_id": database_rule.id,
+        "contains": contains,
+        "category": resolved_category.name,
+        "run_immediately": run_immediately,
+    }

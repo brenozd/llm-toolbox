@@ -10,6 +10,8 @@ EXPECTED_TOOLS = {
     "create_new_transaction",
     "update_existing_transaction",
     "set_category_budget_amount",
+    "mark_transaction_transfer",
+    "create_payee_rule",
 }
 
 

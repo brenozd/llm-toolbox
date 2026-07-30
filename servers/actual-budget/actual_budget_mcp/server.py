@@ -95,6 +95,18 @@ def set_category_budget_amount(ctx: Context, month: str, category: str, amount: 
     return t.set_category_budget_amount(_actual(ctx), month, category, amount)
 
 
+@mcp.tool()
+def mark_transaction_transfer(ctx: Context, transaction_id: str, counterpart_transaction_id: str) -> dict:
+    """Link two existing transactions (one per account) as a transfer pair, clearing their category so they stop counting as income/spend."""
+    return t.mark_transaction_transfer(_actual(ctx), transaction_id, counterpart_transaction_id)
+
+
+@mcp.tool()
+def create_payee_rule(ctx: Context, contains: str, category: str, run_immediately: bool = True) -> dict:
+    """Create a rule that sets `category` on any transaction whose imported bank description contains `contains`. If run_immediately, applies it to existing matching transactions too."""
+    return t.create_payee_rule(_actual(ctx), contains, category, run_immediately)
+
+
 def main() -> None:
     mcp.run()
 
