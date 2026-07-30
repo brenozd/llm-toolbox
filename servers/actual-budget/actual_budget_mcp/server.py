@@ -109,6 +109,12 @@ def create_payee_rule(ctx: Context, contains: str, category: str, run_immediatel
     return t.create_payee_rule(_actual(ctx), contains, category, run_immediately)
 
 
+@mcp.tool()
+def create_transfer_rule(ctx: Context, contains: str, target_account: str, run_immediately: bool = True) -> dict:
+    """Create a rule that marks any transaction whose imported bank description contains `contains` as a transfer to/from `target_account` (name or id). If run_immediately, applies it to existing matching transactions too."""
+    return t.create_transfer_rule(_actual(ctx), contains, target_account, run_immediately)
+
+
 def main() -> None:
     mcp.run()
 

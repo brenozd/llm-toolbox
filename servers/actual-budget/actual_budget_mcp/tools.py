@@ -154,3 +154,27 @@ def create_payee_rule(actual: Actual, contains: str, category: str, run_immediat
         "category": resolved_category.name,
         "run_immediately": run_immediately,
     }
+
+
+def create_transfer_rule(actual: Actual, contains: str, target_account: str, run_immediately: bool = True) -> dict:
+    """Create a rule that marks any transaction whose imported bank description contains `contains` as a
+    transfer to/from `target_account`, by setting its payee to that account's transfer payee."""
+    resolved_account = get_account(actual.session, target_account)
+    if resolved_account is None:
+        raise ActualError(f"Account '{target_account}' not found")
+    if resolved_account.payee is None:
+        raise ActualError(f"Account '{target_account}' has no transfer payee")
+    rule = Rule(
+        conditions=[
+            Condition(field="imported_description", op=ConditionType.CONTAINS, value=contains, type=ValueType.STRING)
+        ],
+        actions=[Action(field="description", value=resolved_account.payee.id, type=ValueType.ID)],
+    )
+    database_rule = _create_rule(actual.session, rule, run_immediately=run_immediately)
+    actual.commit()
+    return {
+        "rule_id": database_rule.id,
+        "contains": contains,
+        "target_account": resolved_account.name,
+        "run_immediately": run_immediately,
+    }

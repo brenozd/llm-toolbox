@@ -12,6 +12,7 @@ EXPECTED_TOOLS = {
     "set_category_budget_amount",
     "mark_transaction_transfer",
     "create_payee_rule",
+    "create_transfer_rule",
 }
 
 
