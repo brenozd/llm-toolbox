@@ -1,0 +1,7 @@
+{
+  "server_url": "http://host.docker.internal:5006",
+  "password": "your-actual-server-password",
+  "file": "your-budget-name-or-sync-id",
+  "encryption_password": null,
+  "data_dir": "/data"
+}
