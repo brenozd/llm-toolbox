@@ -3,7 +3,7 @@ name: Build actual-budget-mcp
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - servers/actual-budget/**
       - .forgejo/workflows/build-actual-budget.yml
