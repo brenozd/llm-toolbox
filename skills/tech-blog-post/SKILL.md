@@ -1,0 +1,104 @@
+---
+name: tech-blog-post
+description: >
+  Write a technical blog post in the style of a senior programmer documenting something they
+  actually did — to remember it later and save the next person unnecessary pain. Produces raw
+  Markdown with frontmatter ready for Astro, Hugo, or similar static site generators. The
+  output is direct, opinionated, and links to upstream issues/commits/docs inline where
+  relevant. Use this skill whenever the user wants to write a technical post, document a
+  solution, write about a problem they solved, create blog content about a technical topic,
+  or says things like "write a blog post about", "document this for my blog", "turn this into
+  a post", "write up what I did", "help me write about", "/tech-blog-post", or "blog post".
+  Trigger even when the user just pastes a description of a problem they solved and says
+  "make this a post" or similar.
+---
+
+# Tech Blog Post Skill
+
+## Before you start
+
+**Read `WRITING.md` (in this skill's directory) in full before writing anything.**
+That file is the authoritative writing guide. Everything in it overrides any default behavior.
+The sections below are blog-specific configuration that extends WRITING.md — they do not replace it.
+
+## What to ask the user
+
+Before writing, collect:
+
+1. **Topic** — what is the post about?
+2. **What happened** — the problem, the solution, the environment. Specific errors, failed
+   attempts, what finally worked. Ask for exact error messages, kernel versions, hardware
+   models, package versions — whatever is relevant.
+3. **References** — any links the user has: GitHub issues, upstream commits, kernel docs,
+   vendor datasheets, forum threads, man pages. These go inline in the post, not in a list.
+4. **Language** — EN only, PT only, or both (EN + PT pair)?
+
+If the user already provided all of the above in their message, go straight to writing.
+Don't ask for information you already have.
+
+## Audience
+
+Programmers and sysadmins who know the basics. Don't explain what Docker is, what PCIe is,
+what a terminal is. Skip all on-ramp prose.
+
+## Frontmatter
+
+This blog uses AstroPaper v6. Frontmatter must match the schema exactly:
+
+```yaml
+---
+title: "<descriptive, problem/outcome-oriented, 50–70 characters>"
+author: Breno Zanato Detomini
+pubDatetime: <YYYY-MM-DDT00:00:00Z>
+slug: <slug-matching-filename-without-extension>
+featured: false
+draft: false
+lang: en          # "en" or "pt"
+tags:
+  - tag1
+description: "<one factual sentence — what the post covers, no marketing>"
+---
+```
+
+Optional fields: `modDatetime`, `ogImage`, `canonicalURL`, `hideEditPost`, `timezone`.
+
+## Bilingual posts (EN + PT pair)
+
+If the user wants both languages:
+
+- English file: `posts/<slug>.md` with `lang: en`
+- Portuguese file: `posts/<slug>-pt.md` with `lang: pt`, same slug value in frontmatter
+
+Both files must maintain 1:1 section parity — same sections, same order, same headings
+structure. If a section is added to EN, add it to PT and vice versa.
+
+PT UI strings (if any new UI copy is introduced) go in `src/i18n/lang/pt.ts`.
+
+## Mandatory structure (from WRITING.md)
+
+In order:
+
+1. **Frontmatter** (as above)
+2. **TL;DR** — `**TL;DR:** <why>. <how>.` — immediately after frontmatter, before any heading.
+   Written for a reader who already knows the domain. Cover the full causal chain for the
+   *why* and all significant steps for the *how*. Length follows content.
+3. **Abstract** — italic, 2–4 sentences. Summarises the THESIS, not the topics. Must be
+   defensible as a central argument even without the post.
+4. **Hook** — first 2 paragraphs after the abstract. Use one of six techniques from
+   WRITING.md. NEVER open with "In this post, I will..." or "[Tool X] has [feature Y] that..."
+5. **Context anchor** — who this is for, what the reader should already know, why this
+   post exists.
+6. **Table of Contents** — required if post is over 1500 words.
+7. **Body** — H2/H3 headings describe *what happens*, not just topic names. Ordered:
+   problem → analysis → solution → edge cases → alternatives.
+8. **Synthesis/closing section** — use a descriptive H2 (not "## Conclusion"). Synthesis +
+   practical implication + next steps. Never summarise what was just said.
+9. **References** — always the last section. Bulleted list of Markdown links, each followed
+   by an em-dash and one phrase explaining *why* it's there — not what it is.
+
+## Output
+
+Raw Markdown only. No preamble, no explanation, no "here's your post". Just the Markdown,
+starting with the frontmatter block.
+
+If producing a bilingual pair, output both files clearly separated.
