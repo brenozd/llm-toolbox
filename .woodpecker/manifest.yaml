@@ -1,0 +1,92 @@
+depends_on:
+  - build-amd64
+  - build-arm64
+
+steps:
+  - name: manifest-branch-latest
+    image: plugins/manifest
+    settings:
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      target: "pulp.bzd.gg/bzd/actual-budget-mcp:latest"
+      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - event: push
+        branch: master
+        path:
+          include:
+            - servers/actual-budget/**
+            - .woodpecker/**
+
+  - name: manifest-branch-sha
+    image: plugins/manifest
+    settings:
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      target: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
+      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - event: push
+        branch: master
+        path:
+          include:
+            - servers/actual-budget/**
+            - .woodpecker/**
+
+  - name: manifest-tag-latest
+    image: plugins/manifest
+    settings:
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      target: "pulp.bzd.gg/bzd/actual-budget-mcp:latest"
+      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - event: tag
+        ref: refs/tags/actual-budget-v*
+
+  - name: manifest-tag-sha
+    image: plugins/manifest
+    settings:
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      target: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
+      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - event: tag
+        ref: refs/tags/actual-budget-v*
+
+  - name: manifest-tag-version
+    image: plugins/manifest
+    settings:
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      target: "pulp.bzd.gg/bzd/actual-budget-mcp:${CI_COMMIT_TAG}"
+      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      platforms:
+        - linux/amd64
+        - linux/arm64
+    when:
+      - event: tag
+        ref: refs/tags/actual-budget-v*

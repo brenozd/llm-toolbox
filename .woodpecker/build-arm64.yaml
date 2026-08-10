@@ -1,0 +1,49 @@
+labels:
+  platform: linux/arm64
+
+steps:
+  - name: publish-branch-arm64
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      repo: pulp.bzd.gg/bzd/actual-budget-mcp
+      registry: pulp.bzd.gg
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      dockerfile: servers/actual-budget/Dockerfile
+      context: servers/actual-budget
+      platforms: linux/arm64
+      provenance: false
+      cache_images:
+        - pulp.bzd.gg/bzd/actual-budget-mcp:buildcache-arm64
+      tags:
+        - sha-${CI_COMMIT_SHA}-arm64
+    when:
+      - event: push
+        branch: master
+        path:
+          include:
+            - servers/actual-budget/**
+            - .woodpecker/**
+
+  - name: publish-tag-arm64
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      repo: pulp.bzd.gg/bzd/actual-budget-mcp
+      registry: pulp.bzd.gg
+      username:
+        from_secret: pulp_registry_user
+      password:
+        from_secret: pulp_registry_password
+      dockerfile: servers/actual-budget/Dockerfile
+      context: servers/actual-budget
+      platforms: linux/arm64
+      provenance: false
+      cache_images:
+        - pulp.bzd.gg/bzd/actual-budget-mcp:buildcache-arm64
+      tags:
+        - sha-${CI_COMMIT_SHA}-arm64
+    when:
+      - event: tag
+        ref: refs/tags/actual-budget-v*
