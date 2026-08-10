@@ -20,7 +20,7 @@ steps:
       tags:
         - sha-${CI_COMMIT_SHA}-arm64
     when:
-      - event: push
+      - event: [push, manual]
         branch: master
         path:
           include:
