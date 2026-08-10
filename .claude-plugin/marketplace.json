@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "llm-toolbox",
+  "description": "MCP servers and reusable Claude Code skills from llm-toolbox.",
+  "version": "1.0.0",
+  "owner": {
+    "name": "Breno Zanato Detomini",
+    "email": "brenozd@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "llm-toolbox",
+      "description": "Reusable Claude Code skills: caveman-sweep, doc-audit, guided-build, image, screenshot, tech-blog-post.",
+      "source": "./",
+      "category": "productivity"
+    }
+  ]
+}

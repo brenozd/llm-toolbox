@@ -8,6 +8,9 @@ MCP servers packaged as OCI containers, in Python, plus reusable Claude Code ski
 
 ## Skills
 
+See [INSTALL.md](INSTALL.md) for how to install these skills and servers
+(Claude Code, Gemini CLI, and other SKILL.md-compatible agents).
+
 - [`skills/caveman-sweep`](skills/caveman-sweep/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
 - [`skills/doc-audit`](skills/doc-audit/) — syncs documentation with current code implementation.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
