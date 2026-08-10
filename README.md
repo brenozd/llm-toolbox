@@ -11,6 +11,7 @@ MCP servers packaged as OCI containers, in Python, plus reusable Claude Code ski
 - [`skills/caveman-sweep`](skills/caveman-sweep/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
 - [`skills/doc-audit`](skills/doc-audit/) — syncs documentation with current code implementation.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
+- [`skills/image`](skills/image/) — crop/rotate/resize/blur/watermark and other light edits with Python + Pillow.
 - [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
 
