@@ -5,6 +5,7 @@ MCP servers packaged as OCI containers, in Python, plus reusable Claude Code ski
 ## Servers
 
 - [`servers/actual-budget`](servers/actual-budget/) — integrates with [Actual Budget](https://actualbudget.org).
+- [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org).
 
 ## Skills
 
