@@ -6,9 +6,11 @@ Recommended — add this repo as a plugin marketplace, then install the
 plugin (pulls all skills at once, updates with `/plugin marketplace update`):
 
 ```
-/plugin marketplace add git.bzd.gg/bzd/llm-toolbox
+/plugin marketplace add https://git.bzd.gg/bzd/llm-toolbox.git
 /plugin install llm-toolbox@llm-toolbox
 ```
+
+(`owner/repo` shorthand only work for github.com — self-hosted Forgejo need full clone URL.)
 
 Local checkout instead of a remote add:
 
