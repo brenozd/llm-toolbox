@@ -27,6 +27,7 @@ local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.
 - [`skills/image`](skills/image/) — crop/rotate/resize/blur/watermark and other light edits with Python + Pillow.
+- [`skills/pr-opener`](skills/pr-opener/) — opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates draft PR (forge-agnostic).
 - [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
 
