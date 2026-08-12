@@ -10,6 +10,7 @@ repos:
     rev: v2.4.1
     hooks:
     - id: codespell
+      args: [--ignore-words-list=actualpy]
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.2
     hooks:
@@ -27,4 +28,3 @@ repos:
         entry: scripts/bump-plugin-version.sh
         language: script
         pass_filenames: false
-
