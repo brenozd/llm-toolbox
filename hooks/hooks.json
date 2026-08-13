@@ -1,0 +1,15 @@
+{
+  "description": "Injects terse/caveman-style response instructions on SessionStart when toggled on via /terse-mode",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
