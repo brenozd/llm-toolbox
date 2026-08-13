@@ -34,3 +34,9 @@ local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
 These skills are written for and depend on the following plugin (install it separately):
 
 - [ponytail](https://github.com/DietrichGebert/ponytail) — lazy/minimal-solution enforcement mode.
+
+## Commands
+
+- `/terse-mode on|off|status` — toggles a terse, filler-free response style. State lives in
+  `${CLAUDE_CONFIG_DIR:-~/.claude}/llm-toolbox/terse-mode`; a `SessionStart` hook injects the
+  style as additional context on the next session when on. Off by default.
