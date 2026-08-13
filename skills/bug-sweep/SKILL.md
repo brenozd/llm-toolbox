@@ -1,11 +1,11 @@
 ---
-name: caveman-sweep
+name: bug-sweep
 description: >
   Iterative find-and-fix sweep: scans codebase or diff for bugs, security vulnerabilities,
   bad practices, and code smells — then plans, asks for technical decisions, implements fixes,
   rescans, and repeats until clean. Returns a terse summary of all changes made.
   Use whenever the user says: "fix issues", "sweep codebase", "find and fix bugs",
-  "review and fix", "hunt bugs", "find bugs", "/caveman-sweep", "deep review",
+  "review and fix", "hunt bugs", "find bugs", "/bug-sweep", "deep review",
   "iterate until clean", "find vulnerabilities and fix", "clean up the code", "audit and fix",
   "fix codebase", "sweep for bugs". Invoke even when the user doesn't say "sweep" — if they
   want issues found AND fixed in one shot, this is the skill.
@@ -19,7 +19,7 @@ allowed-tools:
   - Agent
 ---
 
-# caveman-sweep
+# bug-sweep
 
 Scan → triage → fix → rescan. Runs until clean. Terse output throughout.
 

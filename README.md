@@ -22,7 +22,7 @@ local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
 
 ## Skills
 
-- [`skills/caveman-sweep`](skills/caveman-sweep/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
+- [`skills/bug-sweep`](skills/bug-sweep/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
 - [`skills/doc-audit`](skills/doc-audit/) — syncs documentation with current code implementation.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.
@@ -31,7 +31,6 @@ local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
 - [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
 
-These skills are written for and depend on the following plugins (install them separately):
+These skills are written for and depend on the following plugin (install it separately):
 
-- [caveman](https://github.com/JuliusBrussee/caveman) — ultra-compressed communication mode.
 - [ponytail](https://github.com/DietrichGebert/ponytail) — lazy/minimal-solution enforcement mode.

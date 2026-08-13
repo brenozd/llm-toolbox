@@ -23,16 +23,15 @@ Manual alternative — symlink individual skills instead of the whole plugin:
 
 ```bash
 # all projects
-ln -s "$(pwd)/skills/caveman-sweep" ~/.claude/skills/caveman-sweep
+ln -s "$(pwd)/skills/bug-sweep" ~/.claude/skills/bug-sweep
 
 # one project only
-ln -s "$(pwd)/skills/caveman-sweep" /path/to/project/.claude/skills/caveman-sweep
+ln -s "$(pwd)/skills/bug-sweep" /path/to/project/.claude/skills/bug-sweep
 ```
 
-Some skills (`caveman-sweep`, `guided-build`) expect the
-[caveman](https://github.com/JuliusBrussee/caveman) and
-[ponytail](https://github.com/DietrichGebert/ponytail) plugins — install
-those separately per their own docs.
+Some skills (`guided-build`) expect the
+[ponytail](https://github.com/DietrichGebert/ponytail) plugin — install
+it separately per its own docs.
 
 ## Gemini CLI
 

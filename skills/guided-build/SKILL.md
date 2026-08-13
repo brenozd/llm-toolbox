@@ -231,4 +231,4 @@ Ask: "Is there anything left to address, or are we done?"
 - **Decision gate is mandatory** for: architectural choices, breaking changes to interfaces, adding/removing dependencies, DB schema changes, business logic you're uncertain about.
 - **Everything else**: implement without asking — don't slow the user down with low-stakes questions.
 - **No half-built buckets.** If you can't complete a bucket, stop and explain why — don't deliver partial work as complete.
-- **Keep caveman-style off** during decision questions and checkpoints. Write clearly when the user needs to make a call.
+- **Keep compressed/terse style off** during decision questions and checkpoints. Write clearly when the user needs to make a call.

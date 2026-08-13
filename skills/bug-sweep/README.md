@@ -1,10 +1,10 @@
-# caveman-sweep
+# bug-sweep
 
 Iterative find-and-fix sweep. Scans codebase (or diff) for bugs, security issues, bad practices, code smells — then plans, asks for technical decisions, implements fixes, rescans, repeats until clean.
 
 ## Trigger
 
-`/caveman-sweep`, or phrases like "fix issues", "sweep codebase", "find and fix bugs", "review and fix", "hunt bugs", "find bugs", "deep review", "iterate until clean", "clean up the code", "audit and fix".
+`/bug-sweep`, or phrases like "fix issues", "sweep codebase", "find and fix bugs", "review and fix", "hunt bugs", "find bugs", "deep review", "iterate until clean", "clean up the code", "audit and fix".
 
 ## Flags
 
