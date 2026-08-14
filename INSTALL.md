@@ -59,8 +59,22 @@ shared `.agents/skills/` path above.
 
 ## MCP servers
 
-See [`servers/actual-budget/README.md`](servers/actual-budget/README.md#run)
-for the `mcpServers` JSON to register that server with an MCP client
-(Claude Code, Claude Desktop, Gemini CLI, etc). The same
-`docker run -i --rm ...`-spawned-by-the-client pattern applies to any future
-server added under `servers/`.
+The plugin (`/plugin install llm-toolbox@llm-toolbox`) registers both
+`actual-budget` and `woodpecker` MCPs automatically — no need to hand-copy
+JSON. Each still needs its own `config.json` (see
+[`servers/actual-budget/README.md`](servers/actual-budget/README.md#config)
+and [`servers/woodpecker/README.md`](servers/woodpecker/README.md#config))
+and an env var pointing to it, set before Claude Code starts:
+
+```bash
+export ACTUAL_BUDGET_MCP_CONFIG=/path/to/actual-budget-config.json
+export WOODPECKER_MCP_CONFIG=/path/to/woodpecker-config.json
+```
+
+Without these set, the servers still start but the docker run fails to
+mount a config file, so their tools won't appear — check `/mcp` in Claude
+Code to confirm both are connected. Skip an unused server's env var if you
+don't need it; that server just won't come up.
+
+For a non-plugin client (Claude Desktop, Gemini CLI, etc), register
+manually with the JSON in each server's README under `## Run` instead.
