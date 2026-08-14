@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: bug-sweep, doc-audit, guided-build, image, screenshot, tech-blog-post.",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -11,7 +11,7 @@
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-v", "${ACTUAL_BUDGET_MCP_CONFIG}:/config/config.json:ro",
+        "-v", "${HOME}/.config/llm-toolbox/actual-budget.json:/config/config.json:ro",
         "-v", "actual-budget-data:/data",
         "pulp.bzd.gg/bzd/actual-budget-mcp:latest"
       ]
@@ -20,7 +20,7 @@
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-v", "${WOODPECKER_MCP_CONFIG}:/config/config.json:ro",
+        "-v", "${HOME}/.config/llm-toolbox/woodpecker.json:/config/config.json:ro",
         "pulp.bzd.gg/bzd/woodpecker-mcp:latest"
       ]
     }
