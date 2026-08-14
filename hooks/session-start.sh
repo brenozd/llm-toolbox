@@ -14,15 +14,33 @@ if [ -f "$marker" ]; then
 fi
 
 config_dir="$HOME/.config/llm-toolbox"
-missing=""
+mkdir -p "$config_dir"
+scaffolded=""
+blocked=""
 for name in actual-budget woodpecker; do
-  if [ ! -f "$config_dir/$name.json" ]; then
-    missing+="$name "
+  target="$config_dir/$name.json"
+  if [ -d "$target" ]; then
+    # docker creates a dir here if it ran before the file existed; can't fix without sudo
+    blocked+="$name "
+  elif [ ! -f "$target" ]; then
+    example="${CLAUDE_PLUGIN_ROOT}/servers/$name/config.example.json"
+    if [ -f "$example" ]; then
+      cp "$example" "$target"
+      scaffolded+="$name "
+    fi
   fi
 done
 
-if [ -n "$missing" ]; then
-  context+=$'\n\n'"llm-toolbox MCP server(s) missing config, so they will fail to connect: $missing"'(no config.json at ~/.config/llm-toolbox/<name>.json). At a natural point this session, mention it once and offer to scaffold the file from servers/<name>/config.example.json in the llm-toolbox repo — do not block on it or repeat the offer.'
+if [ -n "$scaffolded" ]; then
+  context+=$'\n\n'"Scaffolded llm-toolbox MCP config(s) from config.example.json: $scaffolded"'(placeholder values at ~/.config/llm-toolbox/<name>.json). At a natural point this session, mention it once and offer to fill in the real values (ask the user, don'"'"'t guess secrets) — do not block on it or repeat the offer.'
+fi
+
+if [ -n "$blocked" ]; then
+  cmd=""
+  for name in $blocked; do
+    cmd+="$config_dir/$name.json "
+  done
+  context+=$'\n\n'"llm-toolbox MCP config path(s) are root-owned empty directories instead of files, so they can't be auto-fixed: $blocked"'. Tell the user once to run: sudo rmdir '"$cmd"
 fi
 
 if [ -z "$context" ]; then
