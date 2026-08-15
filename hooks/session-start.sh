@@ -13,6 +13,15 @@ if [ -f "$marker" ]; then
   context+="$(cat "${CLAUDE_PLUGIN_ROOT}/hooks/terse-style.txt")"
 fi
 
+shadow_marker="$state_dir/shadow-agents"
+if [ -f "$shadow_marker" ]; then
+  agents_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/agents"
+  mkdir -p "$agents_dir"
+  for name in explore plan general-purpose; do
+    ln -sf "${CLAUDE_PLUGIN_ROOT}/agents/$name.md" "$agents_dir/$name.md"
+  done
+fi
+
 config_dir="$HOME/.config/llm-toolbox"
 mkdir -p "$config_dir"
 scaffolded=""

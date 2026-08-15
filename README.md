@@ -40,3 +40,13 @@ These skills are written for and depend on the following plugin (install it sepa
 - `/terse-mode on|off|status` — toggles a terse, filler-free response style. State lives in
   `${CLAUDE_CONFIG_DIR:-~/.claude}/llm-toolbox/terse-mode`; a `SessionStart` hook injects the
   style as additional context on the next session when on. Off by default.
+- `/shadow-agents on|off|status` — toggles llm-toolbox's cheaper `explore`/`plan`/`general-purpose`
+  agent overrides (haiku model, restricted tools, tighter scope — see [`agents/`](agents/)).
+  Off by default; a `SessionStart` hook symlinks them into `${CLAUDE_CONFIG_DIR:-~/.claude}/agents/`
+  once toggled on.
+
+## Agents
+
+- [`agents/`](agents/) — cheaper drop-in overrides for the built-in `explore`, `plan`, and
+  `general-purpose` subagents (haiku, restricted tool lists, tighter scope rules). Not applied
+  automatically on install — opt in with `/shadow-agents on`.
