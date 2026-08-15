@@ -1,5 +1,3 @@
-# llm-toolbox
-
 Only delegate to explore/plan/general-purpose subagents for tasks that
 genuinely need isolated context (large multi-file search, long-running edits).
 For quick lookups, answer directly without spawning a subagent.

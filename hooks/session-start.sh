@@ -20,6 +20,10 @@ if [ -f "$shadow_marker" ]; then
   for name in explore plan general-purpose; do
     ln -sf "${CLAUDE_PLUGIN_ROOT}/agents/$name.md" "$agents_dir/$name.md"
   done
+  if [ -n "$context" ]; then
+    context+=$'\n\n'
+  fi
+  context+="$(cat "${CLAUDE_PLUGIN_ROOT}/hooks/no-unnecessary-delegation.txt")"
 fi
 
 config_dir="$HOME/.config/llm-toolbox"

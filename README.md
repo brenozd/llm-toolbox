@@ -43,7 +43,8 @@ These skills are written for and depend on the following plugin (install it sepa
 - `/shadow-agents on|off|status` — toggles llm-toolbox's cheaper `explore`/`plan`/`general-purpose`
   agent overrides (haiku model, restricted tools, tighter scope — see [`agents/`](agents/)).
   Off by default; a `SessionStart` hook symlinks them into `${CLAUDE_CONFIG_DIR:-~/.claude}/agents/`
-  once toggled on.
+  once toggled on, and injects a reminder — in every project, not just this repo — to skip
+  delegating to a subagent for tasks a direct answer already covers.
 
 ## Agents
 

@@ -12,7 +12,10 @@ llm-toolbox ships lighter replacements for the built-in `explore`, `plan`,
 and `general-purpose` subagents in `${CLAUDE_PLUGIN_ROOT}/agents/` (haiku
 model, restricted tools, tighter scope). They're opt-in: shadowing only
 takes effect once toggled on, so installing the plugin alone doesn't change
-subagent behavior.
+subagent behavior. When on, the `SessionStart` hook also injects a
+reminder — in every project, not just where this file lives — not to
+delegate to a subagent for anything a direct answer already covers
+(`hooks/no-unnecessary-delegation.txt`).
 
 State dir: `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/llm-toolbox`
 Marker file: `<state dir>/shadow-agents`
