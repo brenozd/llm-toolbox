@@ -5,8 +5,8 @@ steps:
   - name: publish-branch-arm64
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      repo: pulp.bzd.gg/bzd/actual-budget-mcp
-      registry: pulp.bzd.gg
+      repo: registry.bzd.gg/bzd/actual-budget-mcp
+      registry: registry.bzd.gg
       username:
         from_secret: pulp_registry_user
       password:
@@ -16,7 +16,7 @@ steps:
       platforms: linux/arm64
       provenance: false
       cache_images:
-        - pulp.bzd.gg/bzd/actual-budget-mcp:buildcache-arm64
+        - registry.bzd.gg/bzd/actual-budget-mcp:buildcache-arm64
       tags:
         - sha-${CI_COMMIT_SHA}-arm64
     when:
@@ -30,8 +30,8 @@ steps:
   - name: publish-tag-arm64
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      repo: pulp.bzd.gg/bzd/actual-budget-mcp
-      registry: pulp.bzd.gg
+      repo: registry.bzd.gg/bzd/actual-budget-mcp
+      registry: registry.bzd.gg
       username:
         from_secret: pulp_registry_user
       password:
@@ -41,7 +41,7 @@ steps:
       platforms: linux/arm64
       provenance: false
       cache_images:
-        - pulp.bzd.gg/bzd/actual-budget-mcp:buildcache-arm64
+        - registry.bzd.gg/bzd/actual-budget-mcp:buildcache-arm64
       tags:
         - sha-${CI_COMMIT_SHA}-arm64
     when:
@@ -51,8 +51,8 @@ steps:
   - name: publish-branch-arm64-woodpecker
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      repo: pulp.bzd.gg/bzd/woodpecker-mcp
-      registry: pulp.bzd.gg
+      repo: registry.bzd.gg/bzd/woodpecker-mcp
+      registry: registry.bzd.gg
       username:
         from_secret: pulp_registry_user
       password:
@@ -62,7 +62,7 @@ steps:
       platforms: linux/arm64
       provenance: false
       cache_images:
-        - pulp.bzd.gg/bzd/woodpecker-mcp:buildcache-arm64
+        - registry.bzd.gg/bzd/woodpecker-mcp:buildcache-arm64
       tags:
         - sha-${CI_COMMIT_SHA}-arm64
     when:
@@ -76,8 +76,8 @@ steps:
   - name: publish-tag-arm64-woodpecker
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      repo: pulp.bzd.gg/bzd/woodpecker-mcp
-      registry: pulp.bzd.gg
+      repo: registry.bzd.gg/bzd/woodpecker-mcp
+      registry: registry.bzd.gg
       username:
         from_secret: pulp_registry_user
       password:
@@ -87,7 +87,7 @@ steps:
       platforms: linux/arm64
       provenance: false
       cache_images:
-        - pulp.bzd.gg/bzd/woodpecker-mcp:buildcache-arm64
+        - registry.bzd.gg/bzd/woodpecker-mcp:buildcache-arm64
       tags:
         - sha-${CI_COMMIT_SHA}-arm64
     when:

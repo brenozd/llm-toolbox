@@ -10,8 +10,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/actual-budget-mcp:latest"
-      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/actual-budget-mcp:latest"
+      template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -30,8 +30,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
-      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
+      template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -50,8 +50,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/actual-budget-mcp:latest"
-      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/actual-budget-mcp:latest"
+      template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -66,8 +66,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
-      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
+      template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -82,8 +82,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/actual-budget-mcp:${CI_COMMIT_TAG}"
-      template: "pulp.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/actual-budget-mcp:${CI_COMMIT_TAG}"
+      template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -98,8 +98,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/woodpecker-mcp:latest"
-      template: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/woodpecker-mcp:latest"
+      template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -118,8 +118,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}"
-      template: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}"
+      template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -138,8 +138,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/woodpecker-mcp:latest"
-      template: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/woodpecker-mcp:latest"
+      template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -154,8 +154,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}"
-      template: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}"
+      template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64
@@ -170,8 +170,8 @@ steps:
         from_secret: pulp_registry_user
       password:
         from_secret: pulp_registry_password
-      target: "pulp.bzd.gg/bzd/woodpecker-mcp:${CI_COMMIT_TAG}"
-      template: "pulp.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
+      target: "registry.bzd.gg/bzd/woodpecker-mcp:${CI_COMMIT_TAG}"
+      template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
         - linux/amd64
         - linux/arm64

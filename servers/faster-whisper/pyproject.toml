@@ -1,0 +1,19 @@
+[project]
+name = "faster-whisper-mcp"
+version = "0.1.0"
+description = "MCP server exposing speech-to-text transcription via faster-whisper (tiny model)."
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.9.0,<2",
+    "faster-whisper>=1.0.0",
+]
+
+[project.scripts]
+faster-whisper-mcp = "faster_whisper_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["faster_whisper_mcp*"]

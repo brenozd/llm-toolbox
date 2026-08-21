@@ -34,13 +34,13 @@ CI (`.woodpecker/`) builds and pushes this on every push to `master`
 touching `servers/woodpecker/**`, and on `woodpecker-v*` tags:
 
 ```bash
-docker pull pulp.bzd.gg/bzd/woodpecker-mcp:latest
+docker pull registry.bzd.gg/bzd/woodpecker-mcp:latest
 ```
 
 To build locally instead:
 
 ```bash
-docker build -t pulp.bzd.gg/bzd/woodpecker-mcp:latest .
+docker build -t registry.bzd.gg/bzd/woodpecker-mcp:latest .
 ```
 
 ## Run
@@ -57,7 +57,7 @@ Register it with a command like:
       "args": [
         "run", "-i", "--rm",
         "-v", "/path/to/config.json:/config/config.json:ro",
-        "pulp.bzd.gg/bzd/woodpecker-mcp:latest"
+        "registry.bzd.gg/bzd/woodpecker-mcp:latest"
       ]
     }
   }
@@ -69,7 +69,7 @@ To try it by hand:
 ```bash
 docker run -i --rm \
   -v $(pwd)/config.json:/config/config.json:ro \
-  pulp.bzd.gg/bzd/woodpecker-mcp:latest
+  registry.bzd.gg/bzd/woodpecker-mcp:latest
 ```
 
 ## Tools
