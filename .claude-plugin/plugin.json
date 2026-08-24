@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: bug-sweep, doc-audit, guided-build, image, screenshot, tech-blog-post.",
-  "version": "1.0.13",
+  "version": "1.0.15",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
