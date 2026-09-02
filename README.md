@@ -22,7 +22,7 @@ local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
 
 ## Skills
 
-- [`skills/bug-sweep`](skills/bug-sweep/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
+- [`skills/deep-clean`](skills/deep-clean/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
 - [`skills/doc-audit`](skills/doc-audit/) — syncs documentation with current code implementation.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.

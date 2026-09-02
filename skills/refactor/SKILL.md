@@ -84,7 +84,8 @@ and say so in one line.
 - [ ] Step 4.1: update tests in `file`
 - [ ] Verify: run full test suite
 
-#### Phase 5: Cleanup (ponytail pass)
+#### Phase 5: Cleanup (ponytail pass + deep-clean)
+- [ ] Run `deep-clean` over the refactor diff — find/fix bugs + code smells, loop to clean
 - [ ] Remove dead code / deprecated paths
 - [ ] Reuse: fold near-duplicate logic touched by this refactor into one place instead of
       leaving copies (only where the refactor already touches both — don't go hunting repo-wide)
@@ -123,12 +124,17 @@ refactor(<scope>): <phase N — what changed>
 - If a phase's verify fails and the fix isn't a 1-liner, stop and report — don't improvise
   around the plan silently.
 
-**Cleanup phase**: before committing it, run the `ponytail-review` skill over the full diff
-produced by this refactor (all phases combined, not just Phase 5's own edits) to catch
-over-engineering, bad names, useless/stale comments, and reuse misses the other phases
-introduced or left behind. Apply its findings as part of this phase's diff; anything you
-disagree with or that needs a judgment call goes to Deviations in the summary, not silently
-dropped.
+**Cleanup phase**: before committing it, over the full diff produced by this refactor (all
+phases combined, not just Phase 5's own edits):
+
+1. Run the `ponytail-review` skill — over-engineering, bad names, useless/stale comments,
+   reuse misses the other phases introduced or left behind.
+2. Run the `deep-clean` skill with `--scope` set to the refactored area and diff scope —
+   its scan (tools + manual review + `references/code-smells.md`) catches bugs and code
+   smells the refactor exposed or moved. Let its find → fix → rescan loop run to clean.
+
+Apply the findings as part of this phase's diff; anything you disagree with or that needs a
+judgment call goes to Deviations in the summary, not silently dropped.
 
 ---
 

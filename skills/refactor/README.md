@@ -24,7 +24,8 @@ API".
 3. **Execute**: runs one phase at a time, verifying before moving to the next; commits per
    phase by default. Cleanup phase runs a `ponytail-review` pass over the full diff — dead
    code, near-duplicate logic left after the refactor, unclear names, useless/stale comments,
-   speculative abstractions exposed — and folds the fixes in before committing.
+   speculative abstractions exposed — then a `deep-clean` pass over the same diff (bugs +
+   code smells, find → fix → rescan until clean), and folds the fixes in before committing.
 4. Returns a terse summary: phases done, deviations, skipped items, commit count.
 
 ## Files

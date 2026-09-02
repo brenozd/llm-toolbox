@@ -23,10 +23,10 @@ Manual alternative — symlink individual skills instead of the whole plugin:
 
 ```bash
 # all projects
-ln -s "$(pwd)/skills/bug-sweep" ~/.claude/skills/bug-sweep
+ln -s "$(pwd)/skills/deep-clean" ~/.claude/skills/deep-clean
 
 # one project only
-ln -s "$(pwd)/skills/bug-sweep" /path/to/project/.claude/skills/bug-sweep
+ln -s "$(pwd)/skills/deep-clean" /path/to/project/.claude/skills/deep-clean
 ```
 
 Some skills (`guided-build`) expect the

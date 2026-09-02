@@ -1,11 +1,11 @@
 ---
-name: bug-sweep
+name: deep-clean
 description: >
   Iterative find-and-fix sweep: scans codebase or diff for bugs, security vulnerabilities,
   bad practices, and code smells — then plans, asks for technical decisions, implements fixes,
   rescans, and repeats until clean. Returns a terse summary of all changes made.
   Use whenever the user says: "fix issues", "sweep codebase", "find and fix bugs",
-  "review and fix", "hunt bugs", "find bugs", "/bug-sweep", "deep review",
+  "review and fix", "hunt bugs", "find bugs", "/deep-clean", "deep clean", "deep review",
   "iterate until clean", "find vulnerabilities and fix", "clean up the code", "audit and fix",
   "fix codebase", "sweep for bugs". Invoke even when the user doesn't say "sweep" — if they
   want issues found AND fixed in one shot, this is the skill.
@@ -19,7 +19,7 @@ allowed-tools:
   - Agent
 ---
 
-# bug-sweep
+# deep-clean
 
 Scan → triage → fix → rescan. Runs until clean. Terse output throughout.
 
@@ -84,9 +84,10 @@ Run project scripts first — they encode project-specific rules.
 - SQL/cmd/LDAP injection via string concat · path traversal in user input
 - Hardcoded secrets · insecure random (`rand` vs `crypto/rand`) · missing auth check
 
-**Bad practices / smells**
+**Bad practices / smells** — full catalogue in `references/code-smells.md` (bloaters, change preventers, dispensables, couplers). Quick hits:
 - Error swallowing · mutable globals · side effects in constructors
 - N+1 queries · unbounded loops over large collections · god functions, deep nesting
+- Duplicate logic · dead code · speculative generality · primitive obsession · feature envy · magic numbers
 
 ---
 
