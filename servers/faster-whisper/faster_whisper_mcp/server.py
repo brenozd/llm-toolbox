@@ -11,17 +11,21 @@ from .config import load_config
 
 
 @asynccontextmanager
-async def lifespan(server: FastMCP) -> AsyncIterator[WhisperModel]:
-    config = load_config()
-    model = WhisperModel(config.model_size, device=config.device, compute_type=config.compute_type)
-    yield model
+async def lifespan(server: FastMCP) -> AsyncIterator[dict]:
+    # Lazy-load model on first use, not on server startup
+    ctx = {"model": None}
+    yield ctx
 
 
 mcp = FastMCP("faster-whisper", lifespan=lifespan)
 
 
 def _model(ctx: Context) -> WhisperModel:
-    return ctx.request_context.lifespan_context
+    ctx_dict = ctx.request_context.lifespan_context
+    if ctx_dict["model"] is None:
+        config = load_config()
+        ctx_dict["model"] = WhisperModel(config.model_size, device=config.device, compute_type=config.compute_type)
+    return ctx_dict["model"]
 
 
 @mcp.tool()
