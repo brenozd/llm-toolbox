@@ -7,9 +7,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/actual-budget-mcp:latest"
       template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -27,9 +27,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
       template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -47,9 +47,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/actual-budget-mcp:latest"
       template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -63,9 +63,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}"
       template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -79,9 +79,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/actual-budget-mcp:${CI_COMMIT_TAG}"
       template: "registry.bzd.gg/bzd/actual-budget-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -95,9 +95,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/woodpecker-mcp:latest"
       template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -115,9 +115,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}"
       template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -135,9 +135,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/woodpecker-mcp:latest"
       template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -151,9 +151,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}"
       template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -167,9 +167,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/woodpecker-mcp:${CI_COMMIT_TAG}"
       template: "registry.bzd.gg/bzd/woodpecker-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -183,9 +183,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/faster-whisper-mcp:latest"
       template: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -203,9 +203,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}"
       template: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -223,9 +223,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/faster-whisper-mcp:latest"
       template: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -239,9 +239,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}"
       template: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
@@ -255,9 +255,9 @@ steps:
     image: plugins/manifest
     settings:
       username:
-        from_secret: pulp_registry_user
+        from_secret: zot_registry_user
       password:
-        from_secret: pulp_registry_password
+        from_secret: zot_registry_password
       target: "registry.bzd.gg/bzd/faster-whisper-mcp:${CI_COMMIT_TAG}"
       template: "registry.bzd.gg/bzd/faster-whisper-mcp:sha-${CI_COMMIT_SHA}-ARCH"
       platforms:
