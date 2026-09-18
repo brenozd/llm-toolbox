@@ -19,17 +19,21 @@ local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
 
 - [`servers/actual-budget`](servers/actual-budget/) — integrates with [Actual Budget](https://actualbudget.org).
 - [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org).
+- [`servers/faster-whisper`](servers/faster-whisper/) — speech-to-text transcription via faster-whisper.
 
 ## Skills
 
 - [`skills/deep-clean`](skills/deep-clean/) — iterative find-and-fix sweep: scan, triage, fix, rescan until clean.
+- [`skills/distrobox`](skills/distrobox/) — persistent per-project distrobox container to build/test in isolation from the host.
 - [`skills/doc-audit`](skills/doc-audit/) — syncs documentation with current code implementation.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.
 - [`skills/image`](skills/image/) — crop/rotate/resize/blur/watermark and other light edits with Python + Pillow.
 - [`skills/pr-opener`](skills/pr-opener/) — opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates draft PR (forge-agnostic).
+- [`skills/refactor`](skills/refactor/) — plans then executes a multi-file refactor phase by phase, with verification and rollback.
 - [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
+- [`skills/ui-review`](skills/ui-review/) — audits a web UI for usability, accessibility, performance, and visual consistency.
 
 These skills are written for and depend on the following plugin (install it separately):
 
