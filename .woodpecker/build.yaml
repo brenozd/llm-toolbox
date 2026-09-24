@@ -2,10 +2,10 @@ steps:
   - name: actual-budget
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      registry: registry.bzd.gg
-      username: { from_secret: zot_registry_user }
-      password: { from_secret: zot_registry_password }
-      repo: registry.bzd.gg/bzd/actual-budget-mcp
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/actual-budget-mcp
       dockerfile: servers/actual-budget/Dockerfile
       context: servers/actual-budget
       platforms: linux/amd64,linux/arm64
@@ -21,10 +21,10 @@ steps:
   - name: woodpecker
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      registry: registry.bzd.gg
-      username: { from_secret: zot_registry_user }
-      password: { from_secret: zot_registry_password }
-      repo: registry.bzd.gg/bzd/woodpecker-mcp
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/woodpecker-mcp
       dockerfile: servers/woodpecker/Dockerfile
       context: servers/woodpecker
       platforms: linux/amd64,linux/arm64
@@ -40,10 +40,10 @@ steps:
   - name: faster-whisper
     image: woodpeckerci/plugin-docker-buildx
     settings:
-      registry: registry.bzd.gg
-      username: { from_secret: zot_registry_user }
-      password: { from_secret: zot_registry_password }
-      repo: registry.bzd.gg/bzd/faster-whisper-mcp
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/faster-whisper-mcp
       dockerfile: servers/faster-whisper/Dockerfile
       context: servers/faster-whisper
       platforms: linux/amd64,linux/arm64
