@@ -1,0 +1,140 @@
+/**
+ * BZD Desenvolvimento de Software
+ * Brand Color Tokens — v2.0
+ *
+ * Usage: @import this file and use var(--bzd-*) in your CSS.
+ * Tokens cover both Light and Dark Mode.
+ * For P3 wide-gamut displays, the -p3 overrides fire automatically.
+ */
+
+/* ─────────────────────────────────────────────
+   LIGHT MODE (default)
+   ───────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+
+  /* ── Fundos ──────────────────────────────── */
+  --bzd-bg-base:       #FBFCFD;   /* Papel — fundo da página                */
+  --bzd-bg-surface:    #FFFFFF;   /* Cards, modais, painéis                 */
+  --bzd-bg-surface-2:  #F3F6FA;   /* Seções alternadas, sidebar             */
+  --bzd-bg-invert:     #0F2A4A;   /* Blocos com fundo invertido (marinho)   */
+
+  /* ── Estrutural ─────────────────────────── */
+  --bzd-border:        #E4E8ED;   /* Divisor sutil, separadores             */
+  --bzd-border-strong: #C4CDD9;   /* Borda de input, outline visível        */
+
+  /* ── Primária — Azul BZD ─────────────────── */
+  --bzd-primary:              #2F6BEB;  /* oklch(0.58 0.18 258)             */
+  --bzd-primary-hover:        #1C5CD6;  /* oklch(0.52 0.18 258)             */
+  --bzd-primary-active:       #1450C0;  /* oklch(0.46 0.18 258)             */
+  --bzd-primary-fg:           #FFFFFF;
+  --bzd-primary-subtle:       #E8F0FE;  /* Céu — oklch(0.95 0.03 256)      */
+  --bzd-primary-subtle-fg:    #1E54C8;
+
+  /* ── Secundária — Marinho ────────────────── */
+  --bzd-secondary:             #0F2A4A;  /* oklch(0.30 0.07 255)            */
+  --bzd-secondary-hover:       #1A3A60;
+  --bzd-secondary-active:      #081E38;
+  --bzd-secondary-fg:          #FFFFFF;
+  --bzd-secondary-subtle:      #D4E2F2;
+  --bzd-secondary-subtle-fg:   #0F2A4A;
+
+  /* ── Terciária — Teal ────────────────────── */
+  --bzd-tertiary:              oklch(0.56 0.16 185);
+  --bzd-tertiary-hover:        oklch(0.48 0.16 185);
+  --bzd-tertiary-active:       oklch(0.42 0.16 185);
+  --bzd-tertiary-fg:           #FFFFFF;
+  --bzd-tertiary-subtle:       oklch(0.95 0.04 185);
+  --bzd-tertiary-subtle-fg:    oklch(0.42 0.16 185);
+
+  /* ── Texto ───────────────────────────────── */
+  --bzd-text:          #14181F;   /* Tinta — títulos, corpo principal       */
+  --bzd-text-2:        #43505F;   /* Corpo de texto                         */
+  --bzd-text-3:        #6B7480;   /* Cinza — rótulos, captions, metadata    */
+  --bzd-text-disabled: #9AA3AE;   /* Estado desabilitado                    */
+  --bzd-text-on-dark:  #EBF0FF;
+
+  /* ── Tipografia ─────────────────────────── */
+  --bzd-font-sans: 'Sora', 'SF Pro Display', 'Helvetica Neue', sans-serif;
+  --bzd-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* ── Sombras ─────────────────────────────── */
+  --bzd-shadow-sm:  0 1px 3px rgba(20,24,31,0.08), 0 1px 2px rgba(20,24,31,0.04);
+  --bzd-shadow-md:  0 4px 12px rgba(20,24,31,0.10), 0 2px 4px rgba(20,24,31,0.05);
+  --bzd-shadow-lg:  0 10px 32px rgba(20,24,31,0.12), 0 4px 8px rgba(20,24,31,0.06);
+  --bzd-shadow-primary: 0 8px 22px -6px rgba(47,107,235,0.45);
+}
+
+/* ─────────────────────────────────────────────
+   DARK MODE
+   ───────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root { --bzd-color-scheme: dark; }
+}
+
+[data-theme="dark"],
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+
+    /* ── Fundos ────────────────────────────── */
+    --bzd-bg-base:       #07101E;
+    --bzd-bg-surface:    #0C1929;
+    --bzd-bg-surface-2:  #112038;
+    --bzd-bg-invert:     #FBFCFD;
+
+    /* ── Estrutural ─────────────────────────  */
+    --bzd-border:        #1C3456;
+    --bzd-border-strong: #2B4D7A;
+
+    /* ── Primária ───────────────────────────  */
+    --bzd-primary:              #4D87F6;
+    --bzd-primary-hover:        #6699F8;
+    --bzd-primary-active:       #7DAAFB;
+    --bzd-primary-fg:           #FFFFFF;
+    --bzd-primary-subtle:       #0F2240;
+    --bzd-primary-subtle-fg:    #7FAAF9;
+
+    /* ── Secundária ─────────────────────────  */
+    --bzd-secondary:             #E8F0FE;
+    --bzd-secondary-hover:       #FFFFFF;
+    --bzd-secondary-active:      #FFFFFF;
+    --bzd-secondary-fg:          #0F2A4A;
+    --bzd-secondary-subtle:      #1A3356;
+    --bzd-secondary-subtle-fg:   #8BA6CC;
+
+    /* ── Terciária ──────────────────────────  */
+    --bzd-tertiary:              oklch(0.65 0.16 185);
+    --bzd-tertiary-hover:        oklch(0.72 0.16 185);
+    --bzd-tertiary-active:       oklch(0.78 0.16 185);
+    --bzd-tertiary-fg:           #FFFFFF;
+    --bzd-tertiary-subtle:       oklch(0.20 0.06 185);
+    --bzd-tertiary-subtle-fg:    oklch(0.70 0.14 185);
+
+    /* ── Texto ──────────────────────────────  */
+    --bzd-text:          #EBF0FF;
+    --bzd-text-2:        #8BA6CC;
+    --bzd-text-3:        #5A7A9E;
+    --bzd-text-disabled: #3A5A80;
+    --bzd-text-on-dark:  #EBF0FF;
+
+    /* ── Sombras dark ───────────────────────  */
+    --bzd-shadow-sm:  0 1px 3px rgba(0,0,0,0.30), 0 1px 2px rgba(0,0,0,0.20);
+    --bzd-shadow-md:  0 4px 12px rgba(0,0,0,0.35), 0 2px 4px rgba(0,0,0,0.20);
+    --bzd-shadow-lg:  0 10px 32px rgba(0,0,0,0.40), 0 4px 8px rgba(0,0,0,0.25);
+    --bzd-shadow-primary: 0 8px 22px -6px rgba(47,107,235,0.55);
+  }
+}
+
+/* ─────────────────────────────────────────────
+   P3 WIDE-GAMUT OVERRIDES
+   ───────────────────────────────────────────── */
+@media (color-gamut: p3) {
+  :root {
+    --bzd-primary:       oklch(0.58 0.18 258);
+    --bzd-primary-hover: oklch(0.52 0.18 258);
+    --bzd-bg-invert:     oklch(0.30 0.07 255);
+    --bzd-text:          oklch(0.16 0.01 260);
+    --bzd-text-3:        oklch(0.50 0.02 260);
+    --bzd-bg-base:       oklch(0.99 0.005 260);
+  }
+}

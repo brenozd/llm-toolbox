@@ -266,7 +266,7 @@ def _wait_for_devtools(port: int) -> list[dict]:
     raise RuntimeError("could not connect to Chromium DevTools")
 
 
-def capture_web(url: str, output: Path, width: int, height: int, full_page: bool) -> None:
+def capture_web(url: str, output: Path, width: int, height: int, full_page: bool, dark: bool = False) -> None:
     chromium = _find_chromium()
     port = _find_free_port()
     proc = _launch_chromium(chromium, port, width, height, url)
@@ -295,6 +295,11 @@ def capture_web(url: str, output: Path, width: int, height: int, full_page: bool
                     return data.get("result", {})
 
         time.sleep(0.5)  # let initial navigation settle
+
+        if dark:
+            call("Emulation.setEmulatedMedia",
+                 {"features": [{"name": "prefers-color-scheme", "value": "dark"}]})
+            time.sleep(0.2)
 
         if full_page:
             metrics = call("Page.getLayoutMetrics")
@@ -494,6 +499,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--viewport-size", metavar="WxH", help="custom viewport, e.g. 375x667")
     p.add_argument("--viewport", action="store_true",
                     help="capture only the visible viewport instead of the full scrollable page")
+    p.add_argument("--dark", action="store_true", help="emulate prefers-color-scheme: dark")
     p.add_argument("--dom", action="store_true", help="also save page HTML alongside a --web screenshot")
     p.add_argument("--delay", type=int, default=0, help="delay before desktop capture, seconds")
     p.add_argument("--output", type=Path, help="explicit output path")
@@ -540,7 +546,7 @@ def main(argv: list[str] | None = None) -> int:
     output.parent.mkdir(parents=True, exist_ok=True)
 
     if args.web:
-        capture_web(args.web, output, width, height, full_page=not args.viewport)
+        capture_web(args.web, output, width, height, full_page=not args.viewport, dark=args.dark)
     else:
         capture_desktop(args.mode, output, args.delay * 1000)
 

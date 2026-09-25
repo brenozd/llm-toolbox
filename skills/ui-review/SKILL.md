@@ -11,7 +11,7 @@ description: >
   interface", "review this UI", "audit this web page", "/ui-review". Generic
   — works on any web page, not tied to any specific project.
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # UI Review
@@ -25,9 +25,22 @@ If the project has its own design doc or style guide (design tokens,
 existing components, a known-issues log), read it first — don't re-report a
 documented decision as a bug, don't re-report a tracked known issue as new,
 and prefer "reuse existing token/component X" over "add a new one" as a fix.
+If the project is BZD-branded, use `references/bzd-brand-tokens.json` and
+`references/bzd-brand-colors.css` as that design doc (see step 3, [visual]).
 If no such doc exists, skip straight to capture.
 
-## 1. Capture the live page
+## 1. Build
+
+A stale build reviews yesterday's UI. Before capturing:
+- If a dev server is already running (check the port/URL the user gave, or
+  `tabs_context_mcp` for an open tab), use it as-is — don't restart it.
+- Otherwise run the project's own build/dev command (`npm run dev`,
+  `package.json` scripts, whatever the repo already uses — don't invent a
+  new one) and wait for it to report ready before moving on.
+- Note the PID/process if you started it, so it can be stopped after the
+  review instead of left running.
+
+## 2. Capture the live page
 
 Prefer `claude-in-chrome` — it's already in the running browser, no extra
 process to manage. Load its tools with `ToolSearch` first if deferred
@@ -37,21 +50,30 @@ before opening a new tab, and don't trigger JS `alert`/`confirm`/`prompt` —
 they block the extension.
 
 If `claude-in-chrome` isn't connected or isn't available in this session,
-fall back to Playwright. Check first whether it's already usable
-(`python3 -c "import playwright"` or `npx playwright --version`) — if not
-installed, don't install it silently: tell the user it's missing and ask
-before adding a new dependency just for one review. If they say yes, or it's
-already there, drive it via a short throwaway script: launch a browser,
-navigate, screenshot at mobile (375px), tablet (768px), and desktop (1440px)
-widths, and capture console errors on load.
+fall back to the `screenshot` skill's `scripts/shot.py` — it already drives
+headless Chromium over CDP, no extra dependency to install or ask about:
+
+```
+python3 <path-to-screenshot-skill>/scripts/shot.py --web <url> --mobile
+python3 <path-to-screenshot-skill>/scripts/shot.py --web <url> --tablet
+python3 <path-to-screenshot-skill>/scripts/shot.py --web <url>              # desktop
+```
+
+Add `--dark` to any of those to emulate `prefers-color-scheme: dark` —
+covering the light/dark theme pair most design systems (including BZD's)
+ship. Add `--dom` if a raw-HTML check would help. `Read` each printed path
+to view the shots inline. This fallback doesn't capture console
+errors/network — say so explicitly in the report per the rule below, don't
+silently skip it.
 
 Either way, collect:
-- screenshots at 2-3 viewport widths (at least mobile + desktop)
+- screenshots at 2-3 viewport widths (at least mobile + desktop), in both
+  light and dark mode if the project supports theming
 - console errors/warnings
 - network requests that failed or look unusually large/slow (only if the
   tool surfaces this cheaply — don't build a waterfall analysis by hand)
 
-## 2. Evaluate, tag every finding
+## 3. Evaluate, tag every finding
 
 Go through each category below. If a category can't be checked (no
 Lighthouse/axe installed, no way to measure timing), say so explicitly under
@@ -93,11 +115,21 @@ Compare against the project's own design tokens/components if a design doc
 exists (see intro); otherwise judge internal consistency of the page itself —
 spacing scale, color palette, repeated one-off components that should be one.
 
+For a BZD-branded project, diff computed styles against
+`references/bzd-brand-tokens.json` / `bzd-brand-colors.css` instead of
+eyeballing it: primary `#2F6BEB`/`oklch(0.58 0.18 258)`, secondary (navy)
+`#0F2A4A`, tertiary (teal) `oklch(0.56 0.16 185)`, body font `Sora`, mono
+`JetBrains Mono`, radii `8/12/18px`. A color close-but-off (e.g.
+`#2F6CEC` instead of `#2F6BEB`) or a competing font is a finding, not a
+nitpick — fix is always "use `var(--bzd-*)` token X", never a new hex.
+Check the dark-mode screenshot against the `darkMode` block the same way,
+not just light mode.
+
 **[state] — error/empty/loading handling**
 What does this page show with zero data, mid-request, and after a failed
 request? A blank screen or a stuck spinner is a finding.
 
-## 3. Report format
+## 4. Report format
 
 Ranked most-severe first. One line per finding, `file:line` when the finding
 maps to source, otherwise a selector or short location description:
