@@ -51,6 +51,27 @@ To share one copy across Gemini CLI, Cursor, and Codex CLI, symlink into
 emerging cross-tool convention those agents also read. Claude Code does not
 read `.agents/skills/` yet, so use the Claude Code steps above for that tool.
 
+## Pi
+
+[Pi](https://pi.dev) discovers pi-packages via `package.json`'s `pi.skills` field —
+this repo already declares one, so a plain package install pulls all skills:
+
+```
+pi install git:git.bzd.gg/bzd/llm-toolbox
+```
+
+Or from a local checkout:
+
+```
+pi install /path/to/llm-toolbox
+```
+
+`pi list` confirms it's registered; `pi remove git:git.bzd.gg/bzd/llm-toolbox`
+uninstalls it. Commands (`/terse-mode`, `/shadow-agents`), hooks, agent
+overrides, and the MCP servers are Claude Code plugin features
+(`CLAUDE_PLUGIN_ROOT`, `SessionStart` hooks) with no Pi package equivalent —
+only the skills install under Pi.
+
 ## Other SKILL.md-compatible agents
 
 Cursor, Codex CLI, and VS Code Copilot also read `SKILL.md` unmodified —

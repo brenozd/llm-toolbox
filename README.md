@@ -13,7 +13,13 @@ MCP servers packaged as OCI containers, in Python, plus reusable Claude Code ski
 
 `owner/repo` shorthand only works for github.com — this repo is self-hosted
 Forgejo, so use the full clone URL above. See [INSTALL.md](INSTALL.md) for
-local-checkout, manual-symlink, Gemini CLI, and MCP server setups.
+local-checkout, manual-symlink, Gemini CLI, Pi, and MCP server setups.
+
+For [Pi](https://pi.dev):
+
+```
+pi install git:git.bzd.gg/bzd/llm-toolbox
+```
 
 ## Servers
 
