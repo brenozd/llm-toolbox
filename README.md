@@ -45,4 +45,8 @@ These skills are written for and depend on the following plugin (install it sepa
 
 - [`agents/`](agents/) — standalone subagents for isolated-context/async work: `deep-clean`
   (find-and-fix sweep), `doc-audit` (sync docs with code), `refactor` (phased multi-file
-  refactor), `ui-review` (web UI audit). Self-contained, no skill dependency.
+  refactor), `ui-review` (web UI audit). Self-contained, no skill dependency. Under Claude Code
+  they load from `agents/` automatically as plugin subagents. Under [Pi](https://pi.dev), they
+  require the [pi-subagents](https://github.com/nicobailon/pi-subagents) extension installed
+  separately; this package declares them via `pi.subagents.agents` in `package.json`, so once
+  pi-subagents is installed, `pi install git:git.bzd.gg/bzd/llm-toolbox` picks them up.

@@ -13,6 +13,11 @@
   "pi": {
     "skills": [
       "./skills"
-    ]
+    ],
+    "subagents": {
+      "agents": [
+        "./agents"
+      ]
+    }
   }
 }
