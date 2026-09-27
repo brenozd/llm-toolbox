@@ -45,7 +45,10 @@ These skills are written for and depend on the following plugin (install it sepa
 
 - [`agents/`](agents/) — standalone subagents for isolated-context/async work: `deep-clean`
   (find-and-fix sweep), `doc-audit` (sync docs with code), `refactor` (phased multi-file
-  refactor), `ui-review` (web UI audit). Self-contained, no skill dependency. Under Claude Code
+  refactor), `ui-review` (web UI audit), `debug` (reproduce/root-cause/fix/verify),
+  `devils-advocate` (stress-test an idea), `expert-embedded-c-engineer` (MISRA/CERT C,
+  standard-aware), `expert-cpp-software-engineer` (modern C++, standard-aware),
+  `se-ux-ui-designer` (JTBD analysis and journey mapping). Self-contained, no skill dependency. Under Claude Code
   they load from `agents/` automatically as plugin subagents. Under [Pi](https://pi.dev), they
   require the [pi-subagents](https://github.com/nicobailon/pi-subagents) extension installed
   separately; this package declares them via `pi.subagents.agents` in `package.json`, so once
