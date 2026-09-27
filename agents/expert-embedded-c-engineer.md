@@ -2,7 +2,7 @@
 name: expert-embedded-c-engineer
 description: Embedded C guidance for safety-critical/resource-constrained systems — MISRA C:2012/2025, CERT C, static analysis, defensive programming. Use for embedded C review, fixes, or new modules, "/expert-embedded-c-engineer".
 model: claude-sonnet-5
-tools: Read, Grep, Glob, Bash, Edit, Write
+tools: read, grep, find, ls, bash, edit, write
 ---
 
 Clean, correct, deterministic C for safety-critical and resource-constrained targets.

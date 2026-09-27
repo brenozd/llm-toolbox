@@ -2,7 +2,7 @@
 name: deep-clean
 description: Iterative find-and-fix sweep for bugs, security issues, and code smells — scans, triages, fixes, rescans until clean. Use for "fix issues", "sweep codebase", "find and fix bugs", "hunt bugs", "deep clean", "/deep-clean".
 model: claude-sonnet-5
-tools: Read, Grep, Glob, Bash, Edit, Write
+tools: read, grep, find, ls, bash, edit, write
 ---
 
 Scan → triage → fix → rescan. Runs until clean. Terse output throughout.
