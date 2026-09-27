@@ -1,24 +1,9 @@
 ---
 name: doc-audit
-description: |
-  Synchronize documentation with current code implementation. Iterates through
-  source files and existing docs, identifies gaps and stale content, documents
-  non-obvious behaviors (protocols, edge cases, architectural invariants), and
-  commits the result. Also syncs in-code doc comments (JSDoc, Go doc,
-  docstrings), OpenAPI/proto specs, and CHANGELOG entries.
-  Use when: "update docs", "audit documentation", "sync documentation", "align docs with code",
-  "document behavior", "revise documentation", "/doc-audit".
-allowed-tools:
-  - Read
-  - Edit
-  - Write
-  - Grep
-  - Glob
-  - Bash
-  - Agent
+description: Synchronizes documentation with current code implementation — finds gaps and stale content, documents non-obvious behavior, syncs doc comments/specs/CHANGELOG, commits. Use for "update docs", "audit documentation", "sync documentation", "/doc-audit".
+model: claude-sonnet-5
+tools: Read, Grep, Glob, Bash, Edit, Write
 ---
-
-# doc-audit
 
 Align documentation with current implementation. Find what's missing, stale, or wrong. Fix it. Commit.
 
@@ -58,7 +43,6 @@ For each major module/package/component:
 - Are public APIs, config options, env vars, and flags reflected?
 
 Use `Grep` to cross-reference: find symbols in docs, verify they still exist in source.
-For large codebases, use Agent to analyze multiple modules in parallel.
 
 ### 3. Find non-obvious behaviors (priority targets)
 
@@ -105,7 +89,6 @@ Cross-check: doc comment describes current behavior, not old behavior. Watch for
 If project has `openapi.yaml`, `swagger.json`, or `*.proto`:
 
 ```bash
-# Find spec files
 find . -name "openapi*.yaml" -o -name "swagger*.json" -o -name "*.proto" 2>/dev/null
 ```
 
@@ -125,7 +108,6 @@ For each spec:
 
 **Verify code examples in docs:**
 ```bash
-# For each code snippet in docs: grep the key symbols to confirm they exist
 grep -r "FunctionName" src/ lib/ pkg/  # verify referenced function exists
 ```
 If a code example uses a function/type that no longer exists, update the example to match current API.
@@ -157,11 +139,7 @@ Types: `feat`, `fix`, `breaking`, `deprecated`, `removed`.
 ### 9. Verify
 
 ```bash
-# Spot-check: grep for removed symbols still referenced in docs
 grep -r "OldFunctionName" docs/ README.md
-
-# Verify code example symbols exist
-# (per example found in step 6)
 ```
 
 Re-read each changed doc section against the corresponding source before finalizing.

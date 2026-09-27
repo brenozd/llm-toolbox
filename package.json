@@ -1,6 +1,6 @@
 {
   "name": "llm-toolbox",
-  "description": "Reusable agent skills: deep-clean, distrobox, doc-audit, guided-build, icon-search, image, pr-opener, refactor, screenshot, tech-blog-post, ui-review.",
+  "description": "Reusable agent skills: distrobox, guided-build, icon-search, image, pr-opener, screenshot, tech-blog-post.",
   "version": "1.0.23",
   "keywords": [
     "pi-package"

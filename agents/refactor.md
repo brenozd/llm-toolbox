@@ -1,24 +1,9 @@
 ---
 name: refactor
-description: >
-  Plan then execute a multi-file refactor safely. Investigates the codebase first, produces
-  a phased plan (types/contracts → implementations → callers → tests → cleanup) with
-  per-phase verification and a rollback plan, waits for confirmation, then executes phase by
-  phase committing and verifying as it goes. Use when the user asks to refactor, restructure,
-  rename across files, extract/split a module, migrate an API/interface, or otherwise change
-  code that touches multiple files. Also triggers on "/refactor", "plan this refactor",
-  "safely refactor", "sequence this change".
-allowed-tools:
-  - Read
-  - Edit
-  - Write
-  - Grep
-  - Glob
-  - Bash
-  - Agent
+description: Plans then executes a multi-file refactor safely — phased plan (contracts → implementations → callers → tests → cleanup) with per-phase verification and rollback, executed after user confirmation. Use for "refactor", "restructure", "rename across files", "/refactor".
+model: claude-sonnet-5
+tools: Read, Grep, Glob, Bash, Edit, Write
 ---
-
-# refactor
 
 Two modes, always in this order: **Plan**, then **Execute**. Never edit files during Plan.
 
@@ -42,9 +27,8 @@ Ask upfront only if not inferable from the request (combine into one message):
    callers, then tests, then cleanup/dead-code removal. Deviate only if the codebase's actual
    dependency graph demands it — say why. Cleanup phase always includes a ponytail pass (see
    below) — plan for it even on a small refactor.
-4. Attach a verification command to every phase — see `references/verify-commands.md` for
-   stack detection and per-stack build/test commands — and a rollback step for the riskiest
-   phases.
+4. Attach a verification command to every phase — see the stack table below — and a rollback
+   step for the riskiest phases.
 5. Output the plan in the format below. Stop. Ask: **"Shall I proceed with Phase 1?"**
 
 Skip planning ceremony for a single-file, mechanical rename with no external callers — just do it
@@ -85,7 +69,7 @@ and say so in one line.
 - [ ] Verify: run full test suite
 
 #### Phase 5: Cleanup (ponytail pass + deep-clean)
-- [ ] Run `deep-clean` over the refactor diff — find/fix bugs + code smells, loop to clean
+- [ ] Run the `deep-clean` agent over the refactor diff — find/fix bugs + code smells, loop to clean
 - [ ] Remove dead code / deprecated paths
 - [ ] Reuse: fold near-duplicate logic touched by this refactor into one place instead of
       leaving copies (only where the refactor already touches both — don't go hunting repo-wide)
@@ -127,11 +111,11 @@ refactor(<scope>): <phase N — what changed>
 **Cleanup phase**: before committing it, over the full diff produced by this refactor (all
 phases combined, not just Phase 5's own edits):
 
-1. Run the `ponytail-review` skill — over-engineering, bad names, useless/stale comments,
-   reuse misses the other phases introduced or left behind.
-2. Run the `deep-clean` skill with `--scope` set to the refactored area and diff scope —
-   its scan (tools + manual review + `references/code-smells.md`) catches bugs and code
-   smells the refactor exposed or moved. Let its find → fix → rescan loop run to clean.
+1. Do an over-engineering pass — bad names, useless/stale comments, reuse misses the other
+   phases introduced or left behind, speculative abstractions.
+2. Run the `deep-clean` agent with `--scope` set to the refactored area and diff scope — its
+   scan (tools + manual review + code smell catalogue) catches bugs and code smells the
+   refactor exposed or moved. Let its find → fix → rescan loop run to clean.
 
 Apply the findings as part of this phase's diff; anything you disagree with or that needs a
 judgment call goes to Deviations in the summary, not silently dropped.
@@ -154,3 +138,25 @@ judgment call goes to Deviations in the summary, not silently dropped.
 
 Commits: N
 ```
+
+---
+
+## Appendix: verify commands by stack
+
+Detect stack, run project scripts first (they encode project-specific rules), fall back to these.
+
+```bash
+ls package.json Cargo.toml go.mod pyproject.toml pom.xml 2>/dev/null
+```
+
+| Stack | Build/typecheck | Test |
+|---|---|---|
+| Python | `mypy .` / `ruff check .` | `pytest --tb=short` |
+| JS/TS | `npx tsc --noEmit` | `npm test` |
+| Go | `go build ./...` / `go vet ./...` | `go test -race ./...` |
+| Rust | `cargo check` | `cargo test` |
+| Java/Kotlin | `mvn compile` or `./gradlew build` | `mvn test` / `./gradlew test` |
+| Generic | `make build` | `make test` |
+
+For a phase touching only types/interfaces, build/typecheck is usually enough — save the full
+test run for the phase where callers/tests actually change.

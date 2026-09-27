@@ -23,10 +23,10 @@ Manual alternative — symlink individual skills instead of the whole plugin:
 
 ```bash
 # all projects
-ln -s "$(pwd)/skills/deep-clean" ~/.claude/skills/deep-clean
+ln -s "$(pwd)/skills/screenshot" ~/.claude/skills/screenshot
 
 # one project only
-ln -s "$(pwd)/skills/deep-clean" /path/to/project/.claude/skills/deep-clean
+ln -s "$(pwd)/skills/screenshot" /path/to/project/.claude/skills/screenshot
 ```
 
 Some skills (`guided-build`) expect the
@@ -67,10 +67,8 @@ pi install /path/to/llm-toolbox
 ```
 
 `pi list` confirms it's registered; `pi remove git:git.bzd.gg/bzd/llm-toolbox`
-uninstalls it. Commands (`/terse-mode`, `/shadow-agents`), hooks, agent
-overrides, and the MCP servers are Claude Code plugin features
-(`CLAUDE_PLUGIN_ROOT`, `SessionStart` hooks) with no Pi package equivalent —
-only the skills install under Pi.
+uninstalls it. The MCP servers are a Claude Code plugin feature with no Pi
+package equivalent — only the skills install under Pi.
 
 ## Other SKILL.md-compatible agents
 
