@@ -1,5 +1,7 @@
 # llm-toolbox
 
+<img src="icon.svg" width="64" height="64" alt="llm-toolbox icon">
+
 [![status-badge](https://woodpecker.bzd.gg/api/badges/6/status.svg)](https://woodpecker.bzd.gg/repos/6)
 
 MCP servers packaged as OCI containers, in Python, plus reusable Claude Code skills.
@@ -35,7 +37,15 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`skills/image`](skills/image/) — crop/rotate/resize/blur/watermark and other light edits with Python + Pillow.
 - [`skills/pr-opener`](skills/pr-opener/) — opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates draft PR (forge-agnostic).
 - [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
+- [`skills/svg-generator`](skills/svg-generator/) — hand-writes SVG markup via a write/render/self-evaluate/revise loop.
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
+- [`skills/ui-review`](skills/ui-review/) — full multi-agent web UI review (UX, visual, a11y, responsiveness), consolidated into one prioritized report.
+
+## Icon
+
+- [`icon.svg`](icon.svg) — light background.
+- [`icon-dark.svg`](icon-dark.svg) — dark background.
+- [`icon-mono.svg`](icon-mono.svg) — single color, uses `currentColor` (set `color` on a parent).
 
 These skills are written for and depend on the following plugin (install it separately):
 
