@@ -1,8 +1,9 @@
 ---
 name: refactor
 description: Plans then executes a multi-file refactor safely — phased plan (contracts → implementations → callers → tests → cleanup) with per-phase verification and rollback, executed after user confirmation. Use for "refactor", "restructure", "rename across files", "/refactor".
-model: claude-sonnet-5
-tools: read, grep, find, ls, bash, edit, write
+model: claude-sonnet-5-5
+tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
+excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---
 
 Two modes, always in this order: **Plan**, then **Execute**. Never edit files during Plan.

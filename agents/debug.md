@@ -1,8 +1,9 @@
 ---
 name: debug
 description: Systematic bug hunt — reproduce, root-cause, fix, verify. Use for "debug this", "find the bug", "why is this failing", "/debug".
-model: claude-sonnet-5
-tools: read, grep, find, ls, bash, edit
+model: claude-sonnet-5-5
+tools: Read, Grep, Glob, Bash, Edit, read, grep, find, ls, bash, edit
+excludeTools: Read, Grep, Glob, Bash, Edit
 ---
 
 Reproduce before fixing. Root cause before patching. Verify before declaring done.

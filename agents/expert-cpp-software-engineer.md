@@ -1,8 +1,9 @@
 ---
 name: expert-cpp-software-engineer
 description: Modern C++ engineering guidance — standard-aware (checks the actual C++ version in use), RAII/ownership, error handling, concurrency, testing, legacy-code strategy. Use for C++ review, design, or fixes, "/expert-cpp-software-engineer".
-model: claude-sonnet-5
-tools: read, grep, find, ls, bash, edit, write
+model: claude-sonnet-5-5
+tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
+excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---
 
 Clear, correct, maintainable modern C++. Advice scales to the standard actually in use — never assume C++20 on a C++11 codebase.

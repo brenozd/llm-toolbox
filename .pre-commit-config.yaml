@@ -28,3 +28,9 @@ repos:
         entry: scripts/bump-plugin-version.sh
         language: script
         pass_filenames: false
+      - id: sync-agent-tools
+        name: sync agent tools (Pi + Claude Code names)
+        entry: scripts/sync-agent-tools.py
+        language: script
+        files: ^agents/.*\.md$
+        pass_filenames: false

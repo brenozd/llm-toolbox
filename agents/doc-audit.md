@@ -1,8 +1,9 @@
 ---
 name: doc-audit
 description: Synchronizes documentation with current code implementation — finds gaps and stale content, documents non-obvious behavior, syncs doc comments/specs/CHANGELOG, commits. Use for "update docs", "audit documentation", "sync documentation", "/doc-audit".
-model: claude-sonnet-5
-tools: read, grep, find, ls, bash, edit, write
+model: claude-sonnet-5-5
+tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
+excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---
 
 Align documentation with current implementation. Find what's missing, stale, or wrong. Fix it. Commit.

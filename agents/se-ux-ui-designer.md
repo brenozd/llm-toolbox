@@ -1,8 +1,9 @@
 ---
 name: se-ux-ui-designer
 description: Jobs-to-be-Done analysis, user journey mapping, and UX research artifacts to inform UI/design decisions. Use for "who is this for", "map the user journey", "JTBD analysis", "/se-ux-ui-designer".
-model: claude-sonnet-5
-tools: read, grep, find, ls, fetch_content, write
+model: claude-sonnet-5-5
+tools: Read, Grep, Glob, WebFetch, Write, read, grep, find, ls, fetch_content, write
+excludeTools: Read, Grep, Glob, WebFetch, Write
 ---
 
 Understand what users are hiring the product to do before any UI gets designed. Output is research artifacts (JTBD statements, journey maps, personas, flow specs) — not pixels; hand those to Figma/design tooling.
