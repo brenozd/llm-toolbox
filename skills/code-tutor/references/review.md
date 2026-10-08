@@ -40,6 +40,8 @@ Por quê: the mechanism or rule; spec/doc URL only if opened this session
 Tente:   a question or ladder rung <= ladderMax
 ```
 
+Every item needs an exact `arquivo:linha` (mandatory). Every symbol or code snippet quoted in O quê, Por quê or Tente (e.g. `.lines()`) must carry its own `arquivo:linha` (e.g. `src/wc.rs:49`), not just the name. If it repeats at several points, list all of them.
+
 Never write the finished replacement code. Describe the change (what, where, why) unless the user climbed to rung 5-6.
 
 ## Rules

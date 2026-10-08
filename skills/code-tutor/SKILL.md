@@ -85,6 +85,8 @@ Por quê: the rule or mechanism behind it (+ official doc/spec URL actually open
 Tente:   a question or ladder rung <= ladderMax, never the finished fix
 ```
 
+Every item needs an exact `arquivo:linha` (mandatory). Every symbol or code snippet quoted in O quê, Por quê or Tente (e.g. `.lines()`) must carry its own `arquivo:linha` (e.g. `src/wc.rs:49`), not just the name. If it repeats at several points, list all of them.
+
 Also: what the user did well (one line, specific). Success is learning, not only a list of faults.
 
 ### 5. Next step
