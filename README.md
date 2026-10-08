@@ -31,6 +31,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 
 ## Skills
 
+- [`skills/code-tutor`](skills/code-tutor/) — programming tutor: profiles the project's domain, reviews your diff with linters/compilers, hints instead of fixes. Pi extension (`/tutor`) adds toggle, edit/write block and an auto-review watcher.
 - [`skills/distrobox`](skills/distrobox/) — persistent per-project distrobox container to build/test in isolation from the host.
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.
