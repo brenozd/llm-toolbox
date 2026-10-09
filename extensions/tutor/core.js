@@ -2,15 +2,15 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileP = promisify(execFile);
 
 export const TUTOR_DIR = ".tutor";
-export const POLL_MS = 30_000;
+export const DEBOUNCE_MS = 5000;
 export const MIN_CHANGED_LINES = 3;
-export const MIN_REVIEW_INTERVAL_MS = 5 * 60_000;
 export const MAX_PROFILE_PROMPT_CHARS = 8000;
 export const MAX_PROFILE_SAVE_CHARS = 20_000;
 export const MAX_LADDER = 6;
@@ -163,32 +163,33 @@ export function countChangedLines(diff) {
 
 const defaultRun = (cmd, args, opts) => execFileP(cmd, args, { maxBuffer: 8 * 1024 * 1024, ...opts });
 
-// Hash of "what the working tree looks like vs HEAD". null when not a git repo, or no commits yet.
-// shortcut: untracked files are hashed by size+mtime (not content) and count as MIN_CHANGED_LINES each.
-export async function gitSnapshot(cwd, run = defaultRun) {
+// Snapshot of the working tree (tracked + untracked, ignores respected) as a git tree id, built with a
+// throwaway index so the user's index is untouched. `diff` is what changed since `base` (a tree id or HEAD);
+// an unknown base falls back to HEAD. null when not a git repo, or no commits yet.
+// shortcut: re-hashes every non-ignored file per snapshot, fine for small repos; use `git add -u` + stat cache if slow.
+export async function gitSnapshot(cwd, base = "HEAD", run = defaultRun) {
+  const idx = path.join(os.tmpdir(), `tutor-idx-${process.pid}-${Date.now()}`);
+  const env = { ...process.env, GIT_INDEX_FILE: idx };
   try {
-    const { stdout: diff } = await run("git", ["diff", "HEAD", "--no-color"], { cwd });
-    const { stdout: other } = await run("git", ["ls-files", "--others", "--exclude-standard"], { cwd });
-    const untracked = other.split("\n").filter(Boolean).slice(0, 200);
-    const parts = [diff];
-    for (const f of untracked) {
+    await run("git", ["add", "-A"], { cwd, env });
+    const { stdout } = await run("git", ["write-tree"], { cwd, env });
+    const hash = stdout.trim();
+    for (const b of base === "HEAD" ? ["HEAD"] : [base, "HEAD"]) {
       try {
-        const s = fs.statSync(path.join(cwd, f));
-        parts.push(`${f}:${s.size}:${s.mtimeMs}`);
-      } catch { /* vanished between ls-files and stat */ }
+        const { stdout: diff } = await run("git", ["diff", "--no-color", b, hash], { cwd });
+        return { hash, base: b, diff, changed: countChangedLines(diff) };
+      } catch { /* stale base: try HEAD */ }
     }
-    return { hash: sha1(parts.join("\0")), changed: countChangedLines(diff) + (parts.length - 1) * MIN_CHANGED_LINES };
+    return null;
   } catch {
     return null;
+  } finally {
+    fs.rmSync(idx, { force: true });
   }
 }
 
-// Review only when the tree changed since the last review, stayed identical across two polls
-// (the user stopped typing), is big enough, and the last review was not too recent.
-export function decideReview({ hash, prevHash, lastHash, changed, now, lastReviewAt }) {
-  if (hash === lastHash) return { review: false, prevHash: hash };
-  if (hash !== prevHash) return { review: false, prevHash: hash };
-  if (changed < MIN_CHANGED_LINES) return { review: false, prevHash: hash };
-  if (now - lastReviewAt < MIN_REVIEW_INTERVAL_MS) return { review: false, prevHash: hash };
-  return { review: true, prevHash: hash };
+// Review when the tree differs from the last reviewed one and the difference is big enough.
+// Debouncing (waiting for saves to stop) is done by the caller before taking the snapshot.
+export function decideReview({ hash, lastHash, changed }) {
+  return hash !== lastHash && changed >= MIN_CHANGED_LINES;
 }

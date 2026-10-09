@@ -6,7 +6,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  MIN_REVIEW_INTERVAL_MS, buildPromptSection, countChangedLines, decideReview, ensureTutorDir, extractContract,
+  buildPromptSection, countChangedLines, decideReview, ensureTutorDir, extractContract,
   gitSnapshot, isBlockedTool, loadState, manifestHash, parseCommand, resolveOn, saveProfile, saveState, tutorPath,
 } from "../core.js";
 
@@ -75,13 +75,10 @@ test("countChangedLines ignores file headers", () => {
   assert.equal(countChangedLines(diff), 3);
 });
 
-test("decideReview needs: changed hash, stable across polls, big enough, not too soon", () => {
-  const base = { lastHash: "A", changed: 10, now: MIN_REVIEW_INTERVAL_MS + 1, lastReviewAt: 0 };
-  assert.equal(decideReview({ ...base, hash: "A", prevHash: "A" }).review, false); // already reviewed
-  assert.equal(decideReview({ ...base, hash: "B", prevHash: "A" }).review, false); // still moving
-  assert.equal(decideReview({ ...base, hash: "B", prevHash: "B", changed: 1 }).review, false); // too small
-  assert.equal(decideReview({ ...base, hash: "B", prevHash: "B", now: 1000 }).review, false); // too soon
-  assert.equal(decideReview({ ...base, hash: "B", prevHash: "B" }).review, true);
+test("decideReview: only when the tree changed since the last review and is big enough", () => {
+  assert.equal(decideReview({ hash: "A", lastHash: "A", changed: 10 }), false); // already reviewed
+  assert.equal(decideReview({ hash: "B", lastHash: "A", changed: 1 }), false); // too small
+  assert.equal(decideReview({ hash: "B", lastHash: "A", changed: 10 }), true);
 });
 
 test("ensureTutorDir: .tutor is invisible to git without touching project ignore files", () => {
@@ -133,4 +130,12 @@ test("gitSnapshot: stable when idle, changes on edit and on new file, null outsi
   assert.equal((await gitSnapshot(dir)).hash, withNew.hash);
 
   assert.equal(await gitSnapshot(tmp()), null);
+
+  // diff is relative to the base tree: only what changed since the last notification
+  fs.writeFileSync(path.join(dir, "b.txt"), "1\n2\n3\n");
+  const since = await gitSnapshot(dir, withNew.hash);
+  assert.equal(since.base, withNew.hash);
+  assert.equal(since.changed, 3);
+  assert.ok(since.diff.includes("b.txt") && !since.diff.includes("a.txt"));
+  assert.equal((await gitSnapshot(dir, "stale-hash")).base, "HEAD"); // unknown base falls back
 });

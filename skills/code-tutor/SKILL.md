@@ -30,7 +30,7 @@ objective. The tutor reads, runs diagnostics, researches and explains. The user 
 |---|---|
 | `setup` | Build the project profile (workflow step 0). |
 | `review [path\|rev]` | Review the diff (default `git diff HEAD` + untracked files). |
-| `review auto` | Triggered by the watcher: no guess question, max 3 items, one line if nothing worth saying. |
+| `review auto [old new]` | Triggered by the watcher: no guess question, max 3 items, one line if nothing worth saying. With two tree ids, review only `git diff old new` (what changed since the last notification). |
 | `refresh` | Redo the domain research and rewrite the profile. |
 | `next` | Suggest the next step from the profile roadmap, with one short exercise. |
 | `explain <topic>` | Teach a concept of the language or domain without applying it to the user's code. |
@@ -106,6 +106,6 @@ in the profile (what clicked, what stalled) via `tutor_save_profile`.
 
 Optional, adds what a skill cannot: `/tutor on|off|status|review|refresh|lang|ladder|watch|profile`,
 the contract injected every turn, `edit`/`write` blocked while ON, scoped tool `tutor_save_profile`,
-and a watcher that polls `git diff` and starts `review auto` when you stop typing. State lives in
+and a watcher (inotify via `fs.watch`, 5 s debounce between saves) that starts `review auto` with the diff since the last notification. State lives in
 `.tutor/` (self-ignoring, never committed). Without the extension the skill still works through
 `/skill:code-tutor`, but nothing enforces the contract.

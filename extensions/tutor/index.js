@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
-  DEFAULT_STATE, POLL_MS, buildPromptSection, extractContract, gitSnapshot, decideReview, isBlockedTool,
+  DEFAULT_STATE, DEBOUNCE_MS, buildPromptSection, extractContract, gitSnapshot, decideReview, isBlockedTool,
   loadProfile, loadState, manifestHash, parseCommand, resolveOn, saveProfile, saveState, tutorPath,
 } from "./core.js";
 
@@ -16,10 +16,9 @@ export default function tutorExtension(pi) {
   let busy = false;
   let ticking = false;
   let timer = null;
+  let watcher = null;
   let lastCtx = null;
   let cwd = process.cwd();
-  let prevHash = null;
-  let lastReviewAt = 0;
   let toolRegistered = false;
   let state = { ...DEFAULT_STATE };
   let contract = FALLBACK_CONTRACT;
@@ -72,34 +71,45 @@ export default function tutorExtension(pi) {
 
   // -- Watcher ---------------------------------------------------------------
   async function tick() {
-    if (!on || !state.watch || busy || ticking) return;
+    if (!on || !state.watch || ticking) return;
+    if (busy) return arm(); // agent running: look again once it is quiet
     ticking = true;
     try {
-      const snap = await gitSnapshot(cwd);
-      if (!snap) return;
-      const d = decideReview({ ...snap, prevHash, lastHash: state.lastHash, now: Date.now(), lastReviewAt });
-      prevHash = d.prevHash;
-      if (!d.review) return;
+      const snap = await gitSnapshot(cwd, state.lastHash || "HEAD");
+      if (!snap || !decideReview({ ...snap, lastHash: state.lastHash })) return;
+      const base = snap.base;
       state.lastHash = snap.hash;
-      lastReviewAt = Date.now();
       saveState(cwd, state);
-      notify("Tutor: new changes, reviewing.");
-      dispatch("review auto");
+      notify("Tutor: changes since the last notification, reviewing.");
+      dispatch(`review auto ${base} ${snap.hash}`);
     } finally {
       ticking = false;
     }
   }
 
-  const startWatcher = () => {
-    if (timer || !state.watch) return;
-    timer = setInterval(() => { tick().catch(() => {}); }, POLL_MS);
+  // Debounce: every fs event pushes the review back, so editors that save on each keystroke stay quiet.
+  const arm = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { tick().catch(() => {}); }, DEBOUNCE_MS);
     timer.unref?.();
   };
 
+  const startWatcher = () => {
+    if (watcher || !state.watch) return;
+    try {
+      // recursive fs.watch is inotify on Linux
+      watcher = fs.watch(cwd, { recursive: true }, (_ev, file) => {
+        if (!/^(\.git|\.tutor|node_modules)([\\/]|$)/.test(String(file ?? ""))) arm();
+      });
+      watcher.on("error", () => stopWatcher());
+    } catch { /* unwatchable dir: no auto reviews */ }
+  };
+
   const stopWatcher = () => {
-    if (timer) clearInterval(timer);
+    watcher?.close();
+    watcher = null;
+    clearTimeout(timer);
     timer = null;
-    prevHash = null;
   };
 
   // Mark the current tree as reviewed so the watcher does not repeat an explicit review.
@@ -107,7 +117,6 @@ export default function tutorExtension(pi) {
     const snap = await gitSnapshot(cwd);
     if (!snap) return;
     state.lastHash = snap.hash;
-    lastReviewAt = Date.now();
     saveState(cwd, state);
   };
 
