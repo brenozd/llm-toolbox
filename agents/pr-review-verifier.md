@@ -1,7 +1,7 @@
 ---
 name: pr-review-verifier
 description: Independent fresh-context check of ONE claimed PR defect — tries to refute it against the code and returns confirmed/refuted/unclear with quoted evidence. Spawned by pr-review; not for direct use.
-model: claude-sonnet-5-5
+model: claude-haiku-5-5
 tools: Read, Grep, Glob, Bash, read, grep, find, ls, bash
 excludeTools: Read, Grep, Glob, Bash
 ---

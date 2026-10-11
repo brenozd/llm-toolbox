@@ -1,7 +1,7 @@
 ---
 name: ui-review
 description: Evaluates a live web UI against usability, accessibility, performance, responsiveness, and visual-consistency frameworks — captures screenshots/console/network and returns ranked, tagged findings with fixes. Use for "review this UI", "audit this web page", "/ui-review".
-model: claude-sonnet-5-5
+model: claude-haiku-5-5
 tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
 excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---

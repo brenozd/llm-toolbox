@@ -1,7 +1,7 @@
 ---
 name: pr-review
 description: Reviews a pull request for real defects — bugs, security, silent failures, missing tests — verifies every finding against the code, drops weak ones, and returns a ranked report. Read-only by default; posts to the forge only after explicit user approval. Use for "review this PR", "review PR #123", "/pr-review".
-model: claude-sonnet-5-5
+model: claude-haiku-5-5
 tools: Read, Grep, Glob, Bash, Agent, read, grep, find, ls, bash, subagent
 excludeTools: Read, Grep, Glob, Bash, Agent
 ---
