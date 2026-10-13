@@ -1,16 +1,6 @@
 ---
 name: tech-blog-post
-description: >
-  Write a technical blog post in the style of a senior programmer documenting something they
-  actually did — to remember it later and save the next person unnecessary pain. Produces raw
-  Markdown with frontmatter ready for Astro, Hugo, or similar static site generators. The
-  output is direct, opinionated, and links to upstream issues/commits/docs inline where
-  relevant. Use this skill whenever the user wants to write a technical post, document a
-  solution, write about a problem they solved, create blog content about a technical topic,
-  or says things like "write a blog post about", "document this for my blog", "turn this into
-  a post", "write up what I did", "help me write about", "/tech-blog-post", or "blog post".
-  Trigger even when the user just pastes a description of a problem they solved and says
-  "make this a post" or similar.
+description: "Write a technical blog post (raw Markdown with frontmatter for Astro/Hugo) from something the user actually did, in a direct, opinionated senior-dev voice. Use for: \"write a blog post about\", \"turn this into a post\", \"write up what I did\", /tech-blog-post."
 ---
 
 # Tech Blog Post Skill

@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, pr-opener, screenshot, svg-generator, tech-blog-post, ui-review.",
-  "version": "1.0.48",
+  "version": "1.0.49",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"

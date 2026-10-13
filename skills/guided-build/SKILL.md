@@ -1,13 +1,6 @@
 ---
 name: guided-build
-description: >
-  Goal-first, checkpoint-driven build process. Interviews the user to surface the real goal
-  and the core decision this project drives, then decomposes work into agile buckets and
-  executes them one at a time — each with a plan, implementation, tests, docs, and a
-  user-facing verification checkpoint before moving on. Key decisions are surfaced explicitly
-  rather than inferred. Use whenever the user says: "guided build", "interview me first",
-  "build incrementally", "break this into buckets", "plan before you code", "/guided-build",
-  "checkpoint-driven", "agile build", "let's plan this together".
+description: "Goal-first, checkpoint-driven build: interviews you for the real goal, splits work into buckets, and verifies each with you before moving on. Use for: \"guided build\", \"interview me first\", \"break this into buckets\", \"plan before you code\", /guided-build."
 ---
 
 # guided-build

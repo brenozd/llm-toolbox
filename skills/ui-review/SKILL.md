@@ -1,13 +1,6 @@
 ---
 name: ui-review
-description: |
-  Full multi-agent review of a web UI: spawns parallel independent agents covering
-  user journey/UX, visual design, accessibility/contrast, mobile responsiveness,
-  desktop/large-screen behavior, frontend implementation, and cross-screen visual QA.
-  Consolidates findings into a deduplicated, prioritized (P0-P3) report with a
-  concrete, breakpoint-specific fix plan.
-  Use when: "revise esta UI", "ui review", "audit this interface", "/ui-review",
-  "review the frontend for UX/accessibility/responsiveness issues".
+description: "Multi-agent review of a web UI (UX, visual, accessibility, mobile, desktop, frontend code) consolidated into a prioritized P0-P3 fix plan. Use for: \"ui review\", \"audit this interface\", \"revise esta UI\", /ui-review."
 allowed-tools:
   - Read
   - Bash

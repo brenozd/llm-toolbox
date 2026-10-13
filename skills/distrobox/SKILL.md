@@ -1,13 +1,6 @@
 ---
 name: distrobox
-description: |
-  Persistent per-project distrobox container (Ubuntu 24.04 toolbx, systemd via --init,
-  isolated HOME) to build and test code in isolation from the host. Mounts the current
-  project read-write at /opt/<name>, mounts host dependency caches (npm/pip/cargo/apt)
-  so re-runs are fast, offers to mount extra volumes, runs the requested commands inside.
-  The container is kept between runs; `/distrobox clean` (or asking) destroys it.
-  Use when: "run this in a sandbox", "test in a container", "isolated dev environment",
-  "distrobox", "I need systemd to test this", "don't run that on my host", "/distrobox".
+description: "Persistent per-project distrobox container (Ubuntu 24.04, systemd) to build and test code isolated from the host. Use for: \"run this in a sandbox\", \"test in a container\", \"I need systemd to test this\", /distrobox."
 allowed-tools:
   - Bash
   - Read

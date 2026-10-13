@@ -1,13 +1,6 @@
 ---
 name: code-tutor
-description: |
-  Programming tutor that teaches by reviewing your real code. Reads the project (AGENTS.md,
-  manifest, deps) to learn its domain, researches how that domain works and its good practices
-  from official sources, then reviews your git diff on three layers (language, domain, project),
-  backed by the language's own linter/compiler/tests. Gives the smallest useful hint, explains
-  the why, suggests the next step. Never edits project files: it teaches, you write.
-  Use when: "tutor", "me ensina", "revisa meu código para eu aprender", "explica por que",
-  "próximo passo", "/code-tutor". Pi users: /tutor on|off|review|watch (extensions/tutor).
+description: "Programming tutor that teaches by reviewing your real code (git diff) on language, domain and project layers; gives the smallest useful hint and the why, never edits files. Use for: \"tutor\", \"me ensina\", \"revisa meu código para eu aprender\", \"próximo passo\", /code-tutor."
 allowed-tools:
   - Read
   - Bash

@@ -1,13 +1,6 @@
 ---
 name: image
-description: |
-  Light image editing via Python + Pillow: crop, rotate, resize/scale, blur, sharpen,
-  grayscale, brightness/contrast/saturation, flip, text/watermark overlay, and format
-  conversion (PNG/JPEG/WebP). Operations chain in a single command, applied in flag
-  order, ideal for prepping images for blog posts, wikis, and docs.
-  Use when: "crop this image", "resize image", "rotate photo", "blur image", "convert
-  to jpeg/webp", "add watermark to image", "grayscale this picture", "edit screenshot
-  for blog post", "/image".
+description: "Light image editing with Python + Pillow: crop, rotate, resize, blur, grayscale, watermark, format conversion (PNG/JPEG/WebP). Use for: \"crop/resize/rotate this image\", \"convert to webp\", \"add watermark\", /image."
 allowed-tools:
   - Bash
   - Read

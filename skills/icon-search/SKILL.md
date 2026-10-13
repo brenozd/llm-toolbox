@@ -1,13 +1,6 @@
 ---
 name: icon-search
-description: |
-  Search for SVG icons by keyword and get each result's license, across three sources:
-  Iconify (api.iconify.design — free, no key, backs opensvg.dev/icons), OpenIconLibrary
-  (openiconlibrary.com — free search/license, gated download), and Flaticon
-  (api.flaticon.com — needs the user's own registered API key).
-  Use when: "find an icon for X", "search icons", "search opensvg", "search flaticon",
-  "search openiconlibrary", "what's the license on this icon", "download an svg icon",
-  "find a home/user/settings icon", "/icon-search".
+description: "Search SVG icons by keyword with licenses (Iconify, OpenIconLibrary, Flaticon). Use for: \"find an icon for X\", \"search icons\", \"license of this icon\", /icon-search."
 allowed-tools:
   - Bash
 ---

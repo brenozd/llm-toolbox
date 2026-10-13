@@ -1,12 +1,6 @@
 ---
 name: svg-generator
-description: |
-  Generate or edit an SVG by hand-writing SVG/XML markup directly (no DOM library,
-  no per-element wrapper scripts), using a write -> render -> self-evaluate -> revise
-  loop until the result is aligned, symmetric where expected, matches the user's
-  request, and respects SVG spec rules — or a fixed iteration cap is hit.
-  Use when: "create an svg", "generate an icon/logo as svg", "edit this svg",
-  "make a vector [shape/icon/illustration]", "/svg-generator".
+description: "Generate or edit an SVG by hand-writing markup in a write -> render -> evaluate -> revise loop. Use for: \"create an svg\", \"make an icon/logo as svg\", \"edit this svg\", /svg-generator."
 allowed-tools:
   - Read
   - Write

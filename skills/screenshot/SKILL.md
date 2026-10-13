@@ -1,15 +1,6 @@
 ---
 name: screenshot
-description: |
-  Capture a desktop or web-page screenshot (Python + Pillow, styled after claudeshot).
-  Desktop capture auto-detects a backend per OS (spectacle/grim/gnome-screenshot/scrot/maim/
-  import on Linux, screencapture on macOS, Pillow ImageGrab on Windows). Web capture via
-  headless Chromium + CDP, with optional DOM/HTML dump, mobile/tablet viewport presets, and
-  full-page or viewport-only shots. Resize/format conversion via Pillow. Clipboard copy on
-  all three OSes. Session tracking with list/clear. Cross-platform: Linux, macOS, Windows.
-  Use when: "screenshot", "take a screenshot", "capture the screen", "screenshot this page",
-  "screenshot localhost", "capture this window", "screenshot mobile view", "list screenshots",
-  "clear screenshots", "/screenshot".
+description: "Capture a desktop or web-page screenshot (Linux/macOS/Windows; headless Chromium for URLs, mobile/tablet presets, DOM dump). Use for: \"take a screenshot\", \"screenshot this page/localhost\", \"screenshot mobile view\", /screenshot."
 allowed-tools:
   - Bash
   - Read

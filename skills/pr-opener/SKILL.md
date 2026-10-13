@@ -1,12 +1,6 @@
 ---
 name: pr-opener
-description: |
-  Open a pull request for the current branch: verify work is complete, gather git context
-  (diffed against the base branch, not just local commits), read the PR template if one
-  exists, draft a title and body, confirm with the user, push, and create the PR (draft by
-  default). Forge-agnostic — uses whichever of gh/tea/glab or Forgejo MCP tools is available,
-  falls back to a manual compare-URL if none.
-  Use when: "open a PR", "create a pull request", "open PR", "make a PR", "/pr-opener".
+description: "Open a pull request for the current branch: verify work, read the PR template, draft title/body, confirm, push, create (draft by default; gh/tea/glab/Forgejo). Use for: \"open a PR\", \"create a pull request\", /pr-opener."
 allowed-tools:
   - Read
   - Bash
