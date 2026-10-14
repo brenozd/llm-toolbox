@@ -41,6 +41,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`skills/svg-generator`](skills/svg-generator/) — hand-writes SVG markup via a write/render/self-evaluate/revise loop.
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
 - [`skills/ui-review`](skills/ui-review/) — full multi-agent web UI review (UX, visual, a11y, responsiveness), consolidated into one prioritized report.
+- [`skills/wiki-writing`](skills/wiki-writing/) — writes/audits dense, verified technical wiki pages (reference, explanation, runbook, ADR, postmortem) with a numbers-consistency check and independent review.
 
 ## Icon
 
