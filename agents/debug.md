@@ -1,7 +1,7 @@
 ---
 name: debug
 description: Systematic bug hunt — reproduce, root-cause, fix, verify. Use for "debug this", "find the bug", "why is this failing", "/debug".
-model: claude-haiku-5-5
+model: opencode-go/deepseek-v4.1-flash
 tools: Read, Grep, Glob, Bash, Edit, read, grep, find, ls, bash, edit
 excludeTools: Read, Grep, Glob, Bash, Edit
 ---

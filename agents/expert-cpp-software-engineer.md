@@ -1,7 +1,7 @@
 ---
 name: expert-cpp-software-engineer
 description: Modern C++ engineering guidance — standard-aware (checks the actual C++ version in use), RAII/ownership, error handling, concurrency, testing, legacy-code strategy. Use for C++ review, design, or fixes, "/expert-cpp-software-engineer".
-model: claude-haiku-5-5
+model: opencode-go/deepseek-v4.1-flash
 tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
 excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---

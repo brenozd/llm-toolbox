@@ -1,7 +1,7 @@
 ---
 name: se-ux-ui-designer
 description: Jobs-to-be-Done analysis, user journey mapping, and UX research artifacts to inform UI/design decisions. Use for "who is this for", "map the user journey", "JTBD analysis", "/se-ux-ui-designer".
-model: claude-haiku-5-5
+model: opencode-go/deepseek-v4.1-flash
 tools: Read, Grep, Glob, WebFetch, Write, read, grep, find, ls, fetch_content, write
 excludeTools: Read, Grep, Glob, WebFetch, Write
 ---

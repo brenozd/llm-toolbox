@@ -1,7 +1,7 @@
 ---
 name: doc-audit
 description: Synchronizes documentation with current code implementation — finds gaps and stale content, documents non-obvious behavior, syncs doc comments/specs/CHANGELOG, commits. Use for "update docs", "audit documentation", "sync documentation", "/doc-audit".
-model: claude-haiku-5-5
+model: opencode-go/deepseek-v4.1-flash
 tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
 excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---

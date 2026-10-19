@@ -1,7 +1,7 @@
 ---
 name: refactor
 description: Plans then executes a multi-file refactor safely — phased plan (contracts → implementations → callers → tests → cleanup) with per-phase verification and rollback, executed after user confirmation. Use for "refactor", "restructure", "rename across files", "/refactor".
-model: claude-haiku-5-5
+model: opencode-go/deepseek-v4.1-flash
 tools: Read, Grep, Glob, Bash, Edit, Write, read, grep, find, ls, bash, edit, write
 excludeTools: Read, Grep, Glob, Bash, Edit, Write
 ---
