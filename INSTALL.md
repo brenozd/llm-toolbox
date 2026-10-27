@@ -79,8 +79,8 @@ shared `.agents/skills/` path above.
 ## MCP servers
 
 The plugin (`/plugin install llm-toolbox@llm-toolbox`) registers
-`actual-budget`, `woodpecker`, and `faster-whisper` MCPs automatically — no
-need to hand-copy JSON. `actual-budget` and `woodpecker` each need their own
+`actual-budget`, `woodpecker`, `faster-whisper`, and `whatsapp` MCPs automatically — no
+need to hand-copy JSON. `actual-budget`, `woodpecker` and `whatsapp` each need their own
 `config.json` (see
 [`servers/actual-budget/README.md`](servers/actual-budget/README.md#config)
 and [`servers/woodpecker/README.md`](servers/woodpecker/README.md#config))
@@ -90,17 +90,27 @@ dropped at a fixed path, no env vars needed:
 mkdir -p ~/.config/llm-toolbox
 cp servers/actual-budget/config.example.json ~/.config/llm-toolbox/actual-budget.json
 cp servers/woodpecker/config.example.json ~/.config/llm-toolbox/woodpecker.json
-# then edit both with your real server details
+cp servers/whatsapp/config.example.json ~/.config/llm-toolbox/whatsapp.json
+# then edit them with your real server details
 ```
 
 Without the file at that path, the server still starts but its `docker run`
 fails to mount a config, so its tools won't appear — check `/mcp` in Claude
-Code to confirm both are connected. Skip a file for a server you don't need;
+Code to confirm they are connected. Skip a file for a server you don't need;
 that one just won't come up.
 
 `faster-whisper` needs no config file — it mounts your home directory
 read-only instead, and is tuned with env vars if needed (see
 [`servers/faster-whisper/README.md`](servers/faster-whisper/README.md#config)).
+
+`whatsapp` also needs a one-time QR pairing (`docker run -it ... login`, see
+[`servers/whatsapp/README.md`](servers/whatsapp/README.md#login)), keeps its
+session in the `whatsapp-data` volume, and mounts `~/.config/llm-toolbox/whatsapp-media`
+read-only as the only folder files can be sent from (`mkdir` it first).
+Sending is off unless you set `allow_send` in its config. It talks to WhatsApp
+Web, an unofficial protocol: pairing a number carries a real ban risk, and the
+session volume is a full login — see the
+[honest limits](servers/whatsapp/README.md#honest-limits) before pairing.
 
 For a non-plugin client (Claude Desktop, Gemini CLI, etc), register
 manually with the JSON in each server's README under `## Run` instead.

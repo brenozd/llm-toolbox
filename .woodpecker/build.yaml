@@ -55,3 +55,45 @@ steps:
         path: { include: ["servers/faster-whisper/**", ".woodpecker/**"] }
       - event: tag
         ref: refs/tags/faster-whisper-v*
+
+  # Offline Python tests: no Go toolchain, no WhatsApp account. libmagic1 because neonize
+  # imports python-magic at import time (ffmpeg is not needed by the tests).
+  # Steps without depends_on run serially and a non-zero exit aborts the pipeline, so the
+  # whatsapp build below only runs when this step ran and passed. Its `when` filters are a
+  # superset of the build's (pull_request included), so pull requests stop after the tests
+  # and the build is never reached with the tests skipped. Adding depends_on here would
+  # switch the pipeline to a dependency graph and parallelise the unrelated image steps.
+  - name: whatsapp-test
+    image: python:3.12-slim
+    commands:
+      - apt-get update && apt-get install -y --no-install-recommends libmagic1
+      - cd servers/whatsapp
+      - pip install --quiet --no-cache-dir .
+      - for t in tests/test_*.py; do python "$t" || exit 1; done
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["servers/whatsapp/**", ".woodpecker/**"] }
+      - event: pull_request
+        path: { include: ["servers/whatsapp/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/whatsapp-v*
+
+  - name: whatsapp
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/whatsapp-mcp
+      dockerfile: servers/whatsapp/Dockerfile
+      context: servers/whatsapp
+      platforms: linux/amd64,linux/arm64
+      provenance: false
+      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["servers/whatsapp/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/whatsapp-v*

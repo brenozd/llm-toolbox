@@ -41,6 +41,21 @@
         "${HOME}:${HOME}:ro",
         "registry.bzd.gg/bzd/faster-whisper-mcp:latest"
       ]
+    },
+    "whatsapp": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "${HOME}/.config/llm-toolbox/whatsapp.json:/config/config.json:ro",
+        "-v",
+        "whatsapp-data:/data",
+        "-v",
+        "${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro",
+        "registry.bzd.gg/bzd/whatsapp-mcp:latest"
+      ]
     }
   }
 }

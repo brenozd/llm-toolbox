@@ -1,0 +1,7 @@
+{
+  "data_dir": "/data",
+  "media_dir": "/media",
+  "allow_send": false,
+  "allowed_recipients": [],
+  "max_media_bytes": 67108864
+}
