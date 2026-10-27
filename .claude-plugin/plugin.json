@@ -31,6 +31,17 @@
         "registry.bzd.gg/bzd/woodpecker-mcp:latest"
       ]
     },
+    "vikunja": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-v",
+        "${HOME}/.config/llm-toolbox/vikunja.json:/config/config.json:ro",
+        "registry.bzd.gg/bzd/vikunja-mcp:latest"
+      ]
+    },
     "faster-whisper": {
       "command": "docker",
       "args": [

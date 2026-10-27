@@ -79,8 +79,8 @@ shared `.agents/skills/` path above.
 ## MCP servers
 
 The plugin (`/plugin install llm-toolbox@llm-toolbox`) registers
-`actual-budget`, `woodpecker`, `faster-whisper`, and `whatsapp` MCPs automatically — no
-need to hand-copy JSON. `actual-budget`, `woodpecker` and `whatsapp` each need their own
+`actual-budget`, `woodpecker`, `vikunja`, `faster-whisper`, and `whatsapp` MCPs automatically — no
+need to hand-copy JSON. `actual-budget`, `woodpecker`, `vikunja` and `whatsapp` each need their own
 `config.json` (see
 [`servers/actual-budget/README.md`](servers/actual-budget/README.md#config)
 and [`servers/woodpecker/README.md`](servers/woodpecker/README.md#config))
@@ -90,6 +90,7 @@ dropped at a fixed path, no env vars needed:
 mkdir -p ~/.config/llm-toolbox
 cp servers/actual-budget/config.example.json ~/.config/llm-toolbox/actual-budget.json
 cp servers/woodpecker/config.example.json ~/.config/llm-toolbox/woodpecker.json
+cp servers/vikunja/config.example.json ~/.config/llm-toolbox/vikunja.json
 cp servers/whatsapp/config.example.json ~/.config/llm-toolbox/whatsapp.json
 # then edit them with your real server details
 ```

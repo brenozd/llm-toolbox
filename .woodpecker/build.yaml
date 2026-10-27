@@ -37,6 +37,25 @@ steps:
       - event: tag
         ref: refs/tags/woodpecker-v*
 
+  - name: vikunja
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/vikunja-mcp
+      dockerfile: servers/vikunja/Dockerfile
+      context: servers/vikunja
+      platforms: linux/amd64,linux/arm64
+      provenance: false
+      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["servers/vikunja/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/vikunja-v*
+
   - name: faster-whisper
     image: woodpeckerci/plugin-docker-buildx
     settings:

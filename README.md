@@ -27,6 +27,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 
 - [`servers/actual-budget`](servers/actual-budget/) — integrates with [Actual Budget](https://actualbudget.org).
 - [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org).
+- [`servers/vikunja`](servers/vikunja/) — projects, tasks, comments and labels of a [Vikunja](https://vikunja.io) instance.
 - [`servers/faster-whisper`](servers/faster-whisper/) — speech-to-text transcription via faster-whisper.
 - [`servers/whatsapp`](servers/whatsapp/) — read WhatsApp chats and (opt-in) send messages, through an in-process whatsmeow client (neonize).
 
