@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
-  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, pr-opener, screenshot, svg-generator, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.0.53",
+  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, pr-opener, screenshot, svg-generator, promo-video, tech-blog-post, ui-review, wiki-writing.",
+  "version": "1.0.54",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -66,6 +66,61 @@
         "-v",
         "${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro",
         "registry.bzd.gg/bzd/whatsapp-mcp:latest"
+      ]
+    },
+    "promo-video": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "--read-only",
+        "--tmpfs",
+        "/tmp",
+        "--tmpfs",
+        "/root",
+        "--pids-limit",
+        "256",
+        "--add-host=host.docker.internal:host-gateway",
+        "-v",
+        "${PWD}:/repo:ro",
+        "-v",
+        "promo-video-work:/work",
+        "registry.bzd.gg/bzd/promo-video-mcp:latest"
+      ]
+    },
+    "promo-video-exec": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--network",
+        "none",
+        "--cap-drop",
+        "ALL",
+        "--cap-add",
+        "SETGID",
+        "--security-opt",
+        "no-new-privileges",
+        "--read-only",
+        "--tmpfs",
+        "/tmp",
+        "--pids-limit",
+        "256",
+        "--tmpfs",
+        "/root",
+        "-e",
+        "PROMO_ALLOW_EXEC=1",
+        "-v",
+        "${PWD}:/repo:ro",
+        "-v",
+        "promo-video-work:/work",
+        "registry.bzd.gg/bzd/promo-video-mcp:latest"
       ]
     }
   }

@@ -1,0 +1,71 @@
+---
+name: promo-video
+description: "Turn the current repo (web app, CLI or GUI) into a short promo video from real captures, with every claim tied to file:line. Needs the promo-video MCP (promo-video-exec for CLI/GUI). Use for: \"make a promo video\", \"demo video of this project\", \"vídeo promocional\", /promo-video."
+---
+
+# promo-video
+
+Honest promo video from the code. The MCP mounts only the current directory read-only at `/repo`.
+Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline voice-over (Kokoro-82M, `pt-BR` or `en`). No stock footage. Network: the `promo-video` entry has a network (web capture needs it, restricted by the tools to `localhost` / `host.docker.internal`); the `promo-video-exec` entry runs `--network none`.
+
+## Rules
+- All text (scenes, captions, narration) is in `spec.lang`; keep code, commands and identifiers verbatim. Never mix languages in one video.
+- Never claim what you did not capture or cite. Numbers on screen need `scene.evidence = "file:line"`.
+- Never open `.env`, keys or real user data; the MCP refuses them. Do not edit the repo.
+- Never put in the video: container paths (`/work`, `/repo`, `/tmp`), meta lines about the making ("compiled in the container", "every number came from that run", "nothing typed by hand"), a claim the footage contradicts (typed heredoc vs "nothing typed"), filler outros, tool internals nobody asked about. Put in: what the product does for the viewer, one concrete before/after, real command output, repo-relative `file:line`. Hide setup noise with `capture_terminal_session(setup=...)` (PATH, cd, aliases; runs before the grab), so the viewer sees `mint_loader ./leak`, not absolute paths.
+- Ask before: running repo code (exec), anything that needs a build. Tell the user the exact command.
+
+## Flow
+1. `preflight`. Fix anything red. CLI/GUI need the `promo-video-exec` entry (`capture_terminal`, `capture_terminal_session`, `capture_gui`); web needs `promo-video`.
+2. `scan_repo` → kind guess (web|cli|gui), the candidate features (README sections, CLI flags, modules) and the README's language. `brand_tokens` for the theme.
+3. **Interview (mandatory, stop here, before any spec).** Summarize first what `scan_repo`, the README and the code reveal, then ask with `ask_user_question` (plain questions if it is unavailable):
+   - (a) **format/aspect** (16:9, 9:16 or both — 3:4 is not supported yet) and target **duration**;
+   - (b) **language** of captions and narration (default: the README's; pt-BR or en for TTS);
+   - (c) **narration** on/off, and the voice when on;
+   - (d) **music**: none, ambient or tech (`list_music` for the choice);
+   - (e) **which features to show**: list the candidates from the code analysis, recommend a subset with a one-line reason each, let the user pick some or all;
+   - (f) **demo honesty**: real programs only, and never claim a bug the tool did not report.
+   Record the answers in a short file in the work dir (`/work/interview.md`) and refer to it in the spec.
+4. **Script gate (stop here).** Show a table: scene | on-screen text | source (capture or file:line), covering the features and duration from the interview. 5–7 scenes, 30–45 s, wait for approval.
+4b. **Script review (mandatory, before `narrate` and before the stills are final).** Hand the scene table and every `title/items/caption/narration` line to a fresh read-only reviewer (writing/director role; a subagent if available, otherwise re-read as one) with: the interview answers, the captures' real output and this checklist. It returns a per-line verdict (keep / rewrite / cut) with the reason:
+   - Is each line *true* against the footage and `evidence`? Does the outro promise something the video contradicts?
+   - Does it say something a viewer needs, or narrate the tooling? Cut meta, filler and repeated information (the same code in a code scene and typed in the terminal).
+   - Written to be heard: short, one idea, no paths/flags; acronyms and identifiers spelled in `spec.say` only, narration and captions keep the real token (`LD_PRELOAD`); `phonetic_in_narration` is an error.
+   - Pace and length vs the interview's duration; the last scene closes on the product, not on the process.
+   Apply the rewrites, `validate_spec`, and only then `narrate`. Re-run the reviewer after any rewrite that changes meaning.
+5. Capture by kind — **always pass the chosen `aspect`**, it sets the viewport/cols/rows/screen size for that format:
+   - web: start the app on the host, `capture_web` on `http://host.docker.internal:PORT` (`selector` gives a zoom `focus`, scrolled into view and clamped to the shot; `hide` blurs private areas).
+   - cli: prefer `capture_terminal_session` (real typing). Put `PATH`/`cd`/aliases in its `setup` so the prompt shows `mint_loader ./leak`, never `/repo/...`; keep a demo program in the repo or the image, not a typed heredoc (long, and "nothing typed" claims turn false). Otherwise: build first if README says so, then `capture_terminal` with the README commands. Max 16 lines; pick a short, meaningful run. `capture_terminal` is the *text* path: it runs the command and renders a reconstructed `$ command` line plus the captured output as a styled block — no terminal, no keystrokes, so never present it as a screen recording. For motion, `capture_terminal_session`: steps of `type`/`key`/`wait_for`/`hold_s` record a real shell in a real xterm — **this is the only tool that captures real keystrokes and real screen output**; typing speed is staged but the output is real, so never type a result by hand; wait for it with `wait_for`. Its window defaults to the format's geometry (16:9: 80x16 at font 22, a wide short window that fills the content-box width at ~20 px glyphs; 9:16: 44x28 at 15), and the scene must keep the final output visible for about 4 s after typing ends: set `duration_s >= typing_end_s + 4` (the capture reports `typing_end_s`; `validate_spec` warns `short_hold` otherwise).
+   - gui: `capture_gui` with `xterm -bg black -fg white -fa 'DejaVu Sans Mono' +sb -e '<cmd>; sleep 20'` for a terminal UI, or the app binary itself. A whole desktop screenshot is mostly empty: pick a screen `size` close to the app window and give the image scene a tight `focus`, or the zoom can only show a stamp in the dark. Always view the PNG; a blank or white shot means fix the command, do not ship.
+   - code: `extract_code` for a ≤18-line snippet with its `file:line`.
+6. Build the spec, `validate_spec` until no errors; keep `spec_hash`. Any spec change gives a new hash.
+7. `stills` → look at every image (cropped text, blank, wrong theme) **and fix every layout warning it returns** (`outside_frame`, `safe_zone`, `clipped_content`, `focus_outside`, `container_path`): they are measured boxes, not opinions. `audit_layout` re-checks without the screenshots. Fix and repeat.
+8. `render` (`draft` first, then `delivery`), poll `render_status`, then `verify` (it expects exactly 1920x1080, or 1080x1920 for 9:16). Report the MP4, SRT and poster paths from the work volume (`promo-video-work`). Asked for a voice-over? `narrate` **after** the stills are approved, `stills` again, then render: the audio lands in the MP4 and `verify` checks it (see Voice-over).
+9. Want both formats? Do not squash one into the other: `reframe(spec_hash, "9:16")` clones the spec, applies the portrait rules (max 4 bullets, terminal lines ≤ ~40 cols) and lists the captures you must redo with the new geometry (it returns the exact parameters). Re-capture, put the new paths in the reframed spec, `validate_spec` again, then `stills` → `render` → `verify` per aspect.
+
+## Spec
+```json
+{"fps":30,"aspect":"16:9","lang":"pt-BR","music":{"id":"moonlight-sonata","volume_db":-18,"duck":12},"theme":{"bg":"#0f1115","fg":"#f2f4f8","accent":"#4cc2ff"},
+ "scenes":[{"id":"hook","type":"title","title":"…","subtitle":"…","duration_s":3,"caption":"…"},
+  {"id":"why","type":"bullets","heading":"…","items":["…"],"evidence":"README.md:5","duration_s":4},
+  {"id":"run","type":"terminal","heading":"…","lines":["$ cmd","out"],"duration_s":5},
+  {"id":"live","type":"terminal","video":"/work/captures/<id>/session.mp4","poster":"/work/captures/<id>/poster.png","title":"mint_loader","heading":"…","duration_s":5},
+  {"id":"ui","type":"image","image":"/work/captures/<id>/x.png","focus":{"x":0,"y":0,"w":.5,"h":.4},"zoom":1.6,"duration_s":4},
+  {"id":"src","type":"code","code":"…","source":"src/a.c:1-12","duration_s":4}]}
+```
+Types: title, bullets (≤5, ≤4 in 9:16), terminal (≤18 `lines`, or a recorded `video`+`poster` shown in a window frame), image (`focus` + `zoom`): the capture covers the frame and the focus is centred, with the pan and the zoom clamped so the focus stays in shot, code (≤18 lines). Text ≤18 words per element. A near-empty capture gets a `sparse_capture` warning — re-run it, don't ship a blank screen.
+
+## Done when
+`verify` returns `ok`, you reviewed the stills, the layout audit reports no warnings, every captured asset matches the delivery aspect, and every number or claim traces to a capture or `file:line`. With narration, `verify` also reports the `audio` stream (codec/duration) and errors when the voice-over is missing or its duration differs from the picture by more than 0.1 s. When `spec.music` is set the render mixes that bed under the voice, ducked, and normalises the whole soundtrack to **-16 LUFS** (AAC 192k, true peak under -1.5 dBTP); `verify` reports the measured `loudness` (`integrated_lufs`, `lra_lu`, `true_peak_db`) and `silences`, and errors on a miss or when a narrated video has more than 3 s of silence. A narrated spec rendered without its voice-over (bed only) is `no_voice`, not ok.
+
+## Voice-over
+Only when the user asked for narration. `spec.lang` (`pt-BR`|`en`) is required for it, and every spoken line is `scene.narration` (a sentence or two, written to be *heard*, not read: no `--flags`, no identifiers).
+1. `validate_spec` — `missing_lang` / `bad_lang` block; `narration_pace` warns when a scene has more than ~3.2 words/s of speech; a spoken number still needs `scene.evidence`.
+2. `spec.say = {"LD_PRELOAD": "el di preload"}` spells anything the engine would mangle. `say_missing` warns for every acronym, snake_case/camelCase token and every on-screen identifier you speak, so add a mapping for each — never let the engine invent a pronunciation. Keep the spoken form out of `scene.narration`: the captions are cut from the narration, so `validate_spec` errors with `phonetic_in_narration` when a `say` value leaked into the spoken line (`container_path` warns when on-screen text shows `/work`, `/repo` or `/tmp`).
+3. `narrate(spec_hash)` writes one WAV per scene to `/work/audio/<spec_hash>/` and a manifest with the measured durations; re-running is cached per line. A scene now lasts `max(duration_s, audio + 0.4 s)`.
+4. Re-run `stills` after `narrate`: the resolved spec changed, and a delivery render is refused until you review the new stills. Only narrate **after** the stills are approved, so you do not pay for speech you then re-cut.
+5. `render` muxes the voice-over into the MP4 (each scene's WAV at that scene's start offset, AAC) and writes the SRT from the narration, cued by the measured manifest duration. `verify` must report `audio` (codec, duration within 0.1 s of the picture) and `ok`.
+6. **Check what the video actually says.** Transcribe the delivered MP4 with the `faster-whisper` MCP (`transcribe(audio_path=<the MP4>, language=spec.lang)`) and compare the transcript to your `scene.narration` lines word by word. A dropped last syllable, a mispronounced identifier or a wrong number means fix the line/`say` mapping and re-narrate — do not ship a video you have not heard.
+
+## Music
+Only when the user asked for a soundtrack. The image bundles a small catalog of **CC0 / public-domain** tracks and nothing else: `list_music()` returns `{id, title, artist, mood[], duration_s, license, license_url, attribution_required, available}`, `list_music(mood="calm")` filters it (moods include calm, epic, playful, elegant, ambient). Pick an `id`, then set `spec.music = {"id": ..., "volume_db": -18, "duck": 12}` — `volume_db` is the bed level (a bed belongs at about -18 dB, never above -6) and `duck` is how far it drops under narration (roughly 7 dB at the default 12, saturating near 8 dB — a direction, not a dB scale). `validate_spec` errors on an unknown id (`unknown_music`) and on out-of-range levels. Every track is CC0/PD, so no on-screen credit is required; `music/CREDITS.txt` exists only when a track would need one.

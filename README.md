@@ -29,6 +29,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org).
 - [`servers/vikunja`](servers/vikunja/) — projects, tasks, comments and labels of a [Vikunja](https://vikunja.io) instance.
 - [`servers/faster-whisper`](servers/faster-whisper/) — speech-to-text transcription via faster-whisper.
+- [`servers/promo-video`](servers/promo-video/) — turns a repo (web, CLI or GUI) into an evidence-checked promo video: scan, capture, validate spec, render MP4, verify.
 - [`servers/whatsapp`](servers/whatsapp/) — read WhatsApp chats and (opt-in) send messages, through an in-process whatsmeow client (neonize).
 
 ## Skills
@@ -38,6 +39,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.
 - [`skills/image`](skills/image/) — crop/rotate/resize/blur/watermark and other light edits with Python + Pillow.
+- [`skills/promo-video`](skills/promo-video/) — workflow for the promo-video MCP: honest storyboard from the code, review stills, render, verify.
 - [`skills/pr-opener`](skills/pr-opener/) — opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates draft PR (forge-agnostic).
 - [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
 - [`skills/svg-generator`](skills/svg-generator/) — hand-writes SVG markup via a write/render/self-evaluate/revise loop.

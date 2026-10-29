@@ -75,6 +75,43 @@ steps:
       - event: tag
         ref: refs/tags/faster-whisper-v*
 
+  # Offline tests (ffmpeg only; chromium/xterm-dependent tests skip themselves). Serial like
+  # whatsapp-test: a failure aborts the pipeline before the image build below.
+  - name: promo-video-test
+    image: python:3.12-slim
+    commands:
+      - apt-get update && apt-get install -y --no-install-recommends ffmpeg
+      - cd servers/promo-video
+      - pip install --quiet --no-cache-dir . pytest
+      - python -m pytest -q tests
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["servers/promo-video/**", ".woodpecker/**"] }
+      - event: pull_request
+        path: { include: ["servers/promo-video/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/promo-video-v*
+
+  - name: promo-video
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/promo-video-mcp
+      dockerfile: servers/promo-video/Dockerfile
+      context: servers/promo-video
+      platforms: linux/amd64,linux/arm64
+      provenance: false
+      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["servers/promo-video/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/promo-video-v*
+
   # Offline Python tests: no Go toolchain, no WhatsApp account. libmagic1 because neonize
   # imports python-magic at import time (ffmpeg is not needed by the tests).
   # Steps without depends_on run serially and a non-zero exit aborts the pipeline, so the
