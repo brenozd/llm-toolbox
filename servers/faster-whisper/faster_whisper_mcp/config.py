@@ -13,7 +13,8 @@ class Config:
 
 def load_config() -> Config:
     return Config(
-        model_size=os.environ.get("WHISPER_MODEL", "tiny"),
+        # small, not tiny: tiny garbles pt-BR (WER 0.40 vs 0.00 on short accented lines).
+        model_size=os.environ.get("WHISPER_MODEL", "small"),
         device=os.environ.get("WHISPER_DEVICE", "cpu"),
         compute_type=os.environ.get("WHISPER_COMPUTE_TYPE", "int8"),
     )
