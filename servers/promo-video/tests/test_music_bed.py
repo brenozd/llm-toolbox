@@ -20,7 +20,7 @@ def mk(**kw):
 
 
 def codes(s):
-    return {f["code"] for f in S.lint(s)}
+    return {f["code"] for f in S.lint(s)} - {"no_direction"}  # every spec without a direction warns; not what this test is about
 
 
 def staged(work, name="track.mp3"):

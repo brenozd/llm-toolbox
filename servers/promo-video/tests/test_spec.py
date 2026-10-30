@@ -11,7 +11,7 @@ def mk(**kw):
 
 
 def codes(s):
-    return {f["code"] for f in S.lint(s)}
+    return {f["code"] for f in S.lint(s)} - {"no_direction"}  # every spec without a direction warns; not what this test is about
 
 
 def test_ok():
@@ -162,3 +162,118 @@ def test_container_path_in_on_screen_text_is_a_warning():
     assert "/work/leak.c" in got[0]["message"]
     s["scenes"][0]["items"] = ["mint_loader ./leak"]  # a repo-relative path is what we want
     assert "container_path" not in codes(s)
+
+
+# --- the director's brief (spec.direction) -------------------------------------------------------
+
+def test_direction_palette_reaches_the_theme_and_an_explicit_theme_wins():
+    d = {"direction": {"palette": {"bg": "#101820", "fg": "#eef2f6", "accent": "#ffb000"}}}
+    s = mk(**d)
+    assert (s["theme"]["bg"], s["theme"]["accent"]) == ("#101820", "#ffb000")
+    assert s["theme"]["muted"] == S.THEME["muted"]  # the palette only says what it means to say
+    s = mk(theme={"accent": "#123456"}, **d)  # a manual override still beats the director
+    assert (s["theme"]["accent"], s["theme"]["bg"]) == ("#123456", "#101820")
+
+
+def test_motion_defaults_to_subtle_so_text_stops_growing():
+    assert mk()["motion"] == "subtle"
+    assert mk(direction={"motion": "still"})["motion"] == "still"
+    assert mk(motion="lively", direction={"motion": "still"})["motion"] == "lively"  # explicit spec wins
+    assert "bad_direction" in codes(mk(motion="bouncy"))
+
+
+def test_bad_direction_values_are_errors():
+    for bad in ({"purpose": "tiktok"}, {"audio": "loud"}, {"palette": {"bg": "0f1115"}},
+                {"palette": "#fff"}, {"scenes": {"a": {"role": "hero"}}}, {"scenes": {"a": {"align": "edge"}}},
+                {"scenes": {"a": "hook"}}, {"pacing": {"max_words_card": 0}}, {"pacing": 6},
+                {"research": "https://example.com"}, {"must_avoid": "thanks"}):
+        assert "bad_direction" in codes(mk(direction=bad)), bad
+    assert "bad_direction" in codes(mk(direction="subtle"))  # not an object at all
+
+
+def test_no_direction_only_warns_and_keeps_todays_findings():
+    s = mk(scenes=[{"id": "a", "type": "title", "title": "100% faster"}])
+    assert {(f["code"], f["severity"]) for f in S.lint(s)} == {("no_direction", "warn"), ("uncited_stat", "error")}
+
+
+def test_a_plan_that_lags_the_timeline_only_warns():
+    """4b cuts and reframe() clones change the scenes: a stale plan must never block the render."""
+    s = mk(direction={"scenes": {"a": {"role": "hook"}, "cut": {"role": "cta"}}})
+    assert [(f["code"], f["severity"]) for f in S.lint(s) if f["code"] == "scene_unused"] == [("scene_unused", "warn")]
+    assert not [f for f in S.lint(s) if f["severity"] == "error"]
+    s = mk(direction={"scenes": {"b": {"role": "value"}}})
+    assert [(f["code"], f["severity"]) for f in S.lint(s) if f["code"] == "no_role"] == [("no_role", "warn")]
+
+
+def test_align_comes_from_the_plan_then_from_the_type():
+    s = mk(scenes=[{"id": "a", "type": "title", "title": "Hi"}, {"id": "b", "type": "bullets", "heading": "H",
+                                                                   "items": ["x"]}],
+           direction={"scenes": {"a": {"align": "left"}}})
+    assert [sc["align"] for sc in s["scenes"]] == ["left", "left"]
+    assert mk(scenes=[{"id": "a", "type": "title", "title": "Hi"}])["scenes"][0]["align"] == "center"
+
+
+def test_palette_contrast_blocks_our_palette_but_only_warns_on_the_users():
+    dark = {"bg": "#111111", "fg": "#1c1c1c"}  # 1.1:1: nobody reads that
+    assert "palette_contrast" in codes(mk(direction={"palette": dark}))
+    user = {"palette": dark, "palette_source": "user"}
+    assert [(f["code"], f["severity"]) for f in S.lint(mk(direction=user)) if f["code"] == "palette_contrast"] == [
+        ("palette_contrast", "warn")]
+
+
+def test_a_booth_loop_needs_seven_to_one():
+    ok = {"bg": "#0f1115", "fg": "#8b93a1"}  # 6.1:1: passes AA, not the hall
+    assert "palette_contrast" in codes(mk(direction={"purpose": "booth-loop", "palette": ok}))
+    assert "palette_contrast" not in codes(mk(direction={"purpose": "feature-demo", "palette": ok}))
+
+
+def test_narration_must_match_the_plan():
+    plan = {"scenes": {"a": {"role": "value", "narration": False}}}
+    s = mk(lang="en", direction=plan, scenes=[{"id": "a", "type": "title", "title": "Hi",
+                                               "narration": "spoken anyway", "duration_s": 4}])
+    assert [(f["code"], f["severity"]) for f in S.lint(s) if f["code"] == "narration_off_plan"] == [
+        ("narration_off_plan", "error")]
+    s = mk(direction={"scenes": {"a": {"role": "value", "narration": True}}})
+    assert [(f["code"], f["severity"]) for f in S.lint(s) if f["code"] == "narration_off_plan"] == [
+        ("narration_off_plan", "warn")]
+
+
+def test_wordy_cap_and_must_avoid_come_from_the_plan():
+    line = "one two three four five six seven"  # 7 words: fine at the default 18, too long at 6
+    s = mk(direction={"pacing": {"max_words_card": 6}, "must_avoid": ["thanks for watching"]},
+           scenes=[{"id": "a", "type": "title", "title": line}])
+    assert "wordy" in codes(s)
+    s = mk(direction={"pacing": {"max_words_card": 8}}, scenes=[{"id": "a", "type": "title", "title": line}])
+    assert "wordy" not in codes(s)
+    s = mk(direction={"must_avoid": ["Thanks for watching"]},
+           scenes=[{"id": "a", "type": "title", "title": "thanks for watching, see you"}])
+    assert [(f["code"], f["severity"], f["scene"]) for f in S.lint(s) if f["code"] == "must_avoid"] == [
+        ("must_avoid", "warn", "a")]
+
+
+def test_spec_hash_follows_the_palette_and_the_motion():
+    still, lively = mk(direction={"motion": "still"}), mk(direction={"motion": "lively"})
+    pal = mk(direction={"palette": {"bg": "#202020", "fg": "#ffffff"}})
+    assert len({S.spec_hash(still), S.spec_hash(lively), S.spec_hash(pal)}) == 3
+
+
+def test_an_empty_direction_is_no_direction():
+    assert [(f["code"], f["severity"]) for f in S.lint(mk(direction={}))] == [("no_direction", "warn")]
+
+
+def test_a_theme_colour_the_render_cannot_parse_is_an_error():
+    assert "bad_theme" in codes(mk(theme={"bg": "#fff"}))  # build_html derives panel/line from these hexes
+    assert "bad_theme" in codes(mk(theme={"fg": "white"}))
+    assert "bad_theme" not in codes(mk(theme={"bg": "#ffffff"}))
+
+
+def test_a_low_contrast_theme_is_measured_even_without_a_direction():
+    dark = {"bg": "#111111", "fg": "#1c1c1c"}  # 1.1:1
+    got = [(f["code"], f["severity"]) for f in S.lint(mk(theme=dark)) if f["code"] == "palette_contrast"]
+    assert got == [("palette_contrast", "warn")]  # no brief: an older spec still renders, but it is said
+
+
+def test_tone_and_palette_source_are_type_checked():
+    assert "bad_direction" in codes(mk(direction={"tone": {"a": 1}}))
+    assert "bad_direction" in codes(mk(direction={"palette_source": 1}))
+    assert "bad_direction" not in codes(mk(direction={"tone": "calm technical", "palette_source": "derived"}))

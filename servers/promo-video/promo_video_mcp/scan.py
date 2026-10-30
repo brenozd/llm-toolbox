@@ -95,7 +95,8 @@ def _lum(hx: str) -> float:
     return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
 
 
-def _contrast(a: str, b: str) -> float:
+def contrast(a: str, b: str) -> float:
+    """WCAG contrast ratio of two hex colours (used by brand_tokens and by the direction palette lint)."""
     la, lb = sorted((_lum(a), _lum(b)), reverse=True)
     return (la + 0.05) / (lb + 0.05)
 
@@ -125,9 +126,9 @@ def brand_tokens(repo: str | None = None) -> dict:
         prov = "guess"
     theme = {"bg": bg or "#0f1115", "fg": fg or "#f2f4f8", "accent": acc or "#4cc2ff"}
     fixed = False
-    if _contrast(theme["bg"], theme["fg"]) < 4.5:
+    if contrast(theme["bg"], theme["fg"]) < 4.5:
         theme["fg"], fixed = ("#ffffff" if _lum(theme["bg"]) < 0.5 else "#000000"), True
-    if _contrast(theme["bg"], theme["accent"]) < 3:
+    if contrast(theme["bg"], theme["accent"]) < 3:
         theme["accent"], fixed = ("#4cc2ff" if _lum(theme["bg"]) < 0.5 else "#0b6bcb"), True
     return {"status": "ok", "theme": theme, "provenance": prov, "contrast_autofixed": fixed,
             "palette": top, "fonts": [f for f, _ in fonts.most_common(3)], "sources": srcs[:10]}

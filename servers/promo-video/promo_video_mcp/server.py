@@ -138,10 +138,10 @@ async def narrate(spec_hash: str) -> object:
 
 
 @mcp.tool()
-async def stills(spec_hash: str) -> list:
-    """Render one small JPEG per scene (the review step), each with the layout audit for that frame (text outside the frame, inside the 9:16 safe zones, or cut off inside its box). Look at every image before approving; required before a delivery render."""
+async def stills(spec_hash: str, at_s: float | None = None) -> list:
+    """Render one small JPEG per scene (the review step), each with its layout audit and a `digest` of the frame. `at_s` shoots that second inside every scene instead (the review frame is 75% in), so two calls with different `at_s` and the same `digest` prove the card stopped moving. Look at every image before approving; required before a delivery render."""
     try:
-        res = await asyncio.to_thread(R.stills, spec_hash)
+        res = await asyncio.to_thread(R.stills, spec_hash, at_s)
     except Exception as e:
         return [json.dumps({"status": "error", "message": f"{type(e).__name__}: {e}"})]
     warn = [f for r in res for f in r["findings"]]

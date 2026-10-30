@@ -10,6 +10,7 @@ from pathlib import Path
 
 from . import config
 from .safety import safe_path
+from .scan import contrast
 
 TYPES = {"title", "bullets", "terminal", "image", "code"}
 ASPECTS = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
@@ -23,6 +24,19 @@ TTS_TOKEN = re.compile(r"\b(?:[A-Z]{2,}[A-Z0-9]*|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9
 TTS_SYMBOL = re.compile(r"(?<!\w)(?:--[A-Za-z][\w-]*|[A-Za-z0-9_]+[/:=][A-Za-z0-9_]+)(?!\w)")
 ZOOM_RANGE = (1.0, 4.0)  # scene.zoom: 1 = the whole capture, more = crop in
 THEME = {"bg": "#0f1115", "fg": "#f2f4f8", "accent": "#4cc2ff", "muted": "#8b93a1"}
+# The director's vocabulary (spec.direction). Small on purpose: every value here has a reader.
+DIRECTION_ENUMS = {"purpose": {"booth-loop", "feature-demo", "sales-video", "other"},
+                   "motion": {"still", "subtle", "lively"},
+                   "audio": {"voice", "music", "silent"},
+                   "role": {"hook", "problem", "reveal", "value", "proof", "cta"},
+                   "align": {"left", "center"}}
+HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+WORDY = 18  # on-screen words per element before it is a paragraph; direction.pacing can lower it
+CONTRAST = {"fg": 4.5, "accent": 3.0}  # WCAG AA on body text / on a graphic accent
+BOOTH_CONTRAST = 7.0  # a booth loop is read across a hall, from a screen nobody calibrated
+DIRECTION_FIX = ('spec.direction = {"purpose": "feature-demo", "palette": {"bg": "#0f1115", "fg": "#f2f4f8", '
+                 '"accent": "#4cc2ff"}, "motion": "subtle", "scenes": {"hook": {"role": "hook", '
+                 '"align": "left", "narration": false}}}')
 # spec.music levels: a bed sits well under the voice and drops further while someone speaks.
 MUSIC_DEFAULTS = {"volume_db": -18.0, "duck": 12.0}
 
@@ -43,16 +57,32 @@ FORMATS = {
 PORTRAIT = {"max_bullets": 4}
 
 
+def plan(spec: dict) -> dict:
+    """The director's per-scene plan (spec.direction.scenes), or {} -- never raises on a hand-written spec."""
+    d = spec.get("direction")
+    return (d.get("scenes") or {}) if isinstance(d, dict) and isinstance(d.get("scenes"), dict) else {}
+
+
 def normalize(spec: dict) -> dict:
     s = json.loads(json.dumps(spec))
     s.setdefault("fps", 30)
     s.setdefault("aspect", "16:9")
     s.setdefault("transition_s", 0.5)
-    s["theme"] = {**THEME, **(s.get("theme") or {})}
+    d = s.get("direction") if isinstance(s.get("direction"), dict) else {}
+    pal = d.get("palette") if isinstance(d.get("palette"), dict) else {}
+    # The director's palette seeds the theme; an explicit spec.theme still wins (old specs keep working).
+    s["theme"] = {**THEME, **pal, **(s.get("theme") or {})}
+    # "subtle" is the default so on-screen text stops growing once it has entered (it used to be the
+    # lively linear scale for everyone); spec.motion overrides the direction, the direction overrides us.
+    s["motion"] = s.get("motion") or d.get("motion") or "subtle"
     if isinstance(s.get("music"), dict):  # a track the music-search skill staged, plus the mix levels
         s["music"] = {"volume_db": MUSIC_DEFAULTS["volume_db"], "duck": MUSIC_DEFAULTS["duck"], **s["music"]}
+    plan_ = plan(s)
     for sc in s.get("scenes", []):
         sc.setdefault("duration_s", 3.0)
+        p = plan_.get(sc.get("id"))
+        p = p if isinstance(p, dict) else {}
+        sc.setdefault("align", p.get("align") or ("center" if sc.get("type") == "title" else "left"))
     return s
 
 
@@ -284,6 +314,79 @@ def _hold_gap(sc: dict) -> float | None:
     return float(end) if isinstance(end, (int, float)) and not isinstance(end, bool) else None
 
 
+def _lint_palette(d: dict, spec: dict, add) -> None:
+    """Contrast of the *effective* theme (a direction palette, an explicit spec.theme, or both), because
+    those are the colours the render writes to pixels. A palette the user chose only warns: it is their
+    brand, not our defect -- and so does a spec with no brief at all. A booth loop is read across a
+    hall, so its body text needs 7:1."""
+    th = spec["theme"]
+    sev = "warn" if not d or str(d.get("palette_source") or "").strip().lower().startswith("user") else "error"
+    bars = {**CONTRAST, **({"fg": BOOTH_CONTRAST} if d.get("purpose") == "booth-loop" else {})}
+    for key, bar in bars.items():
+        try:
+            got = contrast(th["bg"], th.get(key) or th["fg"])
+        except (KeyError, ValueError):  # a hand-written non-hex colour: bad_direction already flagged it
+            continue
+        if got < bar:
+            add(sev, "palette_contrast", None, f"contrast({key},bg) is {got:.1f}:1, under {bar}:1",
+                "pick a pair that reads on a phone, in a hall, on an uncalibrated TV")
+
+
+def _lint_direction(spec: dict, add) -> dict:
+    """The director's brief (spec.direction): vocabulary, palette and the per-scene plan.
+
+    The plan is best effort -- a 4b cut or a `reframe` clone can leave scene ids behind, and that is a
+    warning, never a block -- so this reports {plan, max_words} for the scene loop instead of rejecting."""
+    d = spec.get("direction")
+    if not isinstance(d, dict) or not d:  # an absent or empty brief is no brief at all
+        if d is None or isinstance(d, dict):
+            add("warn", "no_direction", None,
+                "no spec.direction: the purpose, palette and per-scene intent are unstated",
+                "run the director step and put its brief in spec.direction (see skills/promo-video)")
+        else:
+            add("error", "bad_direction", None, f"direction {d!r} is not an object", DIRECTION_FIX)
+        _lint_palette({}, spec, add)  # the theme still reaches the pixels, whoever wrote it
+        return {"plan": {}, "max_words": WORDY}
+    for key in ("purpose", "motion", "audio"):
+        v = d.get(key)
+        if v is not None and v not in DIRECTION_ENUMS[key]:
+            add("error", "bad_direction", None, f"direction.{key} {v!r}",
+                f"use one of {sorted(DIRECTION_ENUMS[key])}")
+    for key in ("tone", "palette_source"):
+        v = d.get(key)
+        if v is not None and not isinstance(v, str):
+            add("error", "bad_direction", None, f"direction.{key} {v!r}", f"{key} is one short phrase")
+    pal = d.get("palette")
+    if pal is not None and (not isinstance(pal, dict) or not pal
+                            or not all(HEX.match(str(v)) for v in pal.values())):
+        add("error", "bad_direction", None, f"direction.palette {pal!r}",
+            'palette is {"bg": "#rrggbb", "fg": "#rrggbb", "accent": "#rrggbb", "muted": "#rrggbb"}')
+    _lint_palette(d, spec, add)  # always: the effective theme is what gets painted, palette or not
+    max_words = WORDY
+    pac = d.get("pacing")
+    if pac is not None:
+        n = pac.get("max_words_card") if isinstance(pac, dict) else None
+        if isinstance(n, int) and not isinstance(n, bool) and 2 <= n <= WORDY:
+            max_words = n
+        else:
+            add("error", "bad_direction", None, f"direction.pacing {pac!r}",
+                f'max_words_card is a whole number in 2..{WORDY}')
+    for key, what in (("research", "[{url, take}]"), ("must_avoid", '["thanks for watching"]')):
+        if d.get(key) is not None and not isinstance(d[key], list):
+            add("error", "bad_direction", None, f"direction.{key} is not a list", f"{key} = {what}")
+    pl = plan(spec)
+    for sid, p in pl.items():
+        if not isinstance(p, dict):
+            add("error", "bad_direction", sid, f"direction.scenes[{sid!r}] is not an object",
+                'a scene plan is {"role": "value", "text": "…", "align": "left", "narration": true}')
+            continue
+        for key in ("role", "align"):
+            if p.get(key) is not None and p.get(key) not in DIRECTION_ENUMS[key]:
+                add("error", "bad_direction", sid, f"{key} {p.get(key)!r}",
+                    f"use one of {sorted(DIRECTION_ENUMS[key])}")
+    return {"plan": pl, "max_words": max_words}
+
+
 def lint(spec: dict) -> list[dict]:
     f: list[dict] = []
 
@@ -308,6 +411,14 @@ def lint(spec: dict) -> list[dict]:
     say = spec.get("say") if isinstance(spec.get("say"), dict) else {}
     if spec.get("music") is not None:
         f += _lint_music(spec.get("music"), add)
+    if spec.get("motion") not in DIRECTION_ENUMS["motion"]:
+        add("error", "bad_direction", None, f"motion {spec.get('motion')!r}",
+            f"use one of {sorted(DIRECTION_ENUMS['motion'])}")
+    for k, v in spec["theme"].items():  # colours the render derives from: fail here, not inside build_html
+        if not HEX.match(str(v)):
+            add("error", "bad_theme", None, f"theme.{k} {v!r}", 'use #rrggbb for every theme colour')
+    dl = _lint_direction(spec, add)
+    d_plan, max_words = dl["plan"], dl["max_words"]
     seen = set()
     for sc in spec["scenes"]:
         sid = sc.get("id")
@@ -348,8 +459,8 @@ def lint(spec: dict) -> list[dict]:
         if ty == "code" and len((sc.get("code") or "").splitlines()) > 18:
             add("error", "too_many_lines", sid, "code longer than 18 lines", "extract fewer lines")
         for t in _texts(sc):
-            if len(t.split()) > 18:
-                add("warn", "wordy", sid, f"{len(t.split())} words", "keep on-screen text under 18 words")
+            if len(t.split()) > max_words:
+                add("warn", "wordy", sid, f"{len(t.split())} words", f"keep on-screen text under {max_words} words")
         if ty == "terminal" and (sc.get("video") or sc.get("capture_id")):
             end = _hold_gap(sc)
             if end is not None:
@@ -383,6 +494,35 @@ def lint(spec: dict) -> list[dict]:
                 if tok not in say:  # tts.pronounce matches the key exactly, so the lint must too
                     add("warn", "say_missing", sid, f"'{tok}' will be read by the TTS engine",
                         f"add spec.say['{tok}'] = '<how to say it>' (e.g. 'L D preload'), spelled exactly as the token")
+    # Plan vs spec. Only a direction that names scenes is checked against the timeline, and a gap in the
+    # plan is a warning: 4b cuts and reframe() clones change the scenes, the director catches up after.
+    if d_plan:
+        ids = {sc.get("id") for sc in spec["scenes"]}
+        for sc in spec["scenes"]:
+            sid, p = sc.get("id"), d_plan.get(sc.get("id"))
+            if not isinstance(p, dict):
+                add("warn", "no_role", sid, f"scene {sid!r} is not in direction.scenes",
+                    "give it a role/align/narration in the plan, or let the director re-read the timeline")
+                continue
+            if p.get("narration") is False and _narration(sc).strip():
+                add("error", "narration_off_plan", sid, "the plan says narration:false but the scene narrates",
+                    "drop scene.narration (it was planned as visual-only) or flip the plan")
+            elif p.get("narration") is True and not _narration(sc).strip():
+                add("warn", "narration_off_plan", sid, "the plan narrates this scene but scene.narration is empty",
+                    "write the line, or set narration:false in the plan")
+        for sid in d_plan:
+            if sid not in ids:
+                add("warn", "scene_unused", sid, f"direction.scenes[{sid!r}] has no scene in the spec",
+                    "drop it from the plan, or add the scene the director planned")
+    d = spec.get("direction") if isinstance(spec.get("direction"), dict) else {}
+    for phrase in d.get("must_avoid") or []:
+        if not isinstance(phrase, str) or not phrase.strip():
+            continue
+        for sc in spec["scenes"]:
+            hits = [t for t in [*_texts(sc), _narration(sc)] if phrase.lower() in t.lower()]
+            if hits:
+                add("warn", "must_avoid", sc.get("id"), f"{phrase!r} shows up in '{hits[0][:40]}'",
+                    "the direction says avoid it: cut the line, or change the plan on purpose")
     return f
 
 

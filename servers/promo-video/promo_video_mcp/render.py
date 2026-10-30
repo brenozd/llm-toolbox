@@ -32,25 +32,26 @@ h2{font-size:calc(var(--u)*6);color:var(--accent);font-weight:700}
 ul{list-style:none;display:flex;flex-direction:column;gap:calc(var(--u)*2.4)}
 li{font-size:calc(var(--u)*4);padding-left:calc(var(--u)*4);position:relative}
 li:before{content:'';position:absolute;left:0;top:.55em;width:calc(var(--u)*1.4);height:calc(var(--u)*1.4);border-radius:50%;background:var(--accent)}
-pre,.term{font-family:'DejaVu Sans Mono','Liberation Mono',monospace;font-size:calc(var(--u)*2.5);line-height:1.45;background:#07080b;border:2px solid #232733;border-radius:calc(var(--u)*1.5);padding:calc(var(--u)*3);white-space:pre-wrap;word-break:break-all;overflow:hidden}
+pre,.term{font-family:'DejaVu Sans Mono','Liberation Mono',monospace;font-size:calc(var(--u)*2.5);line-height:1.45;background:var(--panel);border:2px solid var(--line);border-radius:calc(var(--u)*1.5);padding:calc(var(--u)*3);white-space:pre-wrap;word-break:break-all;overflow:hidden}
 .term .l{display:block;min-height:1.45em}.term .p{color:var(--accent)}
-.frame{flex:1;min-height:0;overflow:hidden;position:relative;border-radius:calc(var(--u)*1.5);border:2px solid #232733;background:#07080b}
+.frame{flex:1;min-height:0;overflow:hidden;position:relative;border-radius:calc(var(--u)*1.5);border:2px solid var(--line);background:var(--panel)}
 .frame img{width:100%;height:100%;object-fit:contain;display:block}
 .frame img[data-z]{position:absolute;object-fit:fill;max-width:none;max-height:none}
-.win{display:flex;flex-direction:column;align-self:center;max-width:100%;max-height:100%;min-height:0;border-radius:calc(var(--u)*1.2);border:2px solid #232733;background:#07080b;overflow:hidden}
-.tbar{display:flex;align-items:center;gap:calc(var(--u)*.9);padding:calc(var(--u)*1) calc(var(--u)*1.5);background:#161a22;border-bottom:1px solid #232733}
-.tbar i{width:calc(var(--u)*1.3);height:calc(var(--u)*1.3);border-radius:50%;background:#3a4150;display:block}
+.win{display:flex;flex-direction:column;align-self:center;max-width:100%;max-height:100%;min-height:0;border-radius:calc(var(--u)*1.2);border:2px solid var(--line);background:var(--panel);overflow:hidden}
+.tbar{display:flex;align-items:center;gap:calc(var(--u)*.9);padding:calc(var(--u)*1) calc(var(--u)*1.5);background:var(--panel);border-bottom:1px solid var(--line)}
+.tbar i{width:calc(var(--u)*1.3);height:calc(var(--u)*1.3);border-radius:50%;background:var(--line);display:block}
 .tbar i:nth-child(1){background:#ff5f57}.tbar i:nth-child(2){background:#febc2e}.tbar i:nth-child(3){background:#28c840}
 .tbar span{font-family:'DejaVu Sans Mono',monospace;font-size:calc(var(--u)*2);color:var(--muted);margin-left:calc(var(--u)*1.2)}
-.wbody{flex:1;min-height:0;display:flex;align-items:center;justify-content:flex-start;overflow:hidden;background:#07080b}
+.wbody{flex:1;min-height:0;display:flex;align-items:center;justify-content:flex-start;overflow:hidden;background:var(--panel)}
 .wbody img{max-width:100%;max-height:100%;display:block}
 .src{font-family:'DejaVu Sans Mono',monospace;font-size:calc(var(--u)*2.2);color:var(--muted)}
 .cap{position:absolute;left:var(--pad-x);right:var(--pad-x);bottom:var(--cap-bottom);text-align:center;font-size:calc(var(--u)*3);background:rgba(0,0,0,.6);padding:calc(var(--u)*1.2) calc(var(--u)*2.4);border-radius:calc(var(--u)*1);width:fit-content;margin:auto}
 """
 
 JS = """
-const T=%(trans)d,SC=%(scenes)s;
+const T=%(trans)d,SC=%(scenes)s,M=%(motion)s,F=%(fps)d;
 const cl=x=>Math.max(0,Math.min(1,x)),ease=p=>1-Math.pow(1-p,3);
+const SET=Math.max(1,Math.round(F*0.8));   /* settle time in frames, from the fps: 0.8 s at any frame rate */
 const els=[...document.querySelectorAll('.scene')];
 function seek(f){
  els.forEach((el,i)=>{
@@ -63,18 +64,29 @@ function seek(f){
   let o=1, h=T/2;
   if(T){ if(i>0)o=Math.min(o,cl((l-h)/h)); if(i<SC.length-1)o=Math.min(o,cl((s.dur-h-l)/h)); }
   el.style.opacity=o;
-  const c=el.querySelector('.c'); if(c)c.style.transform='scale('+(1+0.02*l/s.dur)+')';
+  /* M: still = the frame never moves; subtle = it settles in the first 0.8 s and then holds (the fix
+     for "the text keeps growing"); lively = the old linear zoom over the whole scene. */
+  const c=el.querySelector('.c');
+  if(c)c.style.transform=M==='still'?'':(M==='lively'?'scale('+(1+0.02*l/s.dur)+')':
+    'scale('+(0.98+0.02*ease(cl(l/SET)))+')');
   el.querySelectorAll('.rv').forEach(r=>{const p=ease(cl((l-(+r.dataset.d))/12));r.style.opacity=p;r.style.transform='translateY('+((1-p)*24)+'px)'});
   el.querySelectorAll('.step').forEach(r=>{r.style.visibility=l>=(+r.dataset.d)?'visible':'hidden'});
   const vb=el.querySelector('[data-vmap]');
   if(vb){const m=JSON.parse(vb.dataset.vmap),fr=vb.querySelectorAll('img'),k=m[Math.max(0,Math.min(m.length-1,Math.floor(l)))];fr.forEach((x,j)=>{x.style.display=j===k?'block':'none'})}
   const im=el.querySelector('img[data-z]');
   if(im){const q=(window.__ZOOM||{})[el.id];
-   if(q){const zz=1+(q.z-1)*ease(cl(l/(s.dur*0.7)));   /* origin sits on the pivot, so it holds still while z grows */
+   if(q){const zz=M==='still'?q.z:1+(q.z-1)*ease(cl(l/(s.dur*(M==='lively'?0.7:0.25))));   /* origin sits on the pivot, so it holds still while z grows */
     im.style.transform='translate('+(-q.ox)+'px,'+(-q.oy)+'px) scale('+zz+')'}}
  });
 }
 """
+
+
+def _mix(a: str, b: str, t: float) -> str:
+    """Hex blend of two #rrggbb colours (t=0 -> a): the window/terminal chrome is derived from the theme,
+    so a light user palette gets a visible border instead of white-on-white panels."""
+    ca, cb = [int(a.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)], [int(b.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4)]
+    return "#" + "".join(f"{round(x + (y - x) * t):02x}" for x, y in zip(ca, cb))
 
 
 def _img_uri(path: str) -> str:
@@ -120,6 +132,11 @@ def _box_scale(w: int, h: int, aspect: str, heading: bool, iw: int, ih: int) -> 
     return max(0.2, min(3.0, min(avail_w / iw, avail_h / ih)))
 
 
+def _cls(sc: dict) -> str:
+    """The content box: `center` when the direction aligns this scene centred, else the grid's left edge."""
+    return 'class="c center"' if sc.get("align") == "center" else 'class="c"'
+
+
 def _terminal_video(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, aspect: str = "16:9") -> str:
     """A real session recording, one still per scene frame, inside a fake window title bar."""
     pr = _probe(str(safe_path(sc["video"])))
@@ -139,17 +156,17 @@ def _terminal_video(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, 
     vm = E(json.dumps(_vmap(len(frames), dur, pr["fps"], fps)))
     head = f'<h2 class="rv" data-d="0">{E(sc["heading"])}</h2>' if sc.get("heading") else ""
     title = E(sc.get("title") or "terminal")
-    return (f'<div class="c">{head}<div class="win"><div class="tbar"><i></i><i></i><i></i><span>{title}</span></div>'
+    return (f'<div {_cls(sc)}>{head}<div class="win"><div class="tbar"><i></i><i></i><i></i><span>{title}</span></div>'
             f'<div class="wbody" data-vmap="{vm}">{imgs}</div></div></div>')
 
 
 def _scene(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, aspect: str = "16:9") -> str:
     ty, body = sc["type"], ""
     if ty == "title":
-        body = f'<div class="c center"><h1 class="rv" data-d="0">{E(sc["title"])}</h1><p class="sub rv" data-d="8">{E(sc.get("subtitle", ""))}</p></div>'
+        body = f'<div {_cls(sc)}><h1 class="rv" data-d="0">{E(sc["title"])}</h1><p class="sub rv" data-d="8">{E(sc.get("subtitle", ""))}</p></div>'
     elif ty == "bullets":
         lis = "".join(f'<li class="rv" data-d="{8 + i * 10}">{E(x)}</li>' for i, x in enumerate(sc["items"]))
-        body = f'<div class="c"><h2 class="rv" data-d="0">{E(sc["heading"])}</h2><ul>{lis}</ul></div>'
+        body = f'<div {_cls(sc)}><h2 class="rv" data-d="0">{E(sc["heading"])}</h2><ul>{lis}</ul></div>'
     elif ty == "terminal":
         if sc.get("video"):
             body = _terminal_video(sc, fps, dur, w, h, aspect)
@@ -160,14 +177,14 @@ def _scene(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, aspect: s
                 f'<span class="l step{" p" if ln.startswith("$ ") else ""}" data-d="{int(4 + i * (dur * 0.65 - 4) / n)}">{E(ln)}</span>'
                 for i, ln in enumerate(lines))
             head = f'<h2 class="rv" data-d="0">{E(sc["heading"])}</h2>' if sc.get("heading") else ""
-            body = f'<div class="c">{head}<div class="term">{rows}</div></div>'
+            body = f'<div {_cls(sc)}>{head}<div class="term">{rows}</div></div>'
     elif ty == "code":
-        body = f'<div class="c"><pre class="rv" data-d="0">{E(sc["code"])}</pre><div class="src">{E(sc["source"])}</div></div>'
+        body = f'<div {_cls(sc)}><pre class="rv" data-d="0">{E(sc["code"])}</pre><div class="src">{E(sc["source"])}</div></div>'
     elif ty == "image":
         # cover + a zoom that keeps scene.focus centred (layout.zoom_plan); no letterbox bars
         z = f' data-z="{sc.get("zoom", 1.6)}"' if sc.get("focus") else ""
         head = f'<h2 class="rv" data-d="0">{E(sc["heading"])}</h2>' if sc.get("heading") else ""
-        body = f'<div class="c">{head}<div class="frame"><img src="{_img_uri(sc["image"])}"{z}></div></div>'
+        body = f'<div {_cls(sc)}>{head}<div class="frame"><img src="{_img_uri(sc["image"])}"{z}></div></div>'
     cap = f'<div class="cap">{E(sc["caption"])}</div>' if sc.get("caption") else ""
     return f'<section class="scene" id="{E(sc["id"])}">{body}{cap}</section>'
 
@@ -178,9 +195,12 @@ def build_html(spec: dict) -> str:
     th = spec["theme"]
     secs = "".join(_scene(sc, tl["fps"], tl["scenes"][i]["dur"], w, h, spec["aspect"])
                    for i, sc in enumerate(spec["scenes"]))
-    css = f":root{{--bg:{E(th['bg'])};--fg:{E(th['fg'])};--accent:{E(th['accent'])};--muted:{E(th['muted'])};--u:{min(w, h) / 100}px;" \
-          f"{layout.css(spec['aspect'])}}}" + CSS
-    js = JS % {"trans": tl["trans"], "scenes": json.dumps(tl["scenes"])}
+    # window/terminal chrome mixed from bg+fg, so it reads on a dark theme and on a light user palette
+    panel, line = _mix(th["bg"], th["fg"], 0.06), _mix(th["bg"], th["fg"], 0.18)
+    css = f":root{{--bg:{E(th['bg'])};--fg:{E(th['fg'])};--accent:{E(th['accent'])};--muted:{E(th['muted'])};" \
+          f"--panel:{E(panel)};--line:{E(line)};--u:{min(w, h) / 100}px;{layout.css(spec['aspect'])}}}" + CSS
+    js = JS % {"trans": tl["trans"], "scenes": json.dumps(tl["scenes"]),
+               "motion": json.dumps(spec.get("motion") or "subtle"), "fps": tl["fps"]}
     return f'<!doctype html><meta charset="utf-8"><style>{css}</style><body>{secs}<script>{js}</script>'
 
 
@@ -254,8 +274,10 @@ MEASURE_JS = """(id) => {const el=document.getElementById(id); if(!el) return []
      n.scrollWidth>n.clientWidth+2)}})}"""
 
 
-def _walk(h: str, shoot: bool) -> dict:
-    """One browser pass: seek each scene to its review frame, audit its boxes, and (optionally) shoot it."""
+def _walk(h: str, shoot: bool, at_s: float | None = None) -> dict:
+    """One browser pass: seek each scene to its review frame (or to `at_s` inside it), audit its boxes,
+    and (optionally) shoot it. Identical frames give identical JPEG bytes, so `digest` answers
+    "did the card stop moving?" without a decoder."""
     spec = S.load(h)
     tl = S.timeline(spec)
     rh = S.resolved_hash(spec)  # stills belong to this spec *and* this narration
@@ -269,6 +291,8 @@ def _walk(h: str, shoot: bool) -> dict:
             out.mkdir(parents=True, exist_ok=True)
         for sc in tl["scenes"]:
             f = sc["start"] + min(sc["dur"] - 1, int(sc["dur"] * 0.75))
+            if at_s is not None:  # a spot-check inside the scene, past the entrance
+                f = sc["start"] + max(0, min(sc["dur"] - 1, int(at_s * tl["fps"])))
             pg.evaluate(f"seek({f})")
             els = pg.evaluate(MEASURE_JS, sc["id"])
             if sc["id"] in zoom:  # where the zoom puts the part of the capture the scene is about
@@ -277,12 +301,13 @@ def _walk(h: str, shoot: bool) -> dict:
             findings += fs
             item = {"scene": sc["id"], "frame": f, "findings": fs}
             if shoot:
-                path = out / f"{sc['id']}.jpg"
+                path = out / (f"{sc['id']}.jpg" if at_s is None else f"{sc['id']}-{at_s:g}s.jpg")
                 pg.screenshot(path=str(path), type="jpeg", quality=70)
-                item.update(path=str(path), bytes=path.stat().st_size)
+                item.update(path=str(path), bytes=path.stat().st_size,
+                            digest=hashlib.sha256(path.read_bytes()).hexdigest()[:12])
             res.append(item)
         br.close()
-    if shoot:
+    if shoot and at_s is None:  # a spot-check is not the review set
         (config.WORK / "specs" / f"{rh}.stills").write_text("ok")
     return {"stills": res, "findings": findings}
 
@@ -295,9 +320,10 @@ def stills_done(h: str) -> bool:
         return False
 
 
-def stills(h: str) -> list[dict]:
-    """One small JPEG per scene plus the layout findings for that frame."""
-    return _walk(h, True)["stills"]
+def stills(h: str, at_s: float | None = None) -> list[dict]:
+    """One small JPEG per scene plus the layout findings for that frame; `at_s` shoots that moment of
+    every scene instead, and two runs with the same `digest` are pixel-identical frames."""
+    return _walk(h, True, at_s)["stills"]
 
 
 def audit(h: str) -> dict:

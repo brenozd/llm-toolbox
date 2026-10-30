@@ -128,7 +128,7 @@ def test_narrate_needs_a_lang(work):
 
 def test_lint_narration_language_and_say():
     def codes(s):
-        return {f["code"] for f in S.lint(S.normalize(s))}
+        return {f["code"] for f in S.lint(S.normalize(s))} - {"no_direction"}  # every spec without a direction warns; not what this test is about
 
     assert codes({"scenes": [{"id": "a", "type": "title", "title": "x", "narration": "Oi"}]}) == {"missing_lang"}
     assert "bad_lang" in codes({"lang": "fr", "scenes": [{"id": "a", "type": "title", "title": "x"}]})

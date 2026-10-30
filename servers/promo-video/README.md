@@ -19,7 +19,7 @@ The session grid's aspect is picked to match the content box (16:9 window 1444x6
 
 Portrait keeps the top 10% / bottom 20% / sides 5% clear (the bands a phone UI covers): the content box is padded past both bands and the caption sits just above the bottom one. `reframe(spec_hash, aspect)` clones a spec into the other aspect, applies the portrait rules (max 4 bullets, terminal lines trimmed to ~40 cols, every lossy edit reported) and lists the captures whose geometry no longer matches, with the call that redoes them.
 
-Images cover the frame and centre `scene.focus` instead of letterboxing: `layout.zoom_plan` clamps the pan to what the capture can cover and the zoom so the focus stays in shot. `stills` and `audit_layout` measure every text box of every scene (`getBoundingClientRect`) and warn when a box leaves the frame, sits in a safe zone, or is clipped inside its own box.
+Images cover the frame and centre `scene.focus` instead of letterboxing: `layout.zoom_plan` clamps the pan to what the capture can cover and the zoom so the focus stays in shot. `stills` and `audit_layout` measure every text box of every scene (`getBoundingClientRect`) and warn when a box leaves the frame, sits in a safe zone, or is clipped inside its own box. `stills(spec_hash, at_s=N)` shoots that second of every scene instead of the review frame, and every still carries a `digest` (identical frame ⇒ identical digest), so two `at_s` runs of one scene prove the card stopped moving.
 
 ## Real terminal sessions
 `capture_terminal_session` records a genuine session: Xvfb → xterm (no scrollbar) → `bash`, with every keystroke sent by `xdotool` and the screen grabbed by ffmpeg `x11grab`.
@@ -72,6 +72,21 @@ writes next to the audio (`license_evidence`, `source_url`, `sha256`) and use it
 The exec entry needs `--cap-add SETGID`: without it xterm dies silently and a session recording never finds a window.
 
 Both mount `${PWD}:/repo:ro`, a named volume `promo-video-work:/work` and `${HOME}/.cache/promo-video/music:/music:ro` (the staged soundtrack, `music-search` writes it). **The mount is pinned to `${HOME}/.cache`**: `music-search` stages into `${XDG_CACHE_HOME:-~/.cache}/promo-video/music`, so if you set `XDG_CACHE_HOME` either pass `--stage-dir "$HOME/.cache/promo-video/music"` or change the `-v` source, or the track is staged where `/music` cannot see it (`music_path_missing`). Never mount `${HOME}` itself.
+
+## Direction (the look, decided before the script)
+`spec.direction` is the director's brief; `skills/promo-video` runs that step on the host (network, web research in `research`) and writes the same content to `/work/direction.md`. Every field has a reader, so nothing here is decoration:
+
+| field | reader |
+|---|---|
+| `purpose` (`booth-loop`/`feature-demo`/`sales-video`/`other`), `tone`, `audio` (`voice`/`music`/`silent`) | the skill: which defaults, which beats, whether music/voice at all |
+| `palette` + `palette_source` | `normalize` seeds `theme` with it (an explicit `spec.theme` still wins); `palette_contrast` errors on a pair under 4.5:1 (3:1 for the accent, 7:1 on body text for a `booth-loop`), and only **warns** when `palette_source` is `user` — a brand colour is the user's call |
+| `motion` | `render`: `still` (the card never moves), `subtle` (**the default**) scales 0.98→1 in the first 0.8 s of a scene and then holds, `lively` is the old linear scale over the whole scene — the fix for text that looked like it kept growing |
+| `pacing.max_words_card` | the `wordy` lint cap (18 without a direction) |
+| `must_avoid` | `must_avoid` warns when one of the phrases shows up in on-screen text or narration |
+| `research` | the user, in `direction.md`: `validate_spec` only checks it is a list — the items are never read and the render never fetches anything |
+| `scenes` = `{<scene id>: {role, text, align, narration}}` | the writers (`role`/`text`/`align`), `render` (`align` → `c` vs `c center`), and `narration_off_plan` (error when a scene speaks against `narration:false`, warn the other way) |
+
+The plan is best effort: `no_role` and `scene_unused` warn when it lags the timeline (a 4b cut or a `reframe` clone), so a stale plan never blocks a render. A spec with **no** `direction` keeps working exactly as before plus one `no_direction` warning, and `motion` defaults to `subtle` for it too. `RENDER_VERSION` is `3` (the template changed), so old stills and receipts are not reused.
 
 ## How it works
 Scenes become an HTML timeline; Playwright (Chromium) seeks frame by frame and ffmpeg encodes. `validate_spec` writes the spec to `/work/specs/<hash>.json`; `stills`, `render` and `verify` all use that `spec_hash`, so editing the spec invalidates the review. Delivery renders are refused without stills. Text-only specs re-render deterministically (same spec ⇒ same frame digest); a scene with an `image` or a `video` can differ slightly between renders (≤ 8/255 luma, Chromium re-rasterising the asset), so its digest may change even though the pixels look identical.
