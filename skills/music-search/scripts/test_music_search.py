@@ -4,8 +4,10 @@
 Run: python3 -I skills/music-search/scripts/test_music_search.py
      (also collectable by pytest: `python3 -m pytest skills/music-search/scripts`)
 
-Recorded fixtures in ./fixtures/ are trimmed real responses (2026-xx): Openverse audio
-for "calm ambient", archive.org advancedsearch, ccMixter lic=zero, Commons search.
+Recorded fixtures in ./fixtures/ are trimmed real responses (2026-xx): Openverse audio for
+"calm ambient", archive.org advancedsearch, ccMixter lic=zero. Source records answered by
+the stubs (archive.org /metadata, ccMixter ids=, Openverse audio id) are synthetic dicts
+shaped like the live ones, so `fetch` is exercised without the network.
 """
 
 import json
@@ -14,6 +16,7 @@ import sys
 import tempfile
 import unittest
 from datetime import date
+from hashlib import sha256
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -31,31 +34,44 @@ def stub_http(routes):
     """routes: {url-substring: payload}. Records the URLs that were requested."""
     calls = []
 
-    def fake(url, *, timeout=25, tries=3, binary=False, referer=None):
+    def fake(url, *, timeout=25, tries=3):
         calls.append(url)
         for needle, payload in routes.items():
             if needle in url:
-                if binary:
-                    return payload if isinstance(payload, bytes) else json.dumps(payload).encode()
                 return payload if isinstance(payload, str) else json.dumps(payload)
         raise RuntimeError(f"no fixture for {url}")
 
     return fake, calls
 
 
-def make_analysis(n=1200, dt=0.1, level=-18.0, centroid=800.0, rolloff=1500.0, peak_every=50):
-    frames = []
-    for i in range(n):
-        frames.append(
-            {
-                "t": round(i * dt, 3),
-                "m": level + (3.0 if i % 400 > 200 else 0.0),
-                "i": level,
-                "centroid": centroid,
-                "rolloff": rolloff,
-                "flux": 1.0 if i % peak_every == 0 else 0.01,
-            }
-        )
+def stub_stream(chunks, calls=None):
+    """Stands in for http_stream: a download is a generator of byte blocks."""
+    def fake(url, *, timeout=90, referer=None, chunk=1 << 20):
+        if calls is not None:
+            calls.append(url)
+        yield from chunks
+
+    return fake
+
+
+def ia_item(identifier, licenseurl="", date="", files=None):
+    """Shaped like archive.org /metadata/<id>."""
+    md = {"identifier": identifier, "title": identifier}
+    if licenseurl:
+        md["licenseurl"] = licenseurl
+    if date:
+        md["date"] = date
+    return {
+        "metadata": md,
+        "files": files if files is not None else [
+            {"name": f"{identifier}.flac", "format": "Flac", "size": "9000000"},
+            {"name": f"{identifier}.mp3", "format": "VBR MP3", "size": "2000000"},
+        ],
+    }
+
+
+def make_analysis(n=1200, dt=0.1, level=-18.0, centroid=800.0, rolloff=1500.0):
+    frames = [{"centroid": centroid, "rolloff": rolloff} for _ in range(n)]
     return {"lufs": level, "lra": 6.0, "frames": frames}
 
 
@@ -106,7 +122,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(got["verdict_reason"], "cc_by_2.5_unsupported")
 
     def test_reupload_channel_is_denied(self):
-        got = M.policy(M._cand(license_id="cc0", reupload=True, source="web"))
+        got = M.policy(M._cand(license_id="cc0", reupload=True, source="ia"))
         self.assertEqual(got["verdict"], "deny")
         self.assertEqual(got["verdict_reason"], "reupload_or_mirror")
         self.assertIn("reupload_or_mirror", M.FATAL_REASONS)
@@ -168,7 +184,7 @@ class PolicyTests(unittest.TestCase):
                              published_year_source="metadata"))["verdict"], "allow")
 
     def test_pd_without_year_denied(self):
-        got = M.policy(M._cand(license_id="pd", source="commons"))
+        got = M.policy(M._cand(license_id="pd", source="ia"))
         self.assertEqual(got["verdict"], "deny")
         self.assertEqual(got["verdict_reason"], "pd_recording_year_unknown")
 
@@ -266,6 +282,8 @@ class SearchTests(unittest.TestCase):
             sorted((c["vibe_score"] for c in out["results"]), reverse=True),
         )
         self.assertEqual(out["results"][0]["license"] in ("CC0 1.0", "Public Domain Mark 1.0"), True)
+        # fetch re-reads this item later: the identifier must survive the search
+        self.assertTrue(all(c["ia_id"] for c in out["results"]))
 
     def test_ccmixter_cc0_is_usable(self):
         http, _ = stub_http({"ccmixter.org/api/query": fixture("ccmixter_ambient.json")})
@@ -279,21 +297,23 @@ class SearchTests(unittest.TestCase):
             self.assertTrue(top["file_url"].endswith(".mp3"))
             self.assertGreater(top["vibe_score"], 0)
 
-    def test_commons_by_is_attribution_and_bare_pd_is_refused(self):
-        http, _ = stub_http({"commons.wikimedia.org": fixture("commons_calm_ambient.json")})
+    def test_ia_results_are_indexed_for_fetch(self):
+        http, _ = stub_http({"archive.org/advancedsearch": fixture("ia_calm_ambient.json")})
         M.http_get = http
-        out = M.search("calm ambient", source="commons")
-        self.assertEqual(out["count"], 1)
+        out = M.search("calm ambient", source="ia", limit=1)
         top = out["results"][0]
-        self.assertEqual(top["verdict"], "attribution")
-        self.assertEqual(top["license"], "CC BY 3.0")
-        self.assertIn("pd_recording_year_unknown", out["skipped"])
+        self.assertEqual(M.resolve_candidate(top["id"])["source_url"], top["source_url"])
+        self.assertEqual(M.resolve_candidate("https://example.org/track.mp3"), {})
 
     def test_min_s_and_limit(self):
-        http, _ = stub_http({"commons.wikimedia.org": fixture("commons_calm_ambient.json")})
+        # the recorded ccMixter files are 0:21 and 2:28, so a longer minimum drops them
+        http, _ = stub_http({"ccmixter.org/api/query": fixture("ccmixter_ambient.json")})
         M.http_get = http
-        self.assertEqual(M.search("calm ambient", source="commons", min_s=5000)["count"], 0)
-        self.assertGreaterEqual(M.search("calm ambient", source="commons", min_s=300)["count"], 1)
+        too_long = M.search("ambient", source="ccmixter", min_s=600)
+        self.assertEqual(too_long["count"], 0)
+        self.assertGreaterEqual(too_long["skipped"]["too_short"], 1)
+        kept = M.search("ambient", source="ccmixter", min_s=100, limit=2)
+        self.assertEqual([c["title"] for c in kept["results"]], ["After the storm"])
 
     def test_search_caches_on_disk(self):
         http, calls = stub_http({"archive.org/advancedsearch": fixture("ia_calm_ambient.json")})
@@ -327,27 +347,78 @@ class SearchTests(unittest.TestCase):
         self.assertGreaterEqual(out["count"], 1)
 
 
-class OriginNodeTests(unittest.TestCase):
-    """The origin page licenses the file only through its own license node."""
+class OriginVerifyTests(unittest.TestCase):
+    """Origin verification reads the source record, and there is no HTML page scan left."""
 
-    def test_footer_and_stray_link_do_not_license_the_file(self):
-        page = (
-            '<html><body><p>&copy; 2024 Label. All rights reserved.</p>'
-            '<p>More by <a href="/by/genre/ambient">ambient</a></p>'
-            '<footer>Made with CC0 <a href="https://creativecommons.org/publicdomain/zero/1.0/">tools</a></footer>'
-            "</body></html>"
-        )
-        self.assertEqual(M._scan_license(page), ("other", ""))
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_xdg = os.environ.get("XDG_CACHE_HOME")
+        os.environ["XDG_CACHE_HOME"] = self.tmp.name
+        self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(lambda: os.environ.__setitem__("XDG_CACHE_HOME", self.old_xdg)
+                        if self.old_xdg else os.environ.pop("XDG_CACHE_HOME", None))
 
-    def test_license_node_is_read(self):
-        page = ('<p class="credit">"A" by B '
-                '<a rel="license" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a></p>')
-        self.assertEqual(M._scan_license(page), ("by", "4.0"))
+    def test_ia_record_licenses_the_file(self):
+        http, _ = stub_http({"archive.org/metadata/item-a": ia_item(
+            "item-a", "https://creativecommons.org/licenses/by/4.0/", "2009-03-01")})
+        M.http_get = http
+        got = M.verify_at_origin(M._cand(source="ia", ia_id="item-a", license_id="by"))
+        self.assertTrue(got["ok"])
+        self.assertEqual(got["license_id"], "by")
+        self.assertEqual(got["published_year_source"], "metadata")
+        self.assertIn("licenseurl=", got["license_evidence"])
 
-    def test_conflicting_nodes_prove_neither(self):
-        page = ('<div id="license"><a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/">A</a>'
-                ' <a rel="license" href="https://creativecommons.org/licenses/by-nc/4.0/">B</a></div>')
-        self.assertEqual(M._scan_license(page), ("other", ""))
+    def test_ia_record_without_license_is_unverified(self):
+        http, _ = stub_http({"archive.org/metadata/item-b": ia_item("item-b")})
+        M.http_get = http
+        got = M.verify_at_origin(M._cand(source="ia", ia_id="item-b"))
+        self.assertFalse(got["ok"])
+        self.assertIn("no usable license", got["detail"])
+
+    def test_ia_record_that_contradicts_the_search_is_refused(self):
+        http, _ = stub_http({"archive.org/metadata/item-c": ia_item(
+            "item-c", "https://creativecommons.org/licenses/by-sa/4.0/")})
+        M.http_get = http
+        got = M.verify_at_origin(M._cand(source="ia", ia_id="item-c", license_id="cc0"))
+        self.assertFalse(got["ok"])
+        self.assertIn("mismatch", got["detail"])
+
+    def test_ia_year_conflict_is_refused(self):
+        http, _ = stub_http({"archive.org/metadata/item-d": ia_item(
+            "item-d", "https://creativecommons.org/publicdomain/mark/1.0/", "1935-01-01")})
+        M.http_get = http
+        got = M.verify_at_origin(M._cand(source="ia", ia_id="item-d", license_id="pdm",
+                                         published_year=1920))
+        self.assertFalse(got["ok"])
+        self.assertIn("year conflict", got["detail"])
+
+    def test_ccmixter_api_record_licenses_the_file(self):
+        payload = [{"upload_id": 61841, "license_name": "CC0 (CC Zero)",
+                    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/"}]
+        http, calls = stub_http({"ccmixter.org/api/query": payload})
+        M.http_get = http
+        got = M.verify_at_origin(M._cand(source="ccmixter", ccm_id=61841, license_id="cc0"))
+        self.assertTrue(got["ok"])
+        self.assertEqual(got["license_id"], "cc0")
+        self.assertIn("ids=61841", calls[0])
+
+    def test_openverse_record_reroute_to_freesound_is_caught(self):
+        record = {"id": "ov-1", "license": "cc0", "license_version": "1.0",
+                  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+                  "url": "https://cdn.freesound.org/previews/1/1.mp3", "source": "freesound",
+                  "foreign_landing_url": "https://example.org/t"}
+        http, _ = stub_http({"api.openverse.org/v1/audio/": record})
+        M.http_get = http
+        cand = M._cand(source="openverse", ov_id="ov-1", license_id="cc0")
+        got = M.verify_at_origin(cand)
+        self.assertTrue(got["ok"])
+        cand.update({k: v for k, v in got.items() if k != "ok"})
+        self.assertEqual(M.policy(cand)["verdict_reason"], "freesound_preview_tos")
+
+    def test_unknown_source_has_no_origin_check(self):
+        got = M.verify_at_origin(M._cand(source="web", license_id="cc0"))
+        self.assertFalse(got["ok"])
+        self.assertIn("no origin check available", got["detail"])
 
 
 class FetchTests(unittest.TestCase):
@@ -359,7 +430,7 @@ class FetchTests(unittest.TestCase):
         self.stage = Path(self.tmp.name) / "music"
         self._probe, self._analyze = M.probe, M.analyze
         M.probe = lambda path: (300.0, "mp3")
-        M.analyze = lambda path: make_analysis()
+        M.analyze = lambda path, **kw: make_analysis()
         self.addCleanup(self._restore)
 
     def _restore(self):
@@ -372,95 +443,194 @@ class FetchTests(unittest.TestCase):
     def index(self, cand):
         M.remember([dict(cand)])
 
-    def test_origin_page_without_license_never_downloads(self):
-        page = "<html><body>a nice tune, no rights info</body></html>"
-        http, calls = stub_http({"landing.example": page})
+    def ia_cand(self, identifier, **kw):
+        return M._cand(id=f"ia-{identifier}", source="ia", provider="archive.org",
+                       host="archive.org", ia_id=identifier, title="Calm Bed", creator="Ada",
+                       source_url=f"https://archive.org/details/{identifier}", **kw)
+
+    def test_unknown_candidate_is_refused_without_network(self):
+        http, calls = stub_http({})
         M.http_get = http
-        self.index(M._cand(id="web-1", source="web", source_url="https://landing.example/track",
-                           file_url="https://cdn.example/track.mp3"))
-        out = M.fetch("web-1", duration=30, stage_dir=self.stage)
-        self.assertEqual(out["error"], "origin_verify_failed")
-        self.assertEqual(len(calls), 1)  # only the origin page, never the file
-        self.assertFalse(any("cdn.example" in c for c in calls))
-        self.assertFalse(self.stage.exists() and any(self.stage.iterdir()))
+        out = M.fetch("https://cdn.example/track.mp3", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "unknown_candidate")
+        self.assertEqual(calls, [])
 
     def test_denied_license_refused_before_any_network(self):
         http, calls = stub_http({})
         M.http_get = http
         self.index(M._cand(id="ov-x", source="openverse", provider="freesound",
-                           host="cdn.freesound.org", license_id="cc0", file_url="https://cdn.freesound.org/x.mp3"))
+                           host="cdn.freesound.org", license_id="cc0",
+                           file_url="https://cdn.freesound.org/x.mp3"))
         out = M.fetch("ov-x", duration=30, stage_dir=self.stage)
         self.assertEqual(out["error"], "license_denied")
         self.assertEqual(calls, [])
 
-    def test_origin_mismatch_is_refused(self):
-        page = '<a rel="license" href="https://creativecommons.org/licenses/by-sa/4.0/">license</a>'
-        http, _ = stub_http({"landing.example": page, "cdn.example": b"ID3audio"})
+    def test_record_without_license_never_downloads(self):
+        http, calls = stub_http({"archive.org/metadata/item-nolic": ia_item("item-nolic")})
         M.http_get = http
-        self.index(M._cand(id="web-2", source="web", license_id="cc0",
-                           license_url="https://creativecommons.org/publicdomain/zero/1.0/",
-                           source_url="https://landing.example/t2", file_url="https://cdn.example/t2.mp3"))
-        out = M.fetch("web-2", duration=30, stage_dir=self.stage)
+        streams = []
+        M.http_stream = stub_stream([b"ID3audio"], streams)
+        self.index(self.ia_cand("item-nolic", license_id="cc0"))
+        out = M.fetch("ia-item-nolic", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "origin_verify_failed")
+        self.assertEqual(len(calls), 1)  # the record only, never the file
+        self.assertEqual(streams, [])
+        self.assertFalse(self.stage.exists() and any(self.stage.iterdir()))
+
+    def test_origin_mismatch_is_refused(self):
+        http, calls = stub_http({"archive.org/metadata/item-mm": ia_item(
+            "item-mm", "https://creativecommons.org/licenses/by-sa/4.0/")})
+        M.http_get = http
+        streams = []
+        M.http_stream = stub_stream([b"ID3audio"], streams)
+        self.index(self.ia_cand("item-mm", license_id="cc0"))
+        out = M.fetch("ia-item-mm", duration=30, stage_dir=self.stage)
         self.assertEqual(out["error"], "origin_verify_failed")
         self.assertIn("mismatch", out["reason"])
+        self.assertEqual(streams, [])
 
     def test_by_track_verifies_then_stages_with_sidecar(self):
-        page = ('<p class="license">"Nocturne" by Ada is licensed CC BY 4.0 '
-                '<a rel="license" href="https://creativecommons.org/licenses/by/4.0/">deed</a> '
-                'provided as is</p>')
-        http, calls = stub_http({"landing.example": page, "cdn.example": b"ID3fakebytes"})
+        raw = b"ID3fakebytes"
+        http, calls = stub_http({"archive.org/metadata/item-by": ia_item(
+            "item-by", "https://creativecommons.org/licenses/by/4.0/", "2009-03-01")})
         M.http_get = http
-        self.index(M._cand(
-            id="web-3", source="web", title="Nocturne", creator="Ada",
-            license_id="by", license_version="4.0",
-            license_url="https://creativecommons.org/licenses/by/4.0/",
-            source_url="https://landing.example/t3", file_url="https://cdn.example/t3.mp3",
-        ))
-        out = M.fetch("web-3", duration=30, stage_dir=self.stage)
+        streams = []
+        M.http_stream = stub_stream([raw], streams)
+        self.index(self.ia_cand("item-by", license_id="by", license_version="4.0",
+                                license_url="https://creativecommons.org/licenses/by/4.0/"))
+        out = M.fetch("ia-item-by", duration=30, stage_dir=self.stage)
         self.assertNotIn("error", out)
-        self.assertEqual(out["path_in_container"], "/music/web-3.mp3")
+        self.assertEqual(out["path_in_container"], "/music/ia-item-by.mp3")
         self.assertEqual(out["license"], "CC BY 4.0")
         self.assertIn("Ada", out["attribution"])
-        self.assertIn("https://landing.example/t3", out["attribution"])
-        self.assertEqual(calls[0].startswith("https://landing.example"), True)  # verify first
-        self.assertTrue(any("cdn.example" in c for c in calls[1:]))
-        staged = self.stage / "web-3.mp3"
+        self.assertIn("https://archive.org/details/item-by", out["attribution"])
+        self.assertEqual(calls[0].startswith("https://archive.org/metadata/"), True)  # verify first
+        self.assertEqual(streams, ["https://archive.org/download/item-by/item-by.mp3"])
+        staged = self.stage / "ia-item-by.mp3"
         self.assertTrue(staged.is_file())
-        side = json.loads((self.stage / "web-3.json").read_text())
+        side = json.loads((self.stage / "ia-item-by.json").read_text())
         for key in ("id", "title", "creator", "license", "license_version", "license_url",
                     "source_url", "retrieved_at", "attribution_required", "attribution_text",
                     "verdict", "verdict_reason", "license_evidence", "content_id_risk",
                     "jurisdiction_note", "recording_is_original_transfer", "sha256",
                     "duration_s", "mood", "bpm"):
             self.assertIn(key, side)
-        self.assertEqual(side["sha256"], __import__("hashlib").sha256(b"ID3fakebytes").hexdigest())
-        self.assertEqual(side["path_in_container"], "/music/web-3.mp3")
+        self.assertEqual(side["sha256"], sha256(raw).hexdigest())
+        self.assertEqual(side["path_in_container"], "/music/ia-item-by.mp3")
         self.assertGreaterEqual(side["start_s"], 1.0)
         self.assertLessEqual(side["start_s"] + 30, 300.0 - 1.0)
         for key in ("path_in_container", "start_s", "title", "creator", "license",
                     "license_url", "source_url", "attribution"):
             self.assertIn(key, out)
 
-    def test_short_track_rejected(self):
-        page = '<p class="license">CC0 1.0 <a rel="license" href="https://creativecommons.org/publicdomain/zero/1.0/">deed</a></p>'
-        http, _ = stub_http({"landing.example": page, "cdn.example": b"x"})
+    def test_ccmixter_download_sends_a_referer(self):
+        payload = [{"upload_id": 61841, "license_name": "CC0 (CC Zero)",
+                    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/"}]
+        http, _ = stub_http({"ccmixter.org/api/query": payload})
         M.http_get = http
+        seen = {}
+
+        def fake(url, *, timeout=90, referer=None, chunk=1 << 20):
+            seen["referer"] = referer
+            yield b"ID3ccm"
+
+        M.http_stream = fake
+        self.index(M._cand(id="ccm-61841", source="ccmixter", ccm_id=61841, license_id="cc0",
+                           source_url="https://ccmixter.org/files/Hugh_Jass/61841",
+                           file_url="https://ccmixter.org/content/Hugh_Jass/x.mp3"))
+        out = M.fetch("ccm-61841", duration=20, stage_dir=self.stage)
+        self.assertNotIn("error", out)
+        self.assertEqual(seen["referer"], "https://ccmixter.org/files/Hugh_Jass/61841")
+
+    def test_short_track_rejected(self):
+        http, _ = stub_http({"archive.org/metadata/item-short": ia_item(
+            "item-short", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        M.http_stream = stub_stream([b"x"])
         M.probe = lambda path: (12.0, "mp3")
-        self.index(M._cand(id="web-4", source="web", license_id="cc0",
-                           source_url="https://landing.example/t4", file_url="https://cdn.example/t4.mp3"))
-        out = M.fetch("web-4", duration=30, stage_dir=self.stage)
+        self.index(self.ia_cand("item-short", license_id="cc0"))
+        out = M.fetch("ia-item-short", duration=30, stage_dir=self.stage)
         self.assertEqual(out["error"], "track_too_short")
 
     def test_gate_failure_blocks_the_stage(self):
-        page = '<p class="license">CC0 1.0 <a rel="license" href="https://creativecommons.org/publicdomain/zero/1.0/">deed</a></p>'
-        http, _ = stub_http({"landing.example": page, "cdn.example": b"x"})
+        http, _ = stub_http({"archive.org/metadata/item-silent": ia_item(
+            "item-silent", "https://creativecommons.org/publicdomain/zero/1.0/")})
         M.http_get = http
-        M.analyze = lambda path: {"lufs": -80.0, "lra": 0.0, "frames": make_analysis()["frames"]}
-        self.index(M._cand(id="web-5", source="web", license_id="cc0",
-                           source_url="https://landing.example/t5", file_url="https://cdn.example/t5.mp3"))
-        out = M.fetch("web-5", duration=30, stage_dir=self.stage)
+        M.http_stream = stub_stream([b"x"])
+        M.analyze = lambda path, **kw: {"lufs": -80.0, "lra": 0.0,
+                                        "frames": make_analysis()["frames"]}
+        self.index(self.ia_cand("item-silent", license_id="cc0"))
+        out = M.fetch("ia-item-silent", duration=30, stage_dir=self.stage)
         self.assertEqual(out["error"], "gate_failed")
         self.assertEqual(out["reason"], "digital_silence")
+
+    def test_ffprobe_failure_returns_a_payload_not_a_traceback(self):
+        http, _ = stub_http({"archive.org/metadata/item-bad": ia_item(
+            "item-bad", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        M.http_stream = stub_stream([b"x"])
+
+        def boom(path):
+            raise subprocess_timeout()
+
+        M.probe = boom
+        self.index(self.ia_cand("item-bad", license_id="cc0"))
+        out = M.fetch("ia-item-bad", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "analysis_failed")
+        self.assertIn("TimeoutExpired", out["reason"])
+
+    def test_analyze_failure_returns_a_payload_not_a_traceback(self):
+        http, _ = stub_http({"archive.org/metadata/item-bad2": ia_item(
+            "item-bad2", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        M.http_stream = stub_stream([b"x"])
+
+        def boom(path, **kw):
+            raise RuntimeError("ffmpeg died")
+
+        M.analyze = boom
+        self.index(self.ia_cand("item-bad2", license_id="cc0"))
+        out = M.fetch("ia-item-bad2", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "analysis_failed")
+        self.assertIn("ffmpeg died", out["reason"])
+
+    def test_dead_file_is_a_result(self):
+        http, _ = stub_http({"archive.org/metadata/item-dead": ia_item(
+            "item-dead", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+
+        def boom(url, **kw):
+            raise RuntimeError("404")
+            yield b""  # pragma: no cover
+
+        M.http_stream = boom
+        self.index(self.ia_cand("item-dead", license_id="cc0"))
+        out = M.fetch("ia-item-dead", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "download_failed")
+        self.assertIn("404", out["reason"])
+
+
+def subprocess_timeout():
+    import subprocess
+    return subprocess.TimeoutExpired(cmd="ffprobe", timeout=180)
+
+
+class DownloadTests(unittest.TestCase):
+    def test_streams_in_chunks_and_hashes_incrementally(self):
+        chunks = [b"ID3", b"-middle-", b"end"]
+        M.http_stream = stub_stream(chunks)
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "track.bin"
+            size, digest = M.download("https://cdn.example/t.mp3", dest)
+            self.assertEqual(size, len(b"".join(chunks)))
+            self.assertEqual(dest.read_bytes(), b"".join(chunks))
+            self.assertEqual(digest, sha256(b"".join(chunks)).hexdigest())
+
+    def test_oversized_file_aborts(self):
+        M.http_stream = stub_stream([b"x" * 32, b"y" * 32])
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(RuntimeError):
+                M.download("https://cdn.example/big.mp3", Path(tmp) / "t.bin", max_bytes=40)
 
 
 class AnalysisTests(unittest.TestCase):
@@ -468,18 +638,14 @@ class AnalysisTests(unittest.TestCase):
         text = "\n".join(
             [
                 "frame:0    pts:0       pts_time:0",
-                "lavfi.r128.M=-20.500",
                 "lavfi.r128.I=-19.000",
                 "lavfi.r128.LRA=1.500",
                 "lavfi.aspectralstats.1.centroid=900.000",
-                "lavfi.aspectralstats.1.flux=0.900",
                 "lavfi.aspectralstats.1.rolloff=1700.000",
                 "frame:1    pts:1024    pts_time:0.021333",
-                "lavfi.r128.M=-18.000",
                 "lavfi.r128.I=-17.500",
                 "lavfi.r128.LRA=6.000",
                 "lavfi.aspectralstats.1.centroid=1000.000",
-                "lavfi.aspectralstats.1.flux=0.010",
                 "lavfi.aspectralstats.1.rolloff=2000.000",
             ]
         )
@@ -488,6 +654,28 @@ class AnalysisTests(unittest.TestCase):
         self.assertAlmostEqual(got["lufs"], -17.5)
         self.assertAlmostEqual(got["lra"], 6.0)
         self.assertAlmostEqual(got["frames"][1]["centroid"], 1000.0)
+        self.assertAlmostEqual(got["frames"][1]["rolloff"], 2000.0)
+
+    def test_analyze_seeks_the_window_it_was_asked_for(self):
+        seen = {}
+
+        class Out:
+            stdout = ""
+
+        def fake_run(cmd, **kw):
+            seen["cmd"] = cmd
+            return Out()
+
+        old = M.subprocess.run
+        M.subprocess.run = fake_run
+        try:
+            M.analyze(Path("/tmp/x.mp3"), start=3.0, duration=42.0)
+        finally:
+            M.subprocess.run = old
+        cmd = seen["cmd"]
+        self.assertEqual(cmd[cmd.index("-ss") + 1], "3.000")
+        self.assertEqual(cmd[cmd.index("-t") + 1], "42.000")
+        self.assertLess(cmd.index("-ss"), cmd.index("-i"))  # fast seek, before the input
 
     def test_gates_use_centroid_and_rolloff(self):
         self.assertEqual(M.gate(M.parse_analysis("")), "no_audio")
@@ -499,17 +687,18 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(M.gate(dark), "too_dark_rumble")
         self.assertIsNone(M.gate(make_analysis()))
 
-    def test_pick_start_stays_inside_the_bounds(self):
-        analysis = make_analysis(n=1800, dt=0.1, peak_every=57)
-        start = M.pick_start(analysis, 180.0, 30.0)
-        self.assertGreaterEqual(start, 1.0)
-        self.assertLessEqual(start + 30.0, 180.0 - 1.0)
-        peaks = M.flux_peaks(analysis["frames"], 180.0)
-        self.assertTrue(peaks)
-        self.assertLessEqual(min(abs(start - p) for p in peaks), 1.5)
-
-    def test_pick_start_on_a_short_track_falls_back_to_one_second(self):
-        self.assertEqual(M.pick_start(make_analysis(n=100), 10.0, 30.0), 1.0)
+    def test_pick_start_is_a_clamped_fixed_offset(self):
+        self.assertEqual(M.pick_start(300.0, 30.0), M.START_OFFSET_S)
+        self.assertGreaterEqual(M.pick_start(300.0, 30.0), 1.0)
+        self.assertLessEqual(M.pick_start(300.0, 30.0) + 30.0, 300.0 - 1.0)
+        # barely long enough: clamped to the last legal start, still 1 s of tail
+        start = M.pick_start(34.0, 30.0)
+        self.assertEqual(start, 3.0)
+        self.assertLessEqual(start + 30.0, 34.0 - 1.0)
+        # the shortest track fetch accepts: 1 s of head, window, 1 s of tail
+        tight = M.pick_start(32.0, 30.0)
+        self.assertEqual(tight, 1.0)
+        self.assertLessEqual(tight + 30.0, 32.0 - 1.0)
 
 
 class MiscTests(unittest.TestCase):
@@ -535,6 +724,11 @@ class MiscTests(unittest.TestCase):
         self.assertEqual(M.parse_license("", url="https://creativecommons.org/licenses/by/3.0")[1], "3.0")
         self.assertEqual(M.parse_license("", url="http://creativecommons.org/licenses/by-nc-nd/4.0/")[0], "by-nc-nd")
         self.assertEqual(M.parse_license("")[0], "other")
+
+    def test_only_the_three_sources_remain(self):
+        self.assertEqual(M.SOURCES, ("openverse", "ia", "ccmixter"))
+        self.assertEqual(sorted(M.SEARCHERS), ["ccmixter", "ia", "openverse"])
+        self.assertFalse([n for n in dir(M) if "commons" in n.lower()])
 
     def test_cli_parses_both_commands(self):
         parser = M.build_parser()
