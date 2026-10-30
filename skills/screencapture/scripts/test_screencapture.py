@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for shot.py. Run: python3 -m unittest test_shot -v
+"""Unit tests for screencapture.py. Run: python3 -m unittest test_screencapture -v
 
 Desktop/clipboard capture needs a live graphical session so those paths
 aren't exercised here -- only the pure/stdlib pieces are (resize, format

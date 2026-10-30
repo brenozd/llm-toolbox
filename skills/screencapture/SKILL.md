@@ -74,7 +74,7 @@ python3 scripts/screencapture.py --record desktop --seconds 8 --gif
 
 Steps (JSON list or file): `type`, `key`, `click` (x,y or selector, `button` 1-3), `move`, `scroll` (`dy`),
 `wait_for` (text/selector, `timeout_s`), `hold_s`, and `goto` (web). `key` is an xdotool keysym in
-term (`Return`, `ctrl+c`) and a Playwright key in web (`Enter`, `Control+c`). Each recording writes a
+term (`Return`, `ctrl+c`) and a Playwright key in web (`Enter`, `Control+c`). term, gui and web recordings write a
 `.json` receipt beside it. Missing tools are reported with the install command. `gui` needs Xvfb, xdotool, ffmpeg; no
 `wait_for`/selectors there (use `hold_s`, x/y). Wayland-only apps are not supported yet.
 

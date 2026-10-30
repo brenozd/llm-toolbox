@@ -440,7 +440,7 @@ def _safe_to_delete(path: Path) -> bool:
     return (
         path.is_file()
         and not path.is_symlink()
-        and path.suffix in (".png", ".jpg", ".html")
+        and path.suffix in (".png", ".jpg", ".html", ".mp4", ".webm", ".gif", ".json")
         and path.parent == Path.cwd() / ".screenshots"
     )
 
@@ -513,7 +513,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--clear-yes", action="store_true", help="delete this session's screenshots, no prompt")
     p.add_argument("--record", choices=["term", "gui", "web", "desktop"],
                    help="record video/gif (output ext .mp4/.webm/.gif, default .mp4); web needs --web URL")
-    p.add_argument("--steps", metavar="JSON|FILE", help="scripted steps for --record term/web (see record.py)")
+    p.add_argument("--steps", metavar="JSON|FILE", help="scripted steps for --record term/gui/web (see record.py)")
     p.add_argument("--seconds", type=float, default=5, help="--record desktop duration")
     p.add_argument("--fps", type=int, default=15)
     p.add_argument("--cols", type=int, default=80, help="--record term columns")
@@ -541,7 +541,7 @@ def _record(args) -> int:
         meta = record.record_desktop(output, args.seconds, args.fps)
     else:
         if not args.steps:
-            raise SystemExit("--record term/web needs --steps")
+            raise SystemExit("--record term/gui/web needs --steps")
         steps = record.load_steps(args.steps)
         if args.record == "gui":
             if not args.app:

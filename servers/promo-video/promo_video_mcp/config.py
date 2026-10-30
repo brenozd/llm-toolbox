@@ -16,7 +16,7 @@ MUSIC_VOLUME_DB = (-40.0, 0.0)  # a music bed under narration: never louder than
 MUSIC_DUCK_DB = (0.0, 40.0)
 # Bumped whenever the template or the timeline changes what a render looks like: it is part of
 # spec.resolved_hash, so old stills/receipts cannot be reused for a frame built by another template.
-RENDER_VERSION = "4"
+RENDER_VERSION = "5"
 # TTS model identity (name + size, not a 300 MB hash) is part of the narration cache key: a re-baked
 # model must not be served the WAVs the previous one synthesized.
 MODEL = Path(os.environ.get("PROMO_KOKORO_MODEL", "/opt/kokoro/kokoro-v1.0.fp16.onnx"))

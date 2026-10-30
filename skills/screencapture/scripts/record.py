@@ -197,6 +197,8 @@ class XSession:
             elif ty == "wait_for":
                 if wait_text is None:
                     raise ValueError("wait_for is not available for gui (no text stream): use hold_s")
+                if "text" not in s:
+                    raise ValueError("wait_for needs 'text' on term (selectors are web-only)")
                 if not wait_text(s["text"], float(s.get("timeout_s", 8))):
                     raise RuntimeError(f"wait_for {s['text']!r} timed out: no half clip shipped")
             elif ty == "hold_s":
@@ -217,9 +219,9 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
     check_tools("Xvfb", "xterm", "xdotool", "ffmpeg", "script")
     if any(s["type"] == "goto" for s in steps):
         raise ValueError("'goto' is a web step")
+    xs = XSession(1920, 1080)
     work = Path(tempfile.mkdtemp(prefix="screencapture-"))
     log, raw = work / "pty.log", work / "raw.mp4"
-    xs = XSession(1920, 1080)
     xt = ff = None
     try:
         rc = work / "rc"
@@ -276,20 +278,20 @@ def record_gui(app: str, steps: list[dict], out: Path, width: int = 1280, height
     check_tools("Xvfb", "xdotool", "ffmpeg")
     if any(s["type"] in ("goto", "wait_for") for s in steps):
         raise ValueError("'goto' is a web step and 'wait_for' is term/web only")
+    xs = XSession(width, height)
     work = Path(tempfile.mkdtemp(prefix="screencapture-"))
     raw = work / "raw.mp4"
-    xs = XSession(width, height)
     xs.env.update({"GDK_BACKEND": "x11", "QT_QPA_PLATFORM": "xcb", "SDL_VIDEODRIVER": "x11",
                    "MOZ_ENABLE_WAYLAND": "0", "ELECTRON_OZONE_PLATFORM_HINT": "x11"})
     xs.env["PATH"] = os.environ.get("PATH", xs.env["PATH"])
     proc = ff = None
     try:
         proc = subprocess.Popen(shlex.split(app), cwd=cwd, env=xs.env, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
-        # the launcher may fork (pid != window owner), so take the first visible window on this private display
+                                stdout=subprocess.DEVNULL, stderr=(work / "app.log").open("wb"), start_new_session=True)  # a file: an undrained pipe freezes a chatty app
+        # the launcher may fork (pid != window owner), so take a visible window on this private display (the last one listed)
         def find():
             if proc.poll() not in (None, 0):
-                raise RuntimeError(f"app exited early (rc={proc.returncode}): {proc.stderr.read()[-300:].decode(errors='replace')}")
+                raise RuntimeError(f"app exited early (rc={proc.returncode}): {(work / 'app.log').read_bytes()[-300:].decode(errors='replace')}")
             r = subprocess.run(["xdotool", "search", "--onlyvisible", "--class", "."], env=xs.env,
                                capture_output=True, text=True, timeout=10)
             return (r.stdout.split() or [None])[-1]

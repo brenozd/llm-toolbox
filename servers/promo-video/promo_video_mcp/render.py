@@ -99,14 +99,14 @@ def clip_frames(video: str, n: int, fps: float) -> list[str]:
     seeks the same images (a <video> seek would not be deterministic frame for frame)."""
     p = safe_path(video)
     st = p.stat()
-    key = hashlib.sha256(f"{config.RENDER_VERSION}|{p}|{st.st_size}|{int(st.st_mtime)}|{n}|{fps}".encode()).hexdigest()[:12]
+    key = hashlib.sha256(f"{config.RENDER_VERSION}|{p}|{st.st_size}|{st.st_mtime_ns}|{n}|{fps}".encode()).hexdigest()[:12]
     d = config.WORK / "frames" / key
     have = sorted(d.glob("*.png")) if d.is_dir() else []
     if len(have) < n:
         d.mkdir(parents=True, exist_ok=True)
         for old in d.glob("*.png"):
             old.unlink()
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(p), "-vf", f"fps={fps}",
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(p), "-vf", f"fps={fps},scale='min(iw,1920)':-2",
                         "-frames:v", str(n), str(d / "%04d.png")], check=True)
         have = sorted(d.glob("*.png"))
     return [str(x) for x in have[:n]]
@@ -486,7 +486,7 @@ def _duration(j: dict) -> float:
         return float(j["format"]["duration"])
     except (KeyError, TypeError, ValueError):
         a, b = j["streams"][0]["r_frame_rate"].split("/")
-        return int(j["streams"][0]["nb_frames"]) * int(b) / int(a)
+        return int(j["streams"][0].get("nb_frames") or 0) * int(b) / int(a)
 
 
 def _probe(video: str) -> dict:
