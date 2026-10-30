@@ -75,8 +75,26 @@ steps:
       - event: tag
         ref: refs/tags/faster-whisper-v*
 
+  # The `-exec` entry invariant (M7) lives in scripts/validate-plugin.py: stdlib-only, no image
+  # build and ~1 s, so it gates the pipeline before the promo-video steps below.
+  - name: plugin-test
+    image: python:3.12-slim
+    commands:
+      - python scripts/test_validate_plugin.py
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", ".woodpecker/**"] }
+      - event: pull_request
+        path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/promo-video-v*
+
   # Offline tests (ffmpeg only; chromium/xterm-dependent tests skip themselves). Serial like
   # whatsapp-test: a failure aborts the pipeline before the image build below.
+  # Path globs are deliberately wider than the build step's: the tests also read
+  # skills/promo-video/SKILL.md and .claude-plugin/plugin.json (doc/plugin contracts), so a
+  # change there must run them — but must not rebuild the image.
   - name: promo-video-test
     image: python:3.12-slim
     commands:
@@ -87,9 +105,9 @@ steps:
     when:
       - event: [push, manual]
         branch: master
-        path: { include: ["servers/promo-video/**", ".woodpecker/**"] }
+        path: { include: ["servers/promo-video/**", "skills/promo-video/**", ".claude-plugin/**", ".woodpecker/**"] }
       - event: pull_request
-        path: { include: ["servers/promo-video/**", ".woodpecker/**"] }
+        path: { include: ["servers/promo-video/**", "skills/promo-video/**", ".claude-plugin/**", ".woodpecker/**"] }
       - event: tag
         ref: refs/tags/promo-video-v*
 
