@@ -1,0 +1,479 @@
+{
+ "result_count": 240,
+ "page_count": 12,
+ "page_size": 20,
+ "page": 1,
+ "results": [
+  {
+   "id": "bd0081f7-482a-4c8c-9690-2f5d89d9008a",
+   "title": "Calm ambient forrest sounds.mp3",
+   "indexed_on": "2022-06-01T12:00:12.608809Z",
+   "foreign_landing_url": "https://freesound.org/people/ZHR%C3%98/sounds/620449",
+   "url": "https://cdn.freesound.org/previews/620/620449_10859468-hq.mp3",
+   "creator": "ZHR\u00d8",
+   "creator_url": "https://freesound.org/people/ZHR\u00d8",
+   "license": "cc0",
+   "license_version": "1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "provider": "freesound",
+   "source": "freesound",
+   "category": null,
+   "genres": null,
+   "filesize": 2851715,
+   "filetype": "mp3",
+   "tags": [
+    {
+     "name": "ambience",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "ambient",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "background-sound",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "birds",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "branches",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "calm",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "forrest",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "leaves",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "recording",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "sound",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "sounds",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "soundscape",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    }
+   ],
+   "alt_files": [
+    {
+     "url": "https://freesound.org/apiv2/sounds/620449/download/",
+     "bit_rate": 320000,
+     "filesize": 5084589,
+     "filetype": "mp3",
+     "sample_rate": 44100
+    }
+   ],
+   "attribution": "\"Calm ambient forrest sounds.mp3\" by ZHR\u00d8 is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/.",
+   "fields_matched": [
+    "description",
+    "title",
+    "tags.name"
+   ],
+   "mature": false,
+   "audio_set": {
+    "title": "nature",
+    "foreign_landing_url": "https://freesound.org/apiv2/packs/28808/",
+    "creator": "ZHR\u00d8",
+    "creator_url": "https://freesound.org/people/ZHR\u00d8/",
+    "url": null,
+    "filesize": null,
+    "filetype": null
+   },
+   "duration": 127044,
+   "bit_rate": 128000,
+   "sample_rate": null,
+   "thumbnail": null,
+   "detail_url": "https://api.openverse.org/v1/audio/bd0081f7-482a-4c8c-9690-2f5d89d9008a/",
+   "related_url": "https://api.openverse.org/v1/audio/bd0081f7-482a-4c8c-9690-2f5d89d9008a/related/",
+   "waveform": "https://api.openverse.org/v1/audio/bd0081f7-482a-4c8c-9690-2f5d89d9008a/waveform/",
+   "unstable__sensitivity": []
+  },
+  {
+   "id": "521793f7-5a7d-431c-8647-72a108c69e34",
+   "title": "calm ambient in countryside - late afternoon",
+   "indexed_on": "2024-05-21T15:00:07.873258Z",
+   "foreign_landing_url": "https://freesound.org/people/alessandrozangrossi/sounds/636911",
+   "url": "https://cdn.freesound.org/previews/636/636911_6913649-hq.mp3",
+   "creator": "alessandrozangrossi",
+   "creator_url": "https://freesound.org/people/alessandrozangrossi",
+   "license": "cc0",
+   "license_version": "1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "provider": "freesound",
+   "source": "freesound",
+   "category": null,
+   "genres": null,
+   "filesize": 2766912,
+   "filetype": "mp3",
+   "tags": [
+    {
+     "name": "afternoon",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "ambience",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "ambient",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "bird",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "birds",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "calm",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "country",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "crickets",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "field-recording",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "general-noise",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "quiet",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    }
+   ],
+   "alt_files": [
+    {
+     "url": "https://freesound.org/apiv2/sounds/636911/download/",
+     "bit_rate": 0,
+     "filesize": 34560702,
+     "filetype": "wav",
+     "sample_rate": 48000
+    }
+   ],
+   "attribution": "\"calm ambient in countryside - late afternoon\" by alessandrozangrossi is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/.",
+   "fields_matched": [
+    "description",
+    "title",
+    "tags.name"
+   ],
+   "mature": false,
+   "audio_set": null,
+   "duration": 120000,
+   "bit_rate": 128000,
+   "sample_rate": null,
+   "thumbnail": null,
+   "detail_url": "https://api.openverse.org/v1/audio/521793f7-5a7d-431c-8647-72a108c69e34/",
+   "related_url": "https://api.openverse.org/v1/audio/521793f7-5a7d-431c-8647-72a108c69e34/related/",
+   "waveform": "https://api.openverse.org/v1/audio/521793f7-5a7d-431c-8647-72a108c69e34/waveform/",
+   "unstable__sensitivity": []
+  },
+  {
+   "id": "a424d995-9eb7-4657-8a40-e94d5a1b8820",
+   "title": "calm ambient in countryside - late afternoon",
+   "indexed_on": "2024-05-21T15:00:07.873258Z",
+   "foreign_landing_url": "https://freesound.org/people/alessandrozangrossi/sounds/636912",
+   "url": "https://cdn.freesound.org/previews/636/636912_6913649-hq.mp3",
+   "creator": "alessandrozangrossi",
+   "creator_url": "https://freesound.org/people/alessandrozangrossi",
+   "license": "cc0",
+   "license_version": "1.0",
+   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+   "provider": "freesound",
+   "source": "freesound",
+   "category": null,
+   "genres": null,
+   "filesize": 1350048,
+   "filetype": "mp3",
+   "tags": [
+    {
+     "name": "afternoon",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "ambience",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "ambient",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "bird",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "birds",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "calm",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "country",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "crickets",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "field-recording",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "general-noise",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "quiet",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    }
+   ],
+   "alt_files": [
+    {
+     "url": "https://freesound.org/apiv2/sounds/636912/download/",
+     "bit_rate": 0,
+     "filesize": 16658622,
+     "filetype": "wav",
+     "sample_rate": 48000
+    }
+   ],
+   "attribution": "\"calm ambient in countryside - late afternoon\" by alessandrozangrossi is marked with CC0 1.0. To view the terms, visit https://creativecommons.org/publicdomain/zero/1.0/.",
+   "fields_matched": [
+    "description",
+    "title",
+    "tags.name"
+   ],
+   "mature": false,
+   "audio_set": null,
+   "duration": 57840,
+   "bit_rate": 128000,
+   "sample_rate": null,
+   "thumbnail": null,
+   "detail_url": "https://api.openverse.org/v1/audio/a424d995-9eb7-4657-8a40-e94d5a1b8820/",
+   "related_url": "https://api.openverse.org/v1/audio/a424d995-9eb7-4657-8a40-e94d5a1b8820/related/",
+   "waveform": "https://api.openverse.org/v1/audio/a424d995-9eb7-4657-8a40-e94d5a1b8820/waveform/",
+   "unstable__sensitivity": []
+  },
+  {
+   "id": "aed019bb-7c79-4aeb-96a5-2907b917856b",
+   "title": "Calm Ambient for Meditation",
+   "indexed_on": "2025-07-03T01:17:50.306821Z",
+   "foreign_landing_url": "https://freesound.org/people/Matio888/sounds/795809",
+   "url": "https://cdn.freesound.org/previews/795/795809_16936704-hq.mp3",
+   "creator": "Matio888",
+   "creator_url": "https://freesound.org/people/Matio888",
+   "license": "by",
+   "license_version": "4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "provider": "freesound",
+   "source": "freesound",
+   "category": null,
+   "genres": null,
+   "filesize": 8896848,
+   "filetype": "mp3",
+   "tags": [
+    {
+     "name": "ambient",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "atmospheric",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "background",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "calm",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "deep",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "dreamlike",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "floating",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "healing",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "meditation",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "mindfulness",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "peaceful",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "relaxation",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "relief",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "serene",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "sleep",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "soft",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "soothing",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "stress",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "tranquil",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "yoga",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    },
+    {
+     "name": "zen",
+     "accuracy": null,
+     "unstable__provider": "freesound"
+    }
+   ],
+   "alt_files": [
+    {
+     "url": "https://freesound.org/apiv2/sounds/795809/download/",
+     "bit_rate": 320000,
+     "filesize": 15380230,
+     "filetype": "mp3",
+     "sample_rate": 48000
+    }
+   ],
+   "attribution": "\"Calm Ambient for Meditation\" by Matio888 is licensed under CC BY 4.0. To view a copy of this license, visit https://creativecommons.org/licenses/by/4.0/.",
+   "fields_matched": [
+    "description",
+    "title",
+    "tags.name"
+   ],
+   "mature": false,
+   "audio_set": {
+    "title": "Download all Music",
+    "foreign_landing_url": "https://freesound.org/apiv2/packs/42858/",
+    "creator": "Matio888",
+    "creator_url": "https://freesound.org/people/Matio888/",
+    "url": null,
+    "filesize": null,
+    "filetype": null
+   },
+   "duration": 384493,
+   "bit_rate": 128000,
+   "sample_rate": null,
+   "thumbnail": null,
+   "detail_url": "https://api.openverse.org/v1/audio/aed019bb-7c79-4aeb-96a5-2907b917856b/",
+   "related_url": "https://api.openverse.org/v1/audio/aed019bb-7c79-4aeb-96a5-2907b917856b/related/",
+   "waveform": "https://api.openverse.org/v1/audio/aed019bb-7c79-4aeb-96a5-2907b917856b/waveform/",
+   "unstable__sensitivity": []
+  }
+ ]
+}

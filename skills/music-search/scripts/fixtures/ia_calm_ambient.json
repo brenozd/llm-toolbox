@@ -1,0 +1,132 @@
+{
+ "responseHeader": {
+  "status": 0
+ },
+ "response": {
+  "numFound": 4518,
+  "docs": [
+   {
+    "identifier": "graeexperimentsjanuary2016",
+    "licenseurl": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "subject": [
+     "experimental",
+     "dark",
+     "ambient",
+     "noise",
+     "grae",
+     "audio"
+    ],
+    "title": "GRAE EXPERIMENTS - JANUARY 2016"
+   },
+   {
+    "creator": "hichinochi",
+    "date": "2018-06-12T00:00:00Z",
+    "identifier": "hichinochi-dotsgadots",
+    "licenseurl": "https://creativecommons.org/publicdomain/zero/1.0/",
+    "subject": [
+     "jnoise",
+     "free improvisation",
+     "dark ambient",
+     "noise ambient",
+     "electroacoustic",
+     "modern classical",
+     "classical music",
+     "experimental",
+     "drone",
+     "drone noise",
+     "anw",
+     "ambient noise wall",
+     "ambient",
+     "extreme electronics",
+     "jam",
+     "jam noise",
+     "japannoise",
+     "japan noise",
+     "instrumental",
+     "outsider music",
+     "instrumental electronica",
+     "chamber music",
+     "chamber noise"
+    ],
+    "title": "dotsgadots",
+    "year": 2018
+   },
+   {
+    "creator": "Useless",
+    "identifier": "useless-useless-ii",
+    "licenseurl": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "subject": [
+     "drone",
+     "ambient",
+     "noise",
+     "vaporwave"
+    ],
+    "title": "Useless II"
+   },
+   {
+    "identifier": "8hertztrrmapontormolive",
+    "licenseurl": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "subject": [
+     "8hertz",
+     "8 hertz",
+     "radio wombat",
+     "wombat radio",
+     "podcast",
+     "live",
+     "full live",
+     "next emerson",
+     "trrm\u00e0",
+     "pontormo",
+     "experimental",
+     "drone",
+     "ambient",
+     "drumming",
+     "synth",
+     "modular",
+     "tape loops",
+     "tape music",
+     "nicola savelli",
+     "paolo malavasi",
+     "marco marzuoli",
+     "giuseppe cadriando",
+     "giovanni todisco",
+     "polirythmic",
+     "free jazz",
+     "jezzcore",
+     "tribal"
+    ],
+    "title": "8hertz - Trrm\u00e0 Pontormo Live"
+   },
+   {
+    "creator": "Pharmakustik",
+    "identifier": "BestattungsinstitutsiegmarFricke",
+    "licenseurl": "http://creativecommons.org/licenses/publicdomain/",
+    "subject": [
+     "ambient",
+     "industrial",
+     "electronics",
+     "minimal",
+     "pharmakustik",
+     "Siegmar Fricke",
+     "avantgarde"
+    ],
+    "title": "BESTATTUNGSINSTITUT | Tape 2"
+   },
+   {
+    "creator": "The Noise Conundrum",
+    "date": "2018-01-01T00:00:00Z",
+    "identifier": "tnc-008",
+    "licenseurl": "http://creativecommons.org/publicdomain/mark/1.0/",
+    "subject": [
+     "experimental",
+     "ambient",
+     "drone",
+     "noise",
+     "music"
+    ],
+    "title": "008 - A Peculiar Gift From a Man With No Hands",
+    "year": 2018
+   }
+  ]
+ }
+}
