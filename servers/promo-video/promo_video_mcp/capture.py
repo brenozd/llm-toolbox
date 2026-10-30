@@ -81,6 +81,23 @@ def _until(pred, timeout: float, step: float = 0.1):
     return None
 
 
+def _settle_prompt(log: Path, timeout: float = 1.5, paint: float = 0.2) -> float:
+    """Wait for the shell to have printed its prompt (the pty log gets bytes) instead of sleeping a
+    fixed 0.8 s: a loaded box paints late and a fast one no longer wastes the wait. The `paint`
+    sleep after the bytes land covers the cells xterm has not drawn yet. Returns the seconds waited.
+    Not `_until`: its predicate must return non-None to keep polling, and a False returns at once."""
+    t = time.monotonic()
+    while time.monotonic() - t < timeout:
+        try:
+            if log.exists() and log.stat().st_size:
+                break
+        except OSError:
+            pass
+        time.sleep(0.05)
+    time.sleep(paint)
+    return time.monotonic() - t
+
+
 LOCKDIR = Path("/tmp")  # where X and our own display claims live
 
 
@@ -281,7 +298,10 @@ def _focus_of(pg, selector: str, vp: dict) -> dict | None:
         loc.scroll_into_view_if_needed(timeout=3000)
     except Exception:  # a fixed/sticky element is already in view: nothing to scroll
         pass
-    box = loc.bounding_box()
+    try:
+        box = loc.bounding_box(timeout=3000)  # bounded: a selector that never matches must not eat 30 s
+    except Exception:  # Playwright's TimeoutError is not a RuntimeError, so it would escape the caller
+        return None
     if not box:
         return None
     w, h = float(vp["width"]), float(vp["height"])
@@ -314,37 +334,59 @@ def capture_web(url: str, shots: list[dict], viewport: dict | None = None, aspec
         ctx = br.new_context(viewport=vp, device_scale_factor=dsf)
         ctx.route("**/*", gate)
         pg = ctx.new_page()
-        pg.goto(url, wait_until="load", timeout=20000)
+        try:
+            pg.goto(url, wait_until="load", timeout=20000)
+        except Exception as e:  # a slow/blocked page is a finding, not a traceback out of the tool
+            return {**BAD, "capture_id": cid, "message": f"could not load {url}: {type(e).__name__}: {e}"}
         for s in shots:
             sid = s["id"]
             for sel in s.get("hide", []):
                 pg.add_style_tag(content=f"{sel}{{filter:blur(14px)!important}}")
             if s.get("path"):
-                pg.goto(urlparse(url)._replace(path=s["path"]).geturl(), wait_until="load")
+                try:
+                    pg.goto(urlparse(url)._replace(path=s["path"]).geturl(), wait_until="load", timeout=20000)
+                except Exception as e:  # one bad page must not lose the shots that already worked
+                    out.append({"id": sid, "path": None, "focus": None,
+                                "message": f"could not load {s['path']}: {type(e).__name__}: {e}"})
+                    continue
+            # measured *before* the shot: _focus_of scrolls the element into view, so a box taken
+            # afterwards described pixels the PNG does not have (silent wrong zoom)
+            focus = _focus_of(pg, s["selector"], vp) if s.get("selector") else None
             path = d / f"{sid}.png"
             pg.screenshot(path=str(path))
-            focus = None
-            if s.get("selector"):
-                focus = _focus_of(pg, s["selector"], vp)
-            out.append({"id": sid, "path": str(path), "focus": focus})
+            shot = {"id": sid, "path": str(path), "focus": focus}
+            if s.get("selector") and focus is None:
+                shot["selector_missing"] = s["selector"]  # rendered without a zoom, and the caller knows
+            out.append(shot)
         br.close()
     return {"status": "ok", "capture_id": cid, "aspect": aspect, "viewport": vp, "shots": out}
 
 
 def capture_terminal(command: str, cwd: str | None = None, timeout: int = 20, max_lines: int = 16,
-                    cols: int | None = None, aspect: str = "16:9") -> dict:
+                    cols: int | None = None, aspect: str = "16:9", crop_empty: bool = False) -> dict:
+    """Run a command and keep its output as terminal lines (`max_lines` including the `$ command` line).
+
+    `crop_empty` (opt-in, default False) drops the blank lines at the end of the output, so a scene
+    does not render empty rows under the last line; lines in the middle are kept."""
     _need_exec()
     wd = safe_path(cwd or config.REPO)
     cols = cols or S.fmt(aspect)["max_cols"]
     cid, d = _cap_dir()
     _meta(d, tool="capture_terminal", aspect=aspect, cols=cols, max_lines=max_lines)
     try:
-        r = subprocess.run(["bash", "-c", command], cwd=wd, env=_clean_env(), capture_output=True, text=True,
-                           timeout=timeout, stdin=subprocess.DEVNULL)
-        raw, code = r.stdout + r.stderr, r.returncode
+        # stderr merged into the same pipe: two pipes concatenated put every stderr line after all of
+        # stdout, so an interleaved traceback arrived out of order
+        r = subprocess.run(["bash", "-c", command], cwd=wd, env=_clean_env(), stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True, timeout=timeout, stdin=subprocess.DEVNULL)
+        raw, code = r.stdout, r.returncode
     except subprocess.TimeoutExpired as e:
-        raw, code = ((e.stdout or b"").decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")), -1
+        out = e.output  # the merged stream: e.stdout when stderr=STDOUT
+        raw = out.decode(errors="replace") if isinstance(out, bytes) else (out or "")
+        code = -1
     body = [ln[:cols] for ln in ANSI.sub("", raw).replace("\r", "").splitlines()]
+    if crop_empty:
+        while body and not body[-1].strip():
+            body.pop()
     shown = body[:max_lines - 1]
     lines = ["$ " + command[:cols - 2]] + shown
     (d / "lines.json").write_text(json.dumps(lines))
@@ -353,10 +395,30 @@ def capture_terminal(command: str, cwd: str | None = None, timeout: int = 20, ma
             "truncated": len(body) > len(shown), "timed_out": code == -1}
 
 
+def _crop_empty_rows(video: Path, w: int, h: int, rows: int, used: int) -> tuple[int, int] | None:
+    """Re-encode `video` down to the rows the take actually used: the empty ones under the last line
+    are dead space in the frame (and they shrink the text when the clip is scaled to fill it).
+    Returns the new (w, h), or None when there is nothing to crop or the re-encode failed."""
+    used = max(1, min(used, rows))
+    if used >= rows or w <= 1 or h <= 1:
+        return None
+    ch = max(2, int(round(h * used / rows)) & ~1)  # yuv420p wants an even height
+    tmp = video.with_suffix(".crop.mp4")
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(video), "-vf", f"crop={w}:{ch}:0:0",
+                        *_encoder("18"), "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(tmp)],
+                       capture_output=True, timeout=180)
+    if r.returncode or not tmp.exists() or tmp.stat().st_size < 1024:
+        tmp.unlink(missing_ok=True)
+        return None
+    tmp.replace(video)
+    return w, ch
+
+
 def capture_terminal_session(steps: list[dict], cols: int | None = None, rows: int | None = None, delay_ms: int = 60,
                              jitter_ms: int = 30, seed: int = 0, fps: int = 15, cwd: str | None = None,
                              tail_s: float = 1.2, max_s: float = 120.0, title: str = "terminal",
-                             font_size: int | None = None, aspect: str = "16:9", setup: str | None = None) -> dict:
+                             font_size: int | None = None, aspect: str = "16:9", setup: str | None = None,
+                             crop_empty: bool = False) -> dict:
     """Record a real terminal session: Xvfb -> xterm -> bash, keys via xdotool, grabbed with x11grab.
 
     steps: [{"type":"type","text":"cmd"}, {"type":"key","key":"Return"},
@@ -366,7 +428,9 @@ def capture_terminal_session(steps: list[dict], cols: int | None = None, rows: i
     the previous step left off, so a timeout fails the whole take instead of shipping a half clip.
     cols/rows/font_size default to the format's geometry: 80x16 at font 22 for 16:9, a grid whose aspect
     matches the content box so the window fills the frame width instead of a small stamp of unreadable
-    text (44x28 at 15 for 9:16).
+    text (44x28 at 15 for 9:16). Pass rows = printed lines + 1 to size the window to the run.
+    `crop_empty` (opt-in, default False) re-encodes the take down to the rows that carry text, so a
+    short run in a tall window does not sit on half a screen of empty rows.
     """
     _need_exec()
     if setup is not None and not isinstance(setup, str):
@@ -408,7 +472,7 @@ def capture_terminal_session(steps: list[dict], cols: int | None = None, rows: i
                                "-draw_mouse", "0", "-video_size", f"{w}x{h}", "-i", f"{disp}+{x},{y}", *_encoder("18"),
                                "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(mp4)],
                               stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        time.sleep(0.8)  # let the window settle: typing in the first frames races the prompt
+        _settle_prompt(log)  # the prompt is on screen before the first keystroke, without a fixed sleep
         if ff.poll() is not None:
             return {**BAD, "capture_id": cid, "message": "ffmpeg x11grab exited immediately"}
         mark = rec = log.stat().st_size if log.exists() else 0  # mark: wait_for only looks at output from here
@@ -435,11 +499,17 @@ def capture_terminal_session(steps: list[dict], cols: int | None = None, rows: i
         ff = None
         if not mp4.exists() or mp4.stat().st_size < 1024:
             return {**BAD, "capture_id": cid, "message": "ffmpeg produced no video"}
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-1", "-i", str(mp4), "-frames:v", "1", str(poster)],
-                       capture_output=True, timeout=30)
         out = _tail(log, 1000, off=rec)  # only what the video shows (setup output is before `rec`); the cap
         # is high on purpose: how many lines scrolled off the window is what the warning below reports
+        lines = out.splitlines()
+        used = min(rows, len(lines)) if out.strip() else rows  # rows that carry text: the rest is blank
+        cropped = _crop_empty_rows(mp4, w, h, rows, used) if crop_empty and out.strip() else None
+        if cropped:  # the poster and the receipt must describe the pixels the clip now has
+            w, h = cropped
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-1", "-i", str(mp4), "-frames:v", "1", str(poster)],
+                       capture_output=True, timeout=30)
         sess.write_text(json.dumps({"capture_id": cid, "steps": st, "seed": seed, "cols": cols, "rows": rows,
+                                    "rows_used": used, "crop_empty": crop_empty,
                                     "size": [w, h], "fps": fps, "font_size": font_size,
                                     "delay_ms": delay_ms, "jitter_ms": jitter_ms,
                                     "typing_end_s": round(typed_end, 2),
@@ -447,7 +517,6 @@ def capture_terminal_session(steps: list[dict], cols: int | None = None, rows: i
                                     "output": out}, indent=1))
         _meta(d, tool="capture_terminal_session", aspect=aspect, cols=cols, rows=rows, size=[w, h],
               font_size=font_size, typing_end_s=round(typed_end, 2))
-        lines = out.splitlines()
         if not out.strip():
             status, msg = "warn", "the session captured no output"
         elif len(lines) > rows:  # the window scrolled: the first lines of the take are in no frame
@@ -474,6 +543,8 @@ def capture_terminal_session(steps: list[dict], cols: int | None = None, rows: i
 
 def capture_gui(command: str, cwd: str | None = None, seconds: float = 3.0, size: str | None = None,
                 aspect: str = "16:9") -> dict:
+    """Screenshot a GUI app on a throwaway X display. No GTK/Qt is installed in the image: a GTK or Qt
+    app has to bring its own libraries (a custom image, or the /repo mount) to show up here."""
     _need_exec()
     wd = safe_path(cwd or config.REPO)
     size = size or S.fmt(aspect)["gui"]
@@ -481,27 +552,34 @@ def capture_gui(command: str, cwd: str | None = None, seconds: float = 3.0, size
     _meta(d, tool="capture_gui", aspect=aspect, size=size)
     if not (shutil.which("Xvfb") and shutil.which("ffmpeg")):
         return {**BAD, "message": "Xvfb and ffmpeg are required"}
+    try:  # '720x1280' -> the screen size _xvfb takes
+        w, h = (int(v) for v in re.split(r"[xX]", size.strip()))
+    except ValueError:
+        return {**BAD, "message": f"size must look like WIDTHxHEIGHT, got {size!r}"}
     disp, claim = _claim_display()  # same race as the session recorder: never share a display
-    xv = subprocess.Popen(["Xvfb", disp, "-screen", "0", f"{size}x24", "-nolisten", "tcp"],
-                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                          start_new_session=True)
-    app = None
     try:
-        time.sleep(1.0)
-        app = subprocess.Popen(["bash", "-c", command], cwd=wd, env=_clean_env(disp), stdin=subprocess.DEVNULL,
-                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
-        time.sleep(seconds)
-        alive = app.poll() is None
-        path = d / "gui.png"
-        r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "x11grab", "-video_size", size, "-i", disp,
-                            "-frames:v", "1", str(path)], capture_output=True, text=True, timeout=20)
-        if r.returncode:
-            return {**BAD, "message": r.stderr[-300:]}
-        return {"status": "ok" if alive else "warn", "capture_id": cid, "path": str(path), "app_alive": alive,
-                "size": size,
-                "note": "" if alive else "app exited before the screenshot; screen may be empty"}
+        env = _clean_env(disp)
+        # readiness-polled Xvfb (a fixed sleep 1.0 raced a loaded host, and a dead Xvfb surfaced as
+        # "ffmpeg x11grab failed"); the same helper the session recorder uses
+        xv = _xvfb(env, disp, w, h)
+        app = None
+        try:
+            # stdout/stderr to /dev/null: nobody read the pipe, so a chatty app could block on it
+            app = subprocess.Popen(["bash", "-c", command], cwd=wd, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            time.sleep(seconds)
+            alive = app.poll() is None
+            path = d / "gui.png"
+            r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "x11grab", "-video_size", size,
+                                "-i", disp, "-frames:v", "1", str(path)], capture_output=True, text=True, timeout=20)
+            if r.returncode:
+                return {**BAD, "message": r.stderr[-300:]}
+            return {"status": "ok" if alive else "warn", "capture_id": cid, "path": str(path), "app_alive": alive,
+                    "size": size,
+                    "note": "" if alive else "app exited before the screenshot; screen may be empty"}
+        finally:
+            if app and app.poll() is None:
+                os.killpg(app.pid, signal.SIGTERM)
+            _kill(xv)
     finally:
-        if app and app.poll() is None:
-            os.killpg(app.pid, signal.SIGTERM)
-        _kill(xv)
         claim.unlink(missing_ok=True)

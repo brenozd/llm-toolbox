@@ -87,8 +87,8 @@ def test_timeline_stretches_a_scene_to_fit_its_audio(work):
     assert S.timeline(s)["frames"] == 3 * 30
     tts.narrate(S.persist(s))  # 100 chars -> 5.0 s of audio
     tl = S.timeline(s)
-    # the scene pays for the tail *and* the transition it is overlapped by (0.5 s default)
-    assert tl["scenes"][0]["dur"] == round((5.0 + S.AUDIO_TAIL + 0.5) * 30)
+    # the scene pays for the tail only: it is the last one, so no transition follows it to overlap it
+    assert tl["scenes"][0]["dur"] == round((5.0 + S.AUDIO_TAIL) * 30)
 
 
 def test_resolved_hash_follows_the_speech(work):

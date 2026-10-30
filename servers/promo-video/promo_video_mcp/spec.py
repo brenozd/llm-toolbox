@@ -71,7 +71,13 @@ def normalize(spec: dict) -> dict:
     d = s.get("direction") if isinstance(s.get("direction"), dict) else {}
     pal = d.get("palette") if isinstance(d.get("palette"), dict) else {}
     # The director's palette seeds the theme; an explicit spec.theme still wins (old specs keep working).
-    s["theme"] = {**THEME, **pal, **(s.get("theme") or {})}
+    # A theme that is not an object (a string, a list) is left untouched: lint reports bad_theme instead of
+    # normalize raising TypeError, which turned validate_spec into a traceback.
+    th = s.get("theme")
+    if isinstance(th, dict):
+        s["theme"] = {**THEME, **pal, **th}
+    elif th is None:
+        s["theme"] = {**THEME, **pal}
     # "subtle" is the default so on-screen text stops growing once it has entered (it used to be the
     # lively linear scale for everyone); spec.motion overrides the direction, the direction overrides us.
     s["motion"] = s.get("motion") or d.get("motion") or "subtle"
@@ -127,12 +133,14 @@ def timeline(spec: dict) -> dict:
     """Single source of truth for scene frames; stills, render and verify all use it.
 
     A scene lasts at least as long as its narration plus AUDIO_TAIL, so speech is never cut off. It also
-    pays for the transition it is overlapped by, so the *next* scene never starts before the line ends."""
+    pays for the transition it is overlapped by, so the *next* scene never starts before the line ends --
+    except the last scene, which nothing follows: paying there only bought a second of silent tail."""
     fps = spec["fps"]
     audio = {sid: float(v.get("duration_s") or 0) for sid, v in (audio_manifest(spec).get("scenes") or {}).items()}
     t = round(spec["transition_s"] * fps)
-    durs = [round(max(sc["duration_s"], audio.get(sc["id"], 0) + AUDIO_TAIL + t / fps if audio.get(sc["id"]) else 0)
-                  * fps) for sc in spec["scenes"]]
+    n = len(spec["scenes"])
+    durs = [round(max(sc["duration_s"], audio.get(sc["id"], 0) + AUDIO_TAIL + (t / fps if i < n - 1 else 0.0)
+                      if audio.get(sc["id"]) else 0) * fps) for i, sc in enumerate(spec["scenes"])]
     t = max(0, min(t, min(durs) // 2 - 1)) if durs else 0
     out, start = [], 0
     for i, d in enumerate(durs):
@@ -320,6 +328,8 @@ def _lint_palette(d: dict, spec: dict, add) -> None:
     brand, not our defect -- and so does a spec with no brief at all. A booth loop is read across a
     hall, so its body text needs 7:1."""
     th = spec["theme"]
+    if not isinstance(th, dict):  # a theme lint already rejected: there are no colours to measure
+        return
     sev = "warn" if not d or str(d.get("palette_source") or "").strip().lower().startswith("user") else "error"
     bars = {**CONTRAST, **({"fg": BOOTH_CONTRAST} if d.get("purpose") == "booth-loop" else {})}
     for key, bar in bars.items():
@@ -414,9 +424,14 @@ def lint(spec: dict) -> list[dict]:
     if spec.get("motion") not in DIRECTION_ENUMS["motion"]:
         add("error", "bad_direction", None, f"motion {spec.get('motion')!r}",
             f"use one of {sorted(DIRECTION_ENUMS['motion'])}")
-    for k, v in spec["theme"].items():  # colours the render derives from: fail here, not inside build_html
-        if not HEX.match(str(v)):
-            add("error", "bad_theme", None, f"theme.{k} {v!r}", 'use #rrggbb for every theme colour')
+    th = spec["theme"]
+    if not isinstance(th, dict):  # a string/list theme reaches build_html as a TypeError: reject it here
+        add("error", "bad_theme", None, f"theme {th!r}",
+            'theme is {"bg": "#rrggbb", "fg": "#rrggbb", "accent": "#rrggbb", "muted": "#rrggbb"}')
+    else:
+        for k, v in th.items():  # colours the render derives from: fail here, not inside build_html
+            if not HEX.match(str(v)):
+                add("error", "bad_theme", None, f"theme.{k} {v!r}", 'use #rrggbb for every theme colour')
     dl = _lint_direction(spec, add)
     d_plan, max_words = dl["plan"], dl["max_words"]
     seen = set()
@@ -476,9 +491,21 @@ def lint(spec: dict) -> list[dict]:
             if isinstance(t, str) and re.search(r"(?<![\w.])/(work|repo|tmp)/", t):
                 add("warn", "container_path", sid, f"on-screen text shows a container path: '{t[:40]}'",
                     "show a repo-relative path or drop it: viewers cannot use /work or /repo")
+        if re.search(r"(?<![\w.])/(work|repo|tmp)/", narr):  # a spoken path is as useless as a printed one
+            add("warn", "container_path", sid, f"the narration speaks a container path: '{narr[:40]}'",
+                "say the command the viewer can run, not the container's path")
         for t in [*_texts(sc), narr]:  # a spoken number is a claim too: it needs the same evidence
             if t and STAT.search(t) and not sc.get("evidence"):
                 add("error", "uncited_stat", sid, f"number claim in '{t[:40]}'", "add scene.evidence = 'file:line' proving it, or remove the number")
+        ev = sc.get("evidence")
+        if ev:  # junk evidence used to switch uncited_stat off; the claim needs a file and a line
+            m = re.fullmatch(r"(.+?):(\d+)(?:-(\d+))?", ev.strip()) if isinstance(ev, str) else None
+            if not m:
+                add("error", "bad_evidence", sid, f"evidence {ev!r} is not file:line",
+                    "evidence is 'README.md:12' or 'leak.c:3-9': the file and the line that prove the claim")
+            elif not _exists(m.group(1)):
+                add("error", "bad_evidence", sid, f"evidence names a file that does not exist: {m.group(1)}",
+                    "point evidence at a file that exists (repo-relative or absolute) and re-check the line")
         if narr.strip():
             wps = len(narr.split()) / max(float(sc["duration_s"]), 0.1)
             if wps > MAX_WPS:
@@ -487,7 +514,7 @@ def lint(spec: dict) -> list[dict]:
             for k, v in say.items():
                 if not isinstance(v, str) or not v or str(k).lower() == v.lower():
                     continue
-                if v.lower() in narr.lower():  # SRT is cut from the narration: phonetics would reach the captions
+                if re.search(rf"(?<!\w){re.escape(v)}(?!\w)", narr, re.I):  # 'ex' is not in 'next'
                     add("error", "phonetic_in_narration", sid, f"narration contains the spoken form '{v}'",
                         f"write '{k}' in scene.narration and keep '{v}' only in spec.say: captions show the narration text")
             for tok in _spoken_tokens(narr, sc):

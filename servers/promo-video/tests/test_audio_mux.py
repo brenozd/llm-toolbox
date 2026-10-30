@@ -142,7 +142,11 @@ def test_a_music_bed_alone_is_not_a_voice_over():
     assert R.audio_findings(5.0, True, au) == []  # no receipt (an older render): unchanged
     assert R.audio_findings(5.0, True, au, True) == []
     assert R.audio_findings(5.0, True, au, False)[0]["code"] == "no_voice"
-    assert R.audio_findings(5.0, False, au, False)[0]["severity"] == "warn"  # no narration promised: fine
+    # no narration promised and the receipt names the bed that was mixed in: the audio is expected
+    assert R.audio_findings(5.0, False, au, False, "/music/track.mp3") == []
+    # ...a stream the receipt cannot explain (an old receipt, or none) is still worth a warning
+    assert R.audio_findings(5.0, False, au, False)[0]["code"] == "unexpected_audio"
+    assert R.audio_findings(5.0, False, au)[0]["code"] == "unexpected_audio"
 
 
 def test_verify_reads_the_voice_out_of_the_render_receipt(work, monkeypatch):
@@ -165,3 +169,47 @@ def test_verify_reads_the_voice_out_of_the_render_receipt(work, monkeypatch):
     recp.write_text(json.dumps({"quality": "delivery", "mix": {"voice": True}}))
     v = R.verify(str(mp4), h)
     assert v["status"] == "ok" and v["findings"] == [] and v["loudness"]["integrated_lufs"] == -16.1
+
+
+def test_verify_does_not_warn_about_the_bed_it_mixed(work, monkeypatch):
+    """A silent spec rendered with a music bed has an audio stream on purpose: the receipt's mix.music
+    explains it. Without that track the same stream is still a warning."""
+    s = S.normalize({"aspect": "16:9", "fps": 30, "scenes": [mk_scene("a", duration_s=2)]})
+    h = S.persist(s)
+    mp4 = work / "out" / "delivery.mp4"
+    mp4.parent.mkdir(parents=True, exist_ok=True)
+    mp4.write_bytes(b"")
+    monkeypatch.setattr(R, "_probe", lambda v: {"width": 1920, "height": 1080, "fps": 30.0, "duration": 2.0})
+    monkeypatch.setattr(R, "_probe_audio", lambda v: {"codec": "aac", "channels": 2, "sample_rate": 48000,
+                                                      "duration_s": 2.0})
+    monkeypatch.setattr(R, "_var", lambda v, t: 10.0)
+    monkeypatch.setattr(R.A, "check", lambda *a, **k: {"loudness": {"integrated_lufs": -16.1, "lra_lu": 2.0,
+                                                                   "true_peak_db": -2.0},
+                                                      "silences": [], "findings": []})
+    recp = work / "out" / "delivery.receipt.json"
+    recp.write_text(json.dumps({"quality": "delivery", "mix": {"voice": False, "music": "/music/x.mp3"}}))
+    v = R.verify(str(mp4), h)
+    assert v["status"] == "ok" and [f["code"] for f in v["findings"]] == []
+    recp.write_text(json.dumps({"quality": "delivery", "mix": {"voice": False}}))
+    v = R.verify(str(mp4), h)
+    assert [f["code"] for f in v["findings"]] == ["unexpected_audio"]
+
+
+def test_verify_looks_around_a_dark_checkpoint(work, monkeypatch):
+    """A scene's entrance frame and a crossfade tail are legitimately black, so one sampled frame used to
+    report blank_frame for a video with plenty of picture. A +-0.25 s window (max variance) fixes it, and
+    an all-black video still fails -- the window must not become a lower bar."""
+    s = S.normalize({"aspect": "16:9", "fps": 30, "scenes": [mk_scene("a", duration_s=2)]})
+    h = S.persist(s)
+    mp4 = work / "out" / "delivery.mp4"
+    mp4.parent.mkdir(parents=True, exist_ok=True)
+    mp4.write_bytes(b"")
+    monkeypatch.setattr(R, "_probe", lambda v: {"width": 1920, "height": 1080, "fps": 30.0, "duration": 2.0})
+    monkeypatch.setattr(R, "_probe_audio", lambda v: None)
+    # the 50% checkpoint (1.0 s of 2 s) is exactly the next scene's entrance: black at that instant only
+    monkeypatch.setattr(R, "_var", lambda v, t: 0.1 if abs(t - 1.0) < 1e-6 else 4.0)
+    v = R.verify(str(mp4), h)
+    assert v["status"] == "ok" and v["findings"] == []
+    monkeypatch.setattr(R, "_var", lambda v, t: 0.1)  # a video with no picture anywhere still fails
+    v = R.verify(str(mp4), h)
+    assert [f["code"] for f in v["findings"]] == ["blank_frame"] * 3

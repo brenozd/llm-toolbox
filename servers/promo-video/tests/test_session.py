@@ -161,3 +161,79 @@ def test_session_setup_must_be_a_string(monkeypatch):
     monkeypatch.setattr(config, "ALLOW_EXEC", True)
     with pytest.raises(ValueError, match="setup"):
         capture.capture_terminal_session([{"type": "key", "key": "Return"}], setup=["cd /tmp"])
+
+
+def test_settle_prompt_returns_as_soon_as_the_shell_has_printed(tmp_path):
+    """S3: the grab used to start after a fixed 0.8 s sleep (bare prompt in the first frames, and a
+    race on a loaded box). It waits for the prompt bytes instead."""
+    log = tmp_path / "pty.log"
+    log.write_bytes(b"Script started on ...\r\n$ ")
+    t = capture.time.monotonic()
+    waited = capture._settle_prompt(log)
+    assert capture.time.monotonic() - t < 0.6 and waited < 0.6
+
+
+def test_settle_prompt_is_bounded_when_the_shell_never_prints(tmp_path):
+    t = capture.time.monotonic()
+    capture._settle_prompt(tmp_path / "nope.log", timeout=0.3)
+    elapsed = capture.time.monotonic() - t
+    assert 0.3 <= elapsed < 1.0  # capped by the timeout, not an infinite wait
+
+
+def test_terminal_capture_keeps_stdout_and_stderr_in_order(tmp_path, monkeypatch):
+    """S6: capture_output + stdout+stderr put every stderr line after all of stdout, so an
+    interleaved traceback arrived out of order."""
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    monkeypatch.setattr(config, "REPO", tmp_path)
+    monkeypatch.setattr(config, "ALLOW_EXEC", True)
+    res = capture.capture_terminal("echo a; echo b >&2; echo c")
+    assert res["status"] == "ok", res
+    assert res["lines"] == ["$ echo a; echo b >&2; echo c", "a", "b", "c"]
+
+
+def test_terminal_capture_records_the_timeout_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    monkeypatch.setattr(config, "REPO", tmp_path)
+    monkeypatch.setattr(config, "ALLOW_EXEC", True)
+    res = capture.capture_terminal("echo before; sleep 5; echo after", timeout=1)
+    assert res["timed_out"] and res["exit_code"] == -1
+    assert "before" in res["lines"] and "after" not in res["lines"]
+
+
+def test_terminal_capture_crop_empty_is_opt_in(tmp_path, monkeypatch):
+    """S8b, opt-in: blank trailing rows are dead space, but the default take is unchanged."""
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    monkeypatch.setattr(config, "REPO", tmp_path)
+    monkeypatch.setattr(config, "ALLOW_EXEC", True)
+    cmd = "printf 'one\\ntwo\\n\\n\\n'"
+    kept = capture.capture_terminal(cmd)["lines"]
+    cropped = capture.capture_terminal(cmd, crop_empty=True)["lines"]
+    assert kept == ["$ " + cmd, "one", "two", "", ""]
+    assert cropped == ["$ " + cmd, "one", "two"]
+
+
+@pytest.mark.skipif(not (shutil.which("ffmpeg") and shutil.which("ffprobe")),
+                    reason="ffmpeg is needed to crop a test capture")
+def test_session_rows_are_cropped_to_the_rows_that_carry_text(tmp_path):
+    """S8b, opt-in: a 9-line take in a 16-row window used to ship 44% empty rows."""
+    vid = tmp_path / "take.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=s=320x160", "-frames:v", "5",
+                    "-pix_fmt", "yuv420p", str(vid)], check=True)
+    assert capture._crop_empty_rows(vid, 320, 160, 16, 16) is None  # nothing empty: untouched
+    assert capture._crop_empty_rows(vid, 320, 160, 16, 6) == (320, 60)
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v", "-show_entries", "stream=height",
+                            "-of", "csv=p=0", str(vid)], capture_output=True, text=True, check=True)
+    assert probe.stdout.strip() == "60"
+
+
+def test_guard_turns_an_oserror_into_a_finding():
+    """A1b: Playwright's TimeoutError and a broken X/ffmpeg pipe are findings, not tracebacks."""
+    import asyncio
+
+    from promo_video_mcp import server
+
+    def boom():
+        raise OSError("Xvfb: cannot open display")
+
+    out = asyncio.run(server._guard(boom))
+    assert out["status"] == "error" and out["message"].startswith("OSError")

@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screenshot, svg-generator, promo-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.0.65",
+  "version": "1.0.67",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -80,7 +80,7 @@
         "no-new-privileges",
         "--read-only",
         "--tmpfs",
-        "/tmp",
+        "/tmp:rw,exec",
         "--tmpfs",
         "/root",
         "--pids-limit",
@@ -111,7 +111,7 @@
         "no-new-privileges",
         "--read-only",
         "--tmpfs",
-        "/tmp",
+        "/tmp:rw,exec",
         "--pids-limit",
         "256",
         "--tmpfs",

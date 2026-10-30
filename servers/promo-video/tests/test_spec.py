@@ -1,5 +1,8 @@
+import os
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -35,6 +38,64 @@ def test_timeline_total_and_hash_stable():
     tl = S.timeline(s)
     assert tl["frames"] == 6 * 30 - tl["trans"]
     assert S.spec_hash(s) == S.spec_hash(S.normalize(s))
+
+
+def fake_audio(monkeypatch, **durs):
+    """A narration manifest without a TTS engine: timeline() only reads the measured durations."""
+    man = {"scenes": {k: {"duration_s": v} for k, v in durs.items()}}
+    monkeypatch.setattr(S, "audio_manifest", lambda spec: man)
+
+
+def test_the_last_scene_pays_no_transition(monkeypatch):
+    """A scene pays for the transition it is overlapped *by*, and nothing follows the closing scene: paying
+    there bought a silent tail instead of picture (mint ended on 1.082 s of silence)."""
+    fake_audio(monkeypatch, a=4.0, b=6.0)
+    s = S.normalize({"fps": 30, "transition_s": 0.5, "scenes": [
+        {"id": "a", "type": "title", "title": "a", "duration_s": 1},
+        {"id": "b", "type": "title", "title": "b", "duration_s": 1}]})
+    tl = S.timeline(s)
+    assert tl["trans"] == 15
+    assert tl["scenes"][0]["dur"] == round((4.0 + S.AUDIO_TAIL + 0.5) * 30)  # b overlaps it: it pays
+    assert tl["scenes"][1]["dur"] == round((6.0 + S.AUDIO_TAIL) * 30)  # nothing follows: the tail only
+    assert tl["frames"] == tl["scenes"][0]["dur"] + tl["scenes"][1]["dur"] - 15
+
+
+def test_the_mint_tail_loses_the_transition(monkeypatch):
+    """verify.json of the mint delivery: 892 frames (29.733 s) with 1.082 s of silence after the last cue,
+    because the closing scene was stretched to narration + AUDIO_TAIL + transition. The same speech now
+    ends at 877 frames (29.233 s), so the tail drops by exactly the 0.5 s transition (1.082 -> 0.582)."""
+    narr = 892 / 30 - S.AUDIO_TAIL - 0.5  # the duration the old formula had been stretched to
+    assert round((narr + S.AUDIO_TAIL + 0.5) * 30) == 892  # reproduces the reported delivery
+    fake_audio(monkeypatch, solo=narr)
+    s = S.normalize({"fps": 30, "scenes": [{"id": "solo", "type": "title", "title": "x", "duration_s": 2}]})
+    tl = S.timeline(s)
+    assert tl["frames"] == 892 - tl["trans"] == 877
+    assert tl["frames"] / tl["fps"] == pytest.approx(29.233, abs=1e-3)
+    assert pytest.approx(1.082 - tl["trans"] / tl["fps"], abs=1e-3) == 0.582
+
+
+def test_a_last_scene_keeps_its_own_duration_when_it_is_longer(monkeypatch):
+    """Dropping the overlap must not shrink a scene that holds longer than its line."""
+    fake_audio(monkeypatch, a=1.0, hold=2.0)
+    s = S.normalize({"scenes": [{"id": "a", "type": "title", "title": "a", "duration_s": 1},
+                                 {"id": "hold", "type": "title", "title": "b", "duration_s": 6}]})
+    assert S.timeline(s)["scenes"][1]["dur"] == 6 * 30
+
+
+def test_music_dir_is_the_mount_point_and_can_be_moved():
+    """MUSIC_DIR is where the host mounts the music cache (plugin.json: /music); PROMO_MUSIC_DIR points
+    the same cache somewhere else instead of hardcoding the default."""
+    def music_dir(value: str | None = None) -> str:
+        env = {k: v for k, v in os.environ.items() if k != "PROMO_MUSIC_DIR"}
+        if value is not None:
+            env["PROMO_MUSIC_DIR"] = value
+        r = subprocess.run([sys.executable, "-c", "from promo_video_mcp import config; print(config.MUSIC_DIR)"],
+                           capture_output=True, text=True, env=env, check=True,
+                           cwd=str(Path(S.__file__).resolve().parent.parent))
+        return r.stdout.strip()
+
+    assert music_dir() == "/music"
+    assert music_dir("/mnt/music") == "/mnt/music"
 
 
 def test_safe_path_blocks_secrets_and_escape(tmp_path, monkeypatch):
@@ -154,6 +215,19 @@ def test_phonetic_say_form_must_not_reach_the_narration():
     assert "phonetic_in_narration" not in codes(s)
 
 
+def test_a_spoken_form_only_matches_whole_words():
+    """The match used to be a substring: say={'x': 'ex'} fired on the 'ex' inside 'next'."""
+    s = S.normalize({"lang": "en", "say": {"x": "ex"},
+                     "scenes": [{"id": "a", "type": "title", "title": "x",
+                                 "narration": "Do the next step.", "duration_s": 4}]})
+    assert "phonetic_in_narration" not in codes(s)
+    s = S.normalize({"lang": "en", "say": {"x": "ex"},
+                     "scenes": [{"id": "a", "type": "title", "title": "x",
+                                 "narration": "Run ex and it works.", "duration_s": 4}]})
+    assert [(f["code"], f["severity"]) for f in S.lint(s) if f["code"] == "phonetic_in_narration"] == [
+        ("phonetic_in_narration", "error")]
+
+
 def test_container_path_in_on_screen_text_is_a_warning():
     s = S.normalize({"scenes": [{"id": "a", "type": "bullets", "heading": "Run it",
                                  "items": ["/work/leak.c is the demo", "mint_loader ./leak"]}]})
@@ -161,6 +235,17 @@ def test_container_path_in_on_screen_text_is_a_warning():
     assert [(f["scene"], f["severity"]) for f in got] == [("a", "warn")]
     assert "/work/leak.c" in got[0]["message"]
     s["scenes"][0]["items"] = ["mint_loader ./leak"]  # a repo-relative path is what we want
+    assert "container_path" not in codes(s)
+
+
+def test_container_path_in_the_narration_is_a_warning_too():
+    s = S.normalize({"lang": "en", "scenes": [{"id": "a", "type": "title", "title": "Copy it",
+                                                  "narration": "First, copy it from /work/repo and run it.",
+                                                  "duration_s": 5}]})
+    got = [f for f in S.lint(s) if f["code"] == "container_path"]
+    assert [(f["scene"], f["severity"]) for f in got] == [("a", "warn")]
+    assert "narration" in got[0]["message"]
+    s["scenes"][0]["narration"] = "First, copy it from the repo and run it."
     assert "container_path" not in codes(s)
 
 
@@ -271,6 +356,29 @@ def test_a_low_contrast_theme_is_measured_even_without_a_direction():
     dark = {"bg": "#111111", "fg": "#1c1c1c"}  # 1.1:1
     got = [(f["code"], f["severity"]) for f in S.lint(mk(theme=dark)) if f["code"] == "palette_contrast"]
     assert got == [("palette_contrast", "warn")]  # no brief: an older spec still renders, but it is said
+
+
+def test_a_theme_that_is_not_an_object_is_a_finding_not_a_traceback():
+    """`theme: "white"` used to raise TypeError inside normalize, so validate_spec returned a traceback."""
+    for bad in ("white", ["#ffffff"], 3):
+        assert codes(mk(theme=bad)) == {"bad_theme"}, bad
+    assert codes(mk(theme="white", direction={"purpose": "feature-demo"})) == {"bad_theme"}
+
+
+def test_evidence_must_be_file_line_and_the_file_must_exist(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "REPO", tmp_path)
+    (tmp_path / "README.md").write_text("# demo\n")
+
+    def ev(v):
+        sc = [{"id": "a", "type": "title", "title": "3x faster", "evidence": v}]
+        return [(f["code"], f["severity"]) for f in S.lint(mk(scenes=sc)) if f["code"] in ("bad_evidence", "uncited_stat")]
+
+    assert ev("README.md:3") == []  # file:line is the shape the audit reads
+    assert ev("README.md:3-9") == []
+    assert ev("total nonsense") == [("bad_evidence", "error")]  # junk evidence used to silence uncited_stat
+    assert ev("README.md") == [("bad_evidence", "error")]  # no line: nothing to check
+    assert ev("nope.c:9") == [("bad_evidence", "error")]  # the file proving the claim is not there
+    assert ev(None) == [("uncited_stat", "error")]
 
 
 def test_tone_and_palette_source_are_type_checked():

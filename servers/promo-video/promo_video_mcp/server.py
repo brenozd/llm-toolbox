@@ -15,7 +15,8 @@ async def _guard(fn, *a, **k):
     # Playwright's sync API refuses to run inside the server's event loop: use a worker thread.
     try:
         return await asyncio.to_thread(fn, *a, **k)
-    except (PermissionError, FileNotFoundError, RuntimeError, KeyError, ValueError) as e:
+    except (PermissionError, FileNotFoundError, RuntimeError, KeyError, ValueError, OSError) as e:
+        # OSError: a broken pipe/kill from Xvfb or ffmpeg is a finding like the rest, not a traceback
         return {"status": "error", "message": f"{type(e).__name__}: {e}"}
 
 
@@ -80,9 +81,9 @@ async def capture_web(url: str, shots: list[dict], viewport: dict | None = None,
 
 @mcp.tool()
 async def capture_terminal(command: str, cwd: str | None = None, timeout: int = 20, max_lines: int = 16,
-                           cols: int | None = None, aspect: str = "16:9") -> object:
-    """CLI projects: run a command (clean env, empty HOME) and capture its output as terminal lines. Needs the exec plugin entry (PROMO_ALLOW_EXEC=1). Use the returned capture_id or lines in a `terminal` scene. `cols` (default from the aspect: 100 for 16:9, 40 for 9:16) trims each line."""
-    return await _guard(C.capture_terminal, command, cwd, timeout, max_lines, cols, aspect)
+                           cols: int | None = None, aspect: str = "16:9", crop_empty: bool = False) -> object:
+    """CLI projects: run a command (clean env, empty HOME) and capture its output as terminal lines. Needs the exec plugin entry (PROMO_ALLOW_EXEC=1). Use the returned capture_id or lines in a `terminal` scene. `cols` (default from the aspect: 100 for 16:9, 40 for 9:16) trims each line. `crop_empty` (default false) drops the blank lines at the end of the output so the scene does not render empty rows."""
+    return await _guard(C.capture_terminal, command, cwd, timeout, max_lines, cols, aspect, crop_empty)
 
 
 @mcp.tool()
@@ -90,10 +91,11 @@ async def capture_terminal_session(steps: list[dict], cols: int | None = None, r
                                   delay_ms: int = 60, jitter_ms: int = 30, seed: int = 0, fps: int = 15,
                                   cwd: str | None = None, tail_s: float = 1.2, max_s: float = 120.0,
                                   title: str = "terminal", font_size: int | None = None,
-                                  aspect: str = "16:9", setup: str | None = None) -> object:
-    """CLI projects: record a REAL terminal session (xterm in Xvfb, typed with xdotool, grabbed with x11grab) into an MP4. steps=[{type:'type',text}|{type:'key',key}|{type:'wait_for',text,timeout_s}|{type:'hold_s',s}]. Only the typing speed is staged; the shell and its output are real. cols/rows/font_size default to the aspect's geometry: 80x16 at font 22 for 16:9, 44x28 at 15 for 9:16 (a window that fills the frame). Needs PROMO_ALLOW_EXEC=1. Use video+poster in a `terminal` scene."""
+                                  aspect: str = "16:9", setup: str | None = None,
+                                  crop_empty: bool = False) -> object:
+    """CLI projects: record a REAL terminal session (xterm in Xvfb, typed with xdotool, grabbed with x11grab) into an MP4. steps=[{type:'type',text}|{type:'key',key}|{type:'wait_for',text,timeout_s}|{type:'hold_s',s}]. Only the typing speed is staged; the shell and its output are real. cols/rows/font_size default to the aspect's geometry: 80x16 at font 22 for 16:9, 44x28 at 15 for 9:16 (a window that fills the frame); pass rows = printed lines + 1 to size the window to the run. `crop_empty` (default false) trims the recorded frames down to the rows that carry text, so a short run is not half a screen of empty rows. Needs PROMO_ALLOW_EXEC=1. Use video+poster in a `terminal` scene."""
     return await _guard(C.capture_terminal_session, steps, cols, rows, delay_ms, jitter_ms, seed, fps, cwd, tail_s,
-                        max_s, title, font_size, aspect, setup)
+                        max_s, title, font_size, aspect, setup, crop_empty)
 
 
 @mcp.tool()

@@ -499,11 +499,13 @@ def narrated(spec: dict) -> bool:
 
 
 def audio_findings(video_s: float, narrated: bool, au: dict | None,
-                   voice: bool | None = None) -> list[dict]:
+                   voice: bool | None = None, bed: str | None = None) -> list[dict]:
     """A narrated video must carry the voice-over, and for exactly as long as the picture lasts: a short
     audio stream is a truncated last word, a long one a silent tail. `voice` is what the render receipt
     says went into the mix (None when the receipt predates it): any audio stream is not enough, a bed
-    mixed without the voice would otherwise hide a missing voice-over."""
+    mixed without the voice would otherwise hide a missing voice-over. `bed` is the track the same
+    receipt says was mixed in (mix.music): a silent spec with a music bed is a deliberate quiet video,
+    so its audio is expected, not 'unexpected'."""
     if narrated and not au:
         return [{"severity": "error", "code": "no_audio",
                  "message": "spec has narration but the MP4 has no audio stream"}]
@@ -513,9 +515,9 @@ def audio_findings(video_s: float, narrated: bool, au: dict | None,
     if au and abs(au["duration_s"] - video_s) > 0.1:
         return [{"severity": "error", "code": "audio_duration",
                  "message": f"audio {au['duration_s']:.3f}s != video {video_s:.3f}s (max 0.1s)"}]
-    if au and not narrated:
+    if au and not narrated and not bed:
         return [{"severity": "warn", "code": "unexpected_audio",
-                 "message": "audio stream without narration in the spec"}]
+                 "message": "audio stream without narration or a music bed in the spec"}]
     return []
 
 
@@ -523,6 +525,17 @@ def _var(video: str, t: float) -> float:
     r = subprocess.run(["ffmpeg", "-loglevel", "error", "-ss", f"{t:.3f}", "-i", video, "-frames:v", "1",
                         "-vf", "scale=64:36,format=gray", "-f", "rawvideo", "-"], capture_output=True)
     return statistics.pvariance(list(r.stdout)) if len(r.stdout) > 1 else 0.0
+
+
+BLANK_WINDOW_S = 0.25  # how far around a blank-frame checkpoint to look: one frame is not a verdict
+BLANK_VAR = 0.5  # below this the frame carries almost no picture
+
+
+def _brightest_var(video: str, t0: float, total: float) -> float:
+    """Picture content around `t0`, not at it: a checkpoint can land on a scene's entrance frame (opacity
+    0) or on a crossfade tail, both of which are legitimately black. Sample +-BLANK_WINDOW_S and keep the
+    richest sample -- the max, not a lower threshold, so an all-black video still fails."""
+    return max(_var(video, max(0.0, min(total, t0 + d))) for d in (-BLANK_WINDOW_S, 0.0, BLANK_WINDOW_S))
 
 
 def credits_finding(spec: dict, video: str | Path | None = None) -> dict | None:
@@ -570,12 +583,13 @@ def verify(video: str, h: str) -> dict:
     if abs(pr["duration"] - exp) > 1 / tl["fps"] + 1e-3:
         findings.append({"severity": "error", "code": "duration", "message": f"{pr['duration']:.3f}s != {exp:.3f}s"})
     for frac in (0.05, 0.5, 0.95):
-        v = _var(str(p), exp * frac)
-        if v < 0.5:
+        v = _brightest_var(str(p), exp * frac, pr["duration"])
+        if v < BLANK_VAR:
             findings.append({"severity": "error", "code": "blank_frame", "message": f"luma variance {v:.2f} at {int(frac * 100)}%"})
     au = _probe_audio(str(p))
     voiced = narrated(spec)
-    findings += audio_findings(pr["duration"], voiced, au, (rec.get("mix") or {}).get("voice"))
+    mix = rec.get("mix") or {}
+    findings += audio_findings(pr["duration"], voiced, au, mix.get("voice"), mix.get("music"))
     cred = credits_finding(spec, p)
     if cred:
         findings.append(cred)

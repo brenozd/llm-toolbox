@@ -1,0 +1,91 @@
+"""The whole render, not a piece of it: the real template, real ffmpeg, a real MP4 handed back to
+`verify`. Two verify bars are exercised here because they used to judge the wrong frame/stream:
+
+- a 9:16 delivery was never rendered by a test at all (only synthetic 1080x1920 mp4s were verified);
+- `blank_frame` sampled one frame per checkpoint, so a scene's entrance frame (opacity 0) or a crossfade
+  tail -- legitimately black -- was reported as a blank video;
+- `unexpected_audio` warned about the music bed the render itself had mixed in.
+"""
+
+import shutil
+import subprocess
+
+import pytest
+
+from promo_video_mcp import config, render, spec as S
+
+
+def _chromium() -> bool:
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            p.chromium.launch(args=render.ARGS, executable_path=config.chromium()).close()
+        return True
+    except Exception:
+        return False
+
+
+@pytest.fixture
+def work(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    monkeypatch.setattr(config, "REPO", tmp_path)
+    return tmp_path
+
+
+def codes(findings):
+    return {f["code"] for f in findings}
+
+
+def mk(**kw):
+    return S.normalize({"fps": 10, "scenes": [
+        {"id": "t", "type": "title", "title": "Portrait", "subtitle": "9:16", "duration_s": 2},
+        {"id": "b", "type": "bullets", "heading": "Two", "items": ["one", "two"], "duration_s": 2}], **kw})
+
+
+@pytest.mark.skipif(not _chromium(), reason="chromium is needed to render the template")
+def test_a_portrait_delivery_renders_and_verifies_clean(work):
+    """9:16 end to end: stills (the delivery gate), the delivery render, and the file verify reads back."""
+    h = S.persist(mk(aspect="9:16"))
+    render.stills(h)
+    rec = render.render_sync(h, "delivery", {})
+    assert (rec["width"], rec["height"]) == (1080, 1920)  # the delivery frame of a portrait spec
+    v = render.verify(rec["video"], h)
+    assert v["expected_size"] == [1080, 1920] and v["probe"]["height"] == 1920
+    assert v["findings"] == [] and v["status"] == "ok"
+
+
+@pytest.mark.skipif(not _chromium(), reason="chromium is needed to render the template")
+def test_verify_is_not_fooled_by_an_entrance_frame(work):
+    """Two 1.5 s scenes at 10 fps, a 0.4 s transition: the 50 % checkpoint (1.3 s) lands exactly on the
+    crossfade midpoint, where the outgoing scene has faded out and the incoming one has not started
+    (opacity 0 both, variance 0.13). One sampled frame called that a blank video; the window finds the
+    picture a quarter of a second either side."""
+    h = S.persist(S.normalize({"fps": 10, "transition_s": 0.4, "scenes": [
+        {"id": "a", "type": "title", "title": "First", "duration_s": 1.5},
+        {"id": "b", "type": "title", "title": "Second", "duration_s": 1.5}]}))
+    rec = render.render_sync(h, "draft", {})
+    total = S.timeline(S.load(h))["frames"] / 10
+    mid = total * 0.5
+    # the dark frame is real: this is what used to be reported, and it is not a broken render
+    assert min(render._var(rec["video"], mid + d) for d in (-0.25, 0.0, 0.25)) < render.BLANK_VAR
+    v = render.verify(rec["video"], h)
+    assert "blank_frame" not in codes(v["findings"]), v["findings"]
+    assert v["status"] == "ok"
+
+
+@pytest.mark.skipif(not _chromium() or not shutil.which("ffmpeg"),
+                    reason="chromium and ffmpeg are needed to mix a bed")
+def test_a_music_bed_is_not_unexpected_audio(work):
+    """A silent spec with a music bed carries an audio stream on purpose: the receipt names the track, so
+    verify must report the audio (and its loudness) instead of warning about it."""
+    track = work / "music" / "bed.wav"
+    track.parent.mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "sine=frequency=220:sample_rate=48000:duration=4", str(track)], check=True)
+    h = S.persist(mk(music={"path": str(track), "license": "CC0 1.0"}))
+    rec = render.render_sync(h, "draft", {})
+    assert rec["mix"]["music"] == str(track) and rec["mix"]["voice"] is False
+    v = render.verify(rec["video"], h)
+    assert v["audio"] is not None and v["narrated"] is False
+    assert "unexpected_audio" not in codes(v["findings"]), v["findings"]
+    assert v["loudness"]["integrated_lufs"] is not None
