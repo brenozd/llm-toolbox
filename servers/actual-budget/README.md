@@ -32,13 +32,13 @@ CI (`.woodpecker/`) builds and pushes this on every push to `master`
 touching `servers/actual-budget/**`, and on `actual-budget-v*` tags:
 
 ```bash
-docker pull registry.bzd.gg/bzd/actual-budget-mcp:latest
+docker pull harbor.bzd.gg/bzd/actual-budget-mcp:latest
 ```
 
 To build locally instead:
 
 ```bash
-docker build -t registry.bzd.gg/bzd/actual-budget-mcp:latest .
+docker build -t harbor.bzd.gg/bzd/actual-budget-mcp:latest .
 ```
 
 ## Run
@@ -56,7 +56,7 @@ Register it with a command like:
         "run", "-i", "--rm",
         "-v", "/path/to/config.json:/config/config.json:ro",
         "-v", "actual-budget-data:/data",
-        "registry.bzd.gg/bzd/actual-budget-mcp:latest"
+        "harbor.bzd.gg/bzd/actual-budget-mcp:latest"
       ]
     }
   }
@@ -69,7 +69,7 @@ To try it by hand:
 docker run -i --rm \
   -v $(pwd)/config.json:/config/config.json:ro \
   -v actual-budget-data:/data \
-  registry.bzd.gg/bzd/actual-budget-mcp:latest
+  harbor.bzd.gg/bzd/actual-budget-mcp:latest
 ```
 
 ## Tools

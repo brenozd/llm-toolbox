@@ -43,7 +43,7 @@ not eliminate it, so use a token scoped to what the agent needs.
 
 ```bash
 docker run -i --rm -v ~/.config/llm-toolbox/vikunja.json:/config/config.json:ro \
-  registry.bzd.gg/bzd/vikunja-mcp:latest
+  harbor.bzd.gg/bzd/vikunja-mcp:latest
 ```
 
 Tests (offline): `pip install . && for t in tests/test_*.py; do python $t; done`

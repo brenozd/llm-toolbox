@@ -54,18 +54,18 @@ CI (`.woodpecker/`) runs the Python tests, then builds and pushes this on every
 push to `master` touching `servers/whatsapp/**`, and on `whatsapp-v*` tags:
 
 ```bash
-docker pull registry.bzd.gg/bzd/whatsapp-mcp:latest
+docker pull harbor.bzd.gg/bzd/whatsapp-mcp:latest
 ```
 
 To build locally instead:
 
 ```bash
-docker build -t registry.bzd.gg/bzd/whatsapp-mcp:latest .
+docker build -t harbor.bzd.gg/bzd/whatsapp-mcp:latest .
 ```
 
 The image is `python:3.12-slim` plus `ffmpeg` (voice notes) and `libmagic1`
-(imported by neonize), runs as uid `10001`, and works on amd64 and arm64 —
-neonize publishes prebuilt manylinux wheels for both, so nothing is compiled.
+(imported by neonize), runs as uid `10001`, and works on amd64 —
+neonize publishes prebuilt manylinux wheels, so nothing is compiled.
 
 ## Login
 
@@ -75,14 +75,14 @@ Pair once by scanning a QR code (WhatsApp → Linked devices → Link a device):
 docker run -it --rm \
   -v $(pwd)/config.json:/config/config.json:ro \
   -v whatsapp-data:/data \
-  registry.bzd.gg/bzd/whatsapp-mcp:latest login
+  harbor.bzd.gg/bzd/whatsapp-mcp:latest login
 ```
 
 The QR code is drawn on **stderr** so a redirected stdout never swallows it.
 It exits 0 once paired, non-zero after a 3 minute timeout. The session stays
 in the `whatsapp-data` volume; re-run `login` only after logging the device out
 from the phone. If the volume is root-owned from an earlier run, fix it with
-`docker run --rm -u 0 -v whatsapp-data:/data --entrypoint chown registry.bzd.gg/bzd/whatsapp-mcp:latest -R 10001:10001 /data`.
+`docker run --rm -u 0 -v whatsapp-data:/data --entrypoint chown harbor.bzd.gg/bzd/whatsapp-mcp:latest -R 10001:10001 /data`.
 
 ## Run
 
@@ -100,7 +100,7 @@ with a command like:
         "-v", "/path/to/config.json:/config/config.json:ro",
         "-v", "whatsapp-data:/data",
         "-v", "/path/to/media:/media:ro",
-        "registry.bzd.gg/bzd/whatsapp-mcp:latest"
+        "harbor.bzd.gg/bzd/whatsapp-mcp:latest"
       ]
     }
   }
@@ -114,7 +114,7 @@ docker run -i --rm \
   -v $(pwd)/config.json:/config/config.json:ro \
   -v whatsapp-data:/data \
   -v $(pwd)/media:/media:ro \
-  registry.bzd.gg/bzd/whatsapp-mcp:latest
+  harbor.bzd.gg/bzd/whatsapp-mcp:latest
 ```
 
 Run only one container per `whatsapp-data` volume: WhatsApp allows a single

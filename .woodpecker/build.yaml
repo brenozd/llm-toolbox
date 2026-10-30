@@ -8,7 +8,7 @@ steps:
       repo: harbor.bzd.gg/bzd/actual-budget-mcp
       dockerfile: servers/actual-budget/Dockerfile
       context: servers/actual-budget
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:
@@ -27,7 +27,7 @@ steps:
       repo: harbor.bzd.gg/bzd/woodpecker-mcp
       dockerfile: servers/woodpecker/Dockerfile
       context: servers/woodpecker
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:
@@ -46,7 +46,7 @@ steps:
       repo: harbor.bzd.gg/bzd/vikunja-mcp
       dockerfile: servers/vikunja/Dockerfile
       context: servers/vikunja
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:
@@ -65,7 +65,7 @@ steps:
       repo: harbor.bzd.gg/bzd/faster-whisper-mcp
       dockerfile: servers/faster-whisper/Dockerfile
       context: servers/faster-whisper
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:
@@ -102,7 +102,7 @@ steps:
       repo: harbor.bzd.gg/bzd/promo-video-mcp
       dockerfile: servers/promo-video/Dockerfile
       context: servers/promo-video
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:
@@ -144,7 +144,7 @@ steps:
       repo: harbor.bzd.gg/bzd/whatsapp-mcp
       dockerfile: servers/whatsapp/Dockerfile
       context: servers/whatsapp
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:

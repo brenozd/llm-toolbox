@@ -24,13 +24,13 @@ inside the container.
 ## Image
 
 ```bash
-docker pull registry.bzd.gg/bzd/faster-whisper-mcp:latest
+docker pull harbor.bzd.gg/bzd/faster-whisper-mcp:latest
 ```
 
 To build locally instead:
 
 ```bash
-docker build -t registry.bzd.gg/bzd/faster-whisper-mcp:latest .
+docker build -t harbor.bzd.gg/bzd/faster-whisper-mcp:latest .
 ```
 
 ## Run
@@ -43,7 +43,7 @@ docker build -t registry.bzd.gg/bzd/faster-whisper-mcp:latest .
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}:${HOME}:ro",
-        "registry.bzd.gg/bzd/faster-whisper-mcp:latest"
+        "harbor.bzd.gg/bzd/faster-whisper-mcp:latest"
       ]
     }
   }

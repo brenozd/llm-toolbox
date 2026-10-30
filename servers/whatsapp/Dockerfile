@@ -8,7 +8,7 @@ FROM python:3.11-slim-bookworm AS build
 # The only ffmpeg use in this server is the voice-note encode in audio.py (Opus/Ogg, 24 kHz), so a
 # ~2.5 MB static ffmpeg comes from the pinned source instead of apt-installing Debian's ffmpeg,
 # which drags in the whole Mesa/LLVM GL stack and every codec. Same source and flags on every
-# architecture (CI builds amd64+arm64), so there is no per-arch binary to pin.
+# architecture (CI builds amd64 only), so there is no per-arch binary to pin.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential pkg-config libopus-dev curl xz-utils \
  && rm -rf /var/lib/apt/lists/*
