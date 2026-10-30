@@ -63,6 +63,7 @@ def test_gui_capture_uses_the_shared_xvfb_helper(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "ALLOW_EXEC", True)
     monkeypatch.setattr(capture, "_claim_display", lambda: (":97", tmp_path / ".promo-x97.lock"))
     monkeypatch.setattr(capture, "_xvfb", fake_xvfb)
+    monkeypatch.setattr(capture.shutil, "which", lambda n: "/usr/bin/" + n)  # CI image has no Xvfb/ffmpeg
     monkeypatch.setattr(capture, "_kill", lambda p: seen.setdefault("killed", True))
     monkeypatch.setattr(capture.subprocess, "Popen", lambda *a, **k: SimpleNamespace(pid=0, poll=lambda: 0))
     monkeypatch.setattr(capture.subprocess, "run",

@@ -550,12 +550,12 @@ def capture_gui(command: str, cwd: str | None = None, seconds: float = 3.0, size
     size = size or S.fmt(aspect)["gui"]
     cid, d = _cap_dir()
     _meta(d, tool="capture_gui", aspect=aspect, size=size)
-    if not (shutil.which("Xvfb") and shutil.which("ffmpeg")):
-        return {**BAD, "message": "Xvfb and ffmpeg are required"}
     try:  # '720x1280' -> the screen size _xvfb takes
         w, h = (int(v) for v in re.split(r"[xX]", size.strip()))
     except ValueError:
         return {**BAD, "message": f"size must look like WIDTHxHEIGHT, got {size!r}"}
+    if not (shutil.which("Xvfb") and shutil.which("ffmpeg")):
+        return {**BAD, "message": "Xvfb and ffmpeg are required"}
     disp, claim = _claim_display()  # same race as the session recorder: never share a display
     try:
         env = _clean_env(disp)
