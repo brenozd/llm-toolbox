@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Assert that a published promo-video-mcp tag is the image this repo builds.
+"""Assert that a published storyboard-video-mcp tag is the image this repo builds.
 
 Optional: stdlib only, needs network + anonymous pull on the registry, and is
 deliberately NOT wired into CI (CI cannot see the registry after it pushes).
 
-    scripts/check-release.py                 # harbor.bzd.gg/bzd/promo-video-mcp:latest
+    scripts/check-release.py                 # harbor.bzd.gg/bzd/storyboard-video-mcp:latest
     scripts/check-release.py --tag sha-abc123
     scripts/check-release.py --self-test     # offline: unit-tests the comparison logic
 
@@ -12,7 +12,7 @@ Two checks, both regressions seen on 2026-10 (`harbor.bzd.gg` was 4 commits
 behind because the build step's path filter never matched):
   1. the tag is a single `linux/amd64` manifest, not a multi-arch index
      (`.woodpecker/build.yaml` builds `platforms: linux/amd64` only);
-  2. every `ENV` in `servers/promo-video/Dockerfile` (with `$VAR` expanded the
+  2. every `ENV` in `servers/storyboard-video/Dockerfile` (with `$VAR` expanded the
      way the build expands it) has the same value in the published image config.
 Extra image Env entries are reported, not failed: they come from the base image
 (python:3.12-slim adds PATH/LANG/PYTHON_VERSION/...), so they cannot be checked
@@ -32,11 +32,11 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-IMAGE = "harbor.bzd.gg/bzd/promo-video-mcp"
+IMAGE = "harbor.bzd.gg/bzd/storyboard-video-mcp"
 TAG = "latest"
 PLATFORM = "linux/amd64"
 ROOT = Path(__file__).resolve().parent.parent
-DOCKERFILE = ROOT / "servers/promo-video/Dockerfile"
+DOCKERFILE = ROOT / "servers/storyboard-video/Dockerfile"
 
 MANIFEST_TYPES = (
     "application/vnd.oci.image.manifest.v1+json",
@@ -265,9 +265,9 @@ def self_test() -> int:
           "index has no linux/amd64 entry")
 
     real = dockerfile_env(DOCKERFILE.read_text())
-    check("real Dockerfile KOKORO", real.get("PROMO_KOKORO_MODEL"), "/opt/kokoro/kokoro-v1.0.fp16.onnx")
+    check("real Dockerfile KOKORO", real.get("STORYBOARD_KOKORO_MODEL"), "/opt/kokoro/kokoro-v1.0.fp16.onnx")
     check("real Dockerfile playwright", real.get("PLAYWRIGHT_BROWSERS_PATH"), "/ms-playwright")
-    check("real Dockerfile no stale ENV", "PROMO_CHROMIUM" in real, False)
+    check("real Dockerfile no stale ENV", "STORYBOARD_CHROMIUM" in real, False)
 
     for failure in failures:
         print(f"✗ self-test {failure}", file=sys.stderr)

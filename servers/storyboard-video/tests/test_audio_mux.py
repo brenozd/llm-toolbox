@@ -4,7 +4,7 @@ import wave
 
 import pytest
 
-from promo_video_mcp import config, render as R, spec as S
+from storyboard_video_mcp import config, render as R, spec as S
 
 
 def mk_scene(sid, **kw):

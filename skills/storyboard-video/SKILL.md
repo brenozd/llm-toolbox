@@ -1,12 +1,12 @@
 ---
-name: promo-video
-description: "Turn the current repo (web app, CLI or GUI) into a short promo video from real captures, with every claim tied to file:line. Needs the promo-video MCP (promo-video-exec for CLI/GUI). Use for: \"make a promo video\", \"demo video of this project\", \"vídeo promocional\", /promo-video."
+name: storyboard-video
+description: "Turn the current repo (web app, CLI or GUI) into a short promo video from real captures, with every claim tied to file:line. Needs the storyboard-video MCP (storyboard-video-exec for CLI/GUI). Use for: \"make a promo video\", \"demo video of this project\", \"vídeo promocional\", /storyboard-video."
 ---
 
-# promo-video
+# storyboard-video
 
 Honest promo video from the code. The MCP mounts only the current directory read-only at `/repo`.
-Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline voice-over (Kokoro-82M, `pt-BR` or `en`). No stock footage. Network: the `promo-video` entry has a network (web capture needs it, restricted by the tools to `localhost` / `host.docker.internal`); the `promo-video-exec` entry runs `--network none`.
+Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline voice-over (Kokoro-82M, `pt-BR` or `en`). No stock footage. Network: the `storyboard-video` entry has a network (web capture needs it, restricted by the tools to `localhost` / `host.docker.internal`); the `storyboard-video-exec` entry runs `--network none`.
 
 ## Rules
 - All text (scenes, captions, narration) is in `spec.lang`; keep code, commands and identifiers verbatim. Never mix languages in one video.
@@ -16,7 +16,7 @@ Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline v
 - Ask before: running repo code (exec), anything that needs a build. Tell the user the exact command.
 
 ## Flow
-1. `preflight`. Fix anything red. CLI/GUI need the `promo-video-exec` entry (`capture_terminal`, `capture_terminal_session`, `capture_gui`); web needs `promo-video`. Start Claude Code **from the repo root**: the entry mounts `${PWD}`, the launcher's working directory, as `/repo` — launched from `$HOME` or an IDE, `/repo` is the wrong tree.
+1. `preflight`. Fix anything red. CLI/GUI need the `storyboard-video-exec` entry (`capture_terminal`, `capture_terminal_session`, `capture_gui`); web needs `storyboard-video`. Start Claude Code **from the repo root**: the entry mounts `${PWD}`, the launcher's working directory, as `/repo` — launched from `$HOME` or an IDE, `/repo` is the wrong tree.
 2. `scan_repo` → kind guess (web|cli|gui), the candidate features (README sections, CLI flags, modules) and the README's language. `brand_tokens` for the theme.
 3. **Interview (mandatory, stop here, before any spec).** Summarize first what `scan_repo`, the README and the code reveal, then ask with `ask_user_question` (plain questions if it is unavailable):
    - (a) **format/aspect** (16:9, 9:16 or both — 3:4 is not supported yet) and target **duration**;
@@ -44,7 +44,7 @@ Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline v
    - code: `extract_code` for a ≤18-line snippet with its `file:line`.
 6. Build the spec, `validate_spec` until no errors; keep `spec_hash`. Any spec change gives a new hash.
 7. `stills` → look at every image (cropped text, blank, wrong theme) **and fix every layout warning it returns** (`outside_frame`, `safe_zone`, `clipped_content`, `focus_outside`, `container_path`): they are measured boxes, not opinions. `audit_layout` re-checks without the screenshots. Fix and repeat.
-8. `render` (`draft` first, then `delivery`), poll `render_status`, then `verify` (it expects exactly 1920x1080, or 1080x1920 for 9:16). Report the MP4, SRT and poster paths from the work volume (`promo-video-work`). Asked for a voice-over? `narrate` **after** the stills are approved, `stills` again, then render: the audio lands in the MP4 and `verify` checks it (see Voice-over).
+8. `render` (`draft` first, then `delivery`), poll `render_status`, then `verify` (it expects exactly 1920x1080, or 1080x1920 for 9:16). Report the MP4, SRT and poster paths from the work volume (`storyboard-video-work`). Asked for a voice-over? `narrate` **after** the stills are approved, `stills` again, then render: the audio lands in the MP4 and `verify` checks it (see Voice-over).
 9. Want both formats? Do not squash one into the other: `reframe(spec_hash, "9:16")` clones the spec, applies the portrait rules (max 4 bullets, terminal lines ≤ ~40 cols) and lists the captures you must redo with the new geometry (it returns the exact parameters). Re-capture, put the new paths in the reframed spec, `validate_spec` again, then `stills` → `render` → `verify` per aspect.
 
 ## Spec
@@ -79,7 +79,7 @@ Only when the user asked for narration. Both plugin entries mount `/tmp` **exec*
 Optional, and **silent by default**: the image bundles no music. When the interview answered with a vibe, use the [`skills/music-search`](../music-search/) skill (host, network):
 
 1. `python3 skills/music-search/scripts/music_search.py search --vibe "<vibe>"` → candidates already filtered by licence verdict (allow: CC0/PDM; attribution: CC BY 4.0).
-2. `… fetch <candidate-id|url> --duration <video seconds>` → verifies the licence at the origin, downloads, gates the audio, picks the window and stages the file in `${XDG_CACHE_HOME:-~/.cache}/promo-video/music`, which both plugin entries mount read-only at `/music`. Staging honours XDG but the mount is pinned to `$HOME/.cache`, so with `XDG_CACHE_HOME` set the file lands where `/music` cannot see it: `fetch` then returns a `mount_hint` — restage with `--stage-dir "$HOME/.cache/promo-video/music"`. Otherwise there is **no copy step**: the path just works.
+2. `… fetch <candidate-id|url> --duration <video seconds>` → verifies the licence at the origin, downloads, gates the audio, picks the window and stages the file in `${XDG_CACHE_HOME:-~/.cache}/storyboard-video/music`, which both plugin entries mount read-only at `/music`. Staging honours XDG but the mount is pinned to `$HOME/.cache`, so with `XDG_CACHE_HOME` set the file lands where `/music` cannot see it: `fetch` then returns a `mount_hint` — restage with `--stage-dir "$HOME/.cache/storyboard-video/music"`. Otherwise there is **no copy step**: the path just works.
 3. Put its JSON into `spec.music`: `{"path": "/music/<id>.mp3", "start_s": 3.2, "title", "creator", "license", "license_url", "source_url", "attribution", "volume_db": -18, "duck": 12}`. `volume_db` is the bed level (about -18 dB, never above -6) and `duck` is how far it drops under narration (roughly 7 dB at the default 12 — a direction, not a dB scale).
 
 `validate_spec` errors on `music_path_missing` (not a file under `/music`, `/work` or `/repo`), `music_license_missing` (no licence, a **CC BY** track with an empty `attribution` or no licence link, or a licence string it does not recognise: the gate is an allow-list — CC0, public domain, CC BY — and fails closed), `music_license_incompatible` (NC/ND/SA: a promo is commercial and syncing is an adaptation), `bad_music_start` (`start_s` is not a number ≥ 0) and out-of-range levels. The render writes the credit block to `/work/CREDITS.txt` and to `out/<resolved_hash>/CREDITS.txt` next to the video, and `verify` errors `credits_missing` when neither carries the track — **CC BY means the credit is a licence condition**: hand the file's lines to the user for the video description (CC BY 4.0 §3(a): creator, title, licence name + link, source, and the `Changes:` line).

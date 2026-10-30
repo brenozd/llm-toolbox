@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY pyproject.toml ./
-COPY promo_video_mcp ./promo_video_mcp
+COPY storyboard_video_mcp ./storyboard_video_mcp
 COPY NOTICE ./
 
 # Playwright's own chromium instead of the distro package: every launch here (capture, stills,
@@ -36,8 +36,8 @@ RUN pip install --no-cache-dir kokoro-onnx==0.6.1 onnxruntime==1.31.1 \
  && echo "f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96  kokoro-v1.0.fp16.onnx" | sha256sum -c - \
  && echo "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d  voices-v1.0.bin" | sha256sum -c -
 
-ENV PROMO_WORK=/work PROMO_REPO=/repo \
-    PROMO_KOKORO_MODEL=$KOKORO_DIR/kokoro-v1.0.fp16.onnx \
-    PROMO_KOKORO_VOICES=$KOKORO_DIR/voices-v1.0.bin
+ENV STORYBOARD_WORK=/work STORYBOARD_REPO=/repo \
+    STORYBOARD_KOKORO_MODEL=$KOKORO_DIR/kokoro-v1.0.fp16.onnx \
+    STORYBOARD_KOKORO_VOICES=$KOKORO_DIR/voices-v1.0.bin
 VOLUME ["/work"]
-ENTRYPOINT ["promo-video-mcp"]
+ENTRYPOINT ["storyboard-video-mcp"]

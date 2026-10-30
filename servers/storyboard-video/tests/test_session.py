@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from promo_video_mcp import capture, config, render, spec as S
+from storyboard_video_mcp import capture, config, render, spec as S
 
 
 def test_session_steps_are_validated_and_defaulted():
@@ -230,7 +230,7 @@ def test_guard_turns_an_oserror_into_a_finding():
     """A1b: Playwright's TimeoutError and a broken X/ffmpeg pipe are findings, not tracebacks."""
     import asyncio
 
-    from promo_video_mcp import server
+    from storyboard_video_mcp import server
 
     def boom():
         raise OSError("Xvfb: cannot open display")

@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from promo_video_mcp import audio as A, config, render as R, spec as S
+from storyboard_video_mcp import audio as A, config, render as R, spec as S
 
 BY = {"license": "CC BY 4.0", "license_url": "https://creativecommons.org/licenses/by/4.0/",
       "title": "Slow Ambient", "creator": "Someone",

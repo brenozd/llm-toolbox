@@ -1,14 +1,14 @@
 ---
 name: music-search
-description: "Find, license-gate and stage a music bed for promo-video (Openverse, Internet Archive, ccMixter). Use for: \"find music for this video\", \"soundtrack for the promo\", \"license of this track\", /music-search."
+description: "Find, license-gate and stage a music bed for storyboard-video (Openverse, Internet Archive, ccMixter). Use for: \"find music for this video\", \"soundtrack for the promo\", \"license of this track\", /music-search."
 allowed-tools:
   - Bash
 ---
 
 # music-search
 
-Find, license-gate, verify, trim and stage a music bed for promo-video (stdlib python + the host's
-ffmpeg/ffprobe). **Host-only: it needs network and promo-video's exec container has none.** Workflow:
+Find, license-gate, verify, trim and stage a music bed for storyboard-video (stdlib python + the host's
+ffmpeg/ffprobe). **Host-only: it needs network and storyboard-video's exec container has none.** Workflow:
 `search` a vibe (candidates already filtered by verdict and indexed) → `fetch` one candidate id
 (verify at the source record, download, ffprobe, gate, trim, stage) → JSON into `spec.music`.
 
@@ -19,13 +19,13 @@ python3 $S fetch <candidate-id> --duration 42 [--stage-dir DIR]
 ```
 
 `fetch` takes only an id from a prior `search` (index in
-`${XDG_CACHE_HOME:-~/.cache}/promo-video/candidates.json`): no URL entry point, since a bare file URL
+`${XDG_CACHE_HOME:-~/.cache}/storyboard-video/candidates.json`): no URL entry point, since a bare file URL
 carries no license. `--duration` is the video length; a longer track is trimmed from a fixed
 `start_s` (3 s in, clamped to keep 1 s of head and 1 s of tail — shorter is refused) and only that
-window is analysed. Stage defaults to `${XDG_CACHE_HOME:-~/.cache}/promo-video/music`, mounted
-read-only at `/music` (no copy step). The plugin's mount pins `${HOME}/.cache/promo-video/music`, so
+window is analysed. Stage defaults to `${XDG_CACHE_HOME:-~/.cache}/storyboard-video/music`, mounted
+read-only at `/music` (no copy step). The plugin's mount pins `${HOME}/.cache/storyboard-video/music`, so
 with `XDG_CACHE_HOME` set the file lands where `/music` cannot see it: `fetch` then prints a
-`mount_hint` — restage with `--stage-dir "$HOME/.cache/promo-video/music"` (or move the mount), else
+`mount_hint` — restage with `--stage-dir "$HOME/.cache/storyboard-video/music"` (or move the mount), else
 the spec lints `music_path_missing`. Internet Archive items can hold 145 MB files at ~1 MB/s while
 every call has 60 s, so `fetch` reads the size from the item listing and refuses `download_too_large`
 *before the first byte* when even the smallest audio file is over 40 MB, and `download_too_slow` when

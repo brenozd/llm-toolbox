@@ -38,12 +38,12 @@ def _meta(d, **kw) -> None:
 
 def _need_exec():
     if not config.ALLOW_EXEC:
-        raise PermissionError("exec tools are disabled: the operator must start the container with PROMO_ALLOW_EXEC=1 "
-                              "(use the promo-video-exec plugin entry)")
+        raise PermissionError("exec tools are disabled: the operator must start the container with STORYBOARD_ALLOW_EXEC=1 "
+                              "(use the storyboard-video-exec plugin entry)")
 
 
 def _clean_env(display: str | None = None) -> dict:
-    home = tempfile.mkdtemp(prefix="promo-home-")  # empty HOME so repo code cannot read user dotfiles
+    home = tempfile.mkdtemp(prefix="storyboard-home-")  # empty HOME so repo code cannot read user dotfiles
     env = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": home, "TERM": "dumb", "LANG": "C.UTF-8"}
     if display:
         env["DISPLAY"] = display
@@ -122,7 +122,7 @@ def _claim_display() -> tuple[str, Path]:
     never both get :90 (the loser's Xvfb dies but xdotool would still reach the winner's server).
     Returns the display and the lock to release in the caller's finally."""
     for n in range(90, 600):
-        lock = LOCKDIR / f".promo-x{n}.lock"
+        lock = LOCKDIR / f".storyboard-x{n}.lock"
         if (LOCKDIR / f".X{n}-lock").exists():
             continue
         try:

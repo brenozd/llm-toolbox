@@ -6,7 +6,7 @@ card looked like it was still growing seconds after it entered. `subtle` settles
 
 import pytest
 
-from promo_video_mcp import config, render, spec as S
+from storyboard_video_mcp import config, render, spec as S
 
 
 def mk(**kw):

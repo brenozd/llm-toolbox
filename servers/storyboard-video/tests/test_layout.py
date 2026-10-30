@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from promo_video_mcp import config, layout, render, spec as S
+from storyboard_video_mcp import config, layout, render, spec as S
 
 
 def mk(**kw):
@@ -30,14 +30,14 @@ def test_capture_geometry_per_format():
 
 
 def test_capture_tools_default_to_the_format(tmp_path, monkeypatch):
-    from promo_video_mcp import capture
+    from storyboard_video_mcp import capture
     monkeypatch.setattr(config, "ALLOW_EXEC", False)
     with pytest.raises(PermissionError):
         capture.capture_gui("app", aspect="9:16")
 
 
 def test_capture_terminal_trims_to_the_format_and_records_it(tmp_path, monkeypatch):
-    from promo_video_mcp import capture
+    from storyboard_video_mcp import capture
     monkeypatch.setattr(config, "WORK", tmp_path)
     monkeypatch.setattr(config, "REPO", tmp_path)
     monkeypatch.setattr(config, "ALLOW_EXEC", True)

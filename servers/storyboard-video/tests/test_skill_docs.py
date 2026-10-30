@@ -1,4 +1,4 @@
-"""The documented spec has to be a spec (U6): the model copies `skills/promo-video/SKILL.md` verbatim,
+"""The documented spec has to be a spec (U6): the model copies `skills/storyboard-video/SKILL.md` verbatim,
 so a `.5` in that block is a parse error before `validate_spec` ever runs (it did: `json.loads` died at
 line 8 col 90). Every fenced ```json block of the skill is parsed here, and the `## Spec` block is run
 through `normalize` + `lint` -- the two calls `validate_spec` makes -- so an example that only *looks*
@@ -10,10 +10,10 @@ only when the message names the `<id>` template. Anything else -- a bad theme, a
 `duration_s` out of range -- means the doc drifted from the code.
 
 `SKILL.md` lives at the repo root, which is *not* in the image this suite normally runs in. Resolve it
-two ways, exactly like `test_plugin_entry.py`: `PROMO_REPO_ROOT` wins, else the repo is assumed above
+two ways, exactly like `test_plugin_entry.py`: `STORYBOARD_REPO_ROOT` wins, else the repo is assumed above
 this file; when neither exists the tests skip. Run inside the image with the repo mounted read-only:
 
-    docker run --rm -v "$PWD:/repo:ro" promo-video-mcp:<key> \\
+    docker run --rm -v "$PWD:/repo:ro" storyboard-video-mcp:<key> \\
         python -m pytest -q tests/test_skill_docs.py
 """
 
@@ -24,26 +24,26 @@ from pathlib import Path
 
 import pytest
 
-from promo_video_mcp import config
-from promo_video_mcp import spec as S
+from storyboard_video_mcp import config
+from storyboard_video_mcp import spec as S
 
 
 def _repo_root():
-    """`PROMO_REPO_ROOT`, else the checkout above this file -- None when the tests were copied to a
+    """`STORYBOARD_REPO_ROOT`, else the checkout above this file -- None when the tests were copied to a
     shallower place (a flat /tests mount), where guessing the root would raise IndexError."""
-    if os.environ.get("PROMO_REPO_ROOT"):
-        return Path(os.environ["PROMO_REPO_ROOT"])
+    if os.environ.get("STORYBOARD_REPO_ROOT"):
+        return Path(os.environ["STORYBOARD_REPO_ROOT"])
     here = Path(__file__).resolve()
     return here.parents[3] if len(here.parents) > 3 else None
 
 
 REPO_ROOT = _repo_root()
-SKILL = REPO_ROOT / "skills" / "promo-video" / "SKILL.md" if REPO_ROOT else None
+SKILL = REPO_ROOT / "skills" / "storyboard-video" / "SKILL.md" if REPO_ROOT else None
 
 pytestmark = pytest.mark.skipif(
     not (SKILL and SKILL.is_file()),
-    reason="no skills/promo-video/SKILL.md under the repo root "
-           f"{REPO_ROOT or '(unresolved)'}: mount the repo or set PROMO_REPO_ROOT")
+    reason="no skills/storyboard-video/SKILL.md under the repo root "
+           f"{REPO_ROOT or '(unresolved)'}: mount the repo or set STORYBOARD_REPO_ROOT")
 
 # A fenced block: ```json ... ```, lazily up to the closing fence at the start of a line.
 FENCE = re.compile(r"^```json[ \t]*\n(.*?)^```[ \t]*$", re.S | re.M)

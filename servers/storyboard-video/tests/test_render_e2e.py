@@ -12,7 +12,7 @@ import subprocess
 
 import pytest
 
-from promo_video_mcp import config, render, spec as S
+from storyboard_video_mcp import config, render, spec as S
 
 
 def _chromium() -> bool:

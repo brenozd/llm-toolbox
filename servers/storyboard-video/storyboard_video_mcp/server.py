@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 from . import capture as C, config, render as R, scan as SC, spec as S, tts as T
 
-mcp = FastMCP("promo-video")
+mcp = FastMCP("storyboard-video")
 
 
 async def _guard(fn, *a, **k):
@@ -41,14 +41,14 @@ def _preflight() -> dict:
     except Exception as e:
         ok = False
         checks.append({"name": "chromium_error", "ok": False, "fix": str(e)[:200]})
-    checks.append({"name": "chromium", "ok": ok, "fix": "set PROMO_CHROMIUM or install chromium"})
+    checks.append({"name": "chromium", "ok": ok, "fix": "set STORYBOARD_CHROMIUM or install chromium"})
     try:
         config.WORK.mkdir(parents=True, exist_ok=True)
         (config.WORK / ".w").write_text("x")
         w = True
     except OSError:
         w = False
-    checks.append({"name": f"work_dir {config.WORK}", "ok": w, "fix": "mount a writable volume at PROMO_WORK"})
+    checks.append({"name": f"work_dir {config.WORK}", "ok": w, "fix": "mount a writable volume at STORYBOARD_WORK"})
     checks.append({"name": f"repo {config.REPO}", "ok": config.REPO.exists(), "fix": "mount the target repo read-only at /repo"})
     return {"status": "ok" if all(c["ok"] for c in checks if c["name"] not in ("Xvfb", "xdotool", "xterm")) else "error",
             "exec_enabled": config.ALLOW_EXEC, "checks": checks}
@@ -82,7 +82,7 @@ async def capture_web(url: str, shots: list[dict], viewport: dict | None = None,
 @mcp.tool()
 async def capture_terminal(command: str, cwd: str | None = None, timeout: int = 20, max_lines: int = 16,
                            cols: int | None = None, aspect: str = "16:9", crop_empty: bool = False) -> object:
-    """CLI projects: run a command (clean env, empty HOME) and capture its output as terminal lines. Needs the exec plugin entry (PROMO_ALLOW_EXEC=1). Use the returned capture_id or lines in a `terminal` scene. `cols` (default from the aspect: 100 for 16:9, 40 for 9:16) trims each line. `crop_empty` (default false) drops the blank lines at the end of the output so the scene does not render empty rows."""
+    """CLI projects: run a command (clean env, empty HOME) and capture its output as terminal lines. Needs the exec plugin entry (STORYBOARD_ALLOW_EXEC=1). Use the returned capture_id or lines in a `terminal` scene. `cols` (default from the aspect: 100 for 16:9, 40 for 9:16) trims each line. `crop_empty` (default false) drops the blank lines at the end of the output so the scene does not render empty rows."""
     return await _guard(C.capture_terminal, command, cwd, timeout, max_lines, cols, aspect, crop_empty)
 
 
@@ -93,7 +93,7 @@ async def capture_terminal_session(steps: list[dict], cols: int | None = None, r
                                   title: str = "terminal", font_size: int | None = None,
                                   aspect: str = "16:9", setup: str | None = None,
                                   crop_empty: bool = False) -> object:
-    """CLI projects: record a REAL terminal session (xterm in Xvfb, typed with xdotool, grabbed with x11grab) into an MP4. steps=[{type:'type',text}|{type:'key',key}|{type:'wait_for',text,timeout_s}|{type:'hold_s',s}]. Only the typing speed is staged; the shell and its output are real. cols/rows/font_size default to the aspect's geometry: 80x16 at font 22 for 16:9, 44x28 at 15 for 9:16 (a window that fills the frame); pass rows = printed lines + 1 to size the window to the run. `crop_empty` (default false) trims the recorded frames down to the rows that carry text, so a short run is not half a screen of empty rows. Needs PROMO_ALLOW_EXEC=1. Use video+poster in a `terminal` scene."""
+    """CLI projects: record a REAL terminal session (xterm in Xvfb, typed with xdotool, grabbed with x11grab) into an MP4. steps=[{type:'type',text}|{type:'key',key}|{type:'wait_for',text,timeout_s}|{type:'hold_s',s}]. Only the typing speed is staged; the shell and its output are real. cols/rows/font_size default to the aspect's geometry: 80x16 at font 22 for 16:9, 44x28 at 15 for 9:16 (a window that fills the frame); pass rows = printed lines + 1 to size the window to the run. `crop_empty` (default false) trims the recorded frames down to the rows that carry text, so a short run is not half a screen of empty rows. Needs STORYBOARD_ALLOW_EXEC=1. Use video+poster in a `terminal` scene."""
     return await _guard(C.capture_terminal_session, steps, cols, rows, delay_ms, jitter_ms, seed, fps, cwd, tail_s,
                         max_s, title, font_size, aspect, setup, crop_empty)
 
@@ -101,7 +101,7 @@ async def capture_terminal_session(steps: list[dict], cols: int | None = None, r
 @mcp.tool()
 async def capture_gui(command: str, cwd: str | None = None, seconds: float = 3.0, size: str | None = None,
                      aspect: str = "16:9") -> object:
-    """GUI projects: launch the app on a virtual X display (Xvfb), wait, screenshot it. Needs PROMO_ALLOW_EXEC=1. Use the PNG in an `image` scene. size defaults to the aspect's screen (1280x720 / 720x1280)."""
+    """GUI projects: launch the app on a virtual X display (Xvfb), wait, screenshot it. Needs STORYBOARD_ALLOW_EXEC=1. Use the PNG in an `image` scene. size defaults to the aspect's screen (1280x720 / 720x1280)."""
     return await _guard(C.capture_gui, command, cwd, seconds, size, aspect)
 
 

@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
-  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screenshot, svg-generator, promo-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.0.80",
+  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, svg-generator, storyboard-video, tech-blog-post, ui-review, wiki-writing.",
+  "version": "1.0.82",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -70,7 +70,7 @@
         "harbor.bzd.gg/bzd/whatsapp-mcp:latest"
       ]
     },
-    "promo-video": {
+    "storyboard-video": {
       "command": "docker",
       "args": [
         "run",
@@ -91,13 +91,13 @@
         "-v",
         "${PWD}:/repo:ro",
         "-v",
-        "promo-video-work:/work",
+        "storyboard-video-work:/work",
         "-v",
-        "${HOME}/.cache/promo-video/music:/music:ro",
-        "harbor.bzd.gg/bzd/promo-video-mcp:latest"
+        "${HOME}/.cache/storyboard-video/music:/music:ro",
+        "harbor.bzd.gg/bzd/storyboard-video-mcp:latest"
       ]
     },
-    "promo-video-exec": {
+    "storyboard-video-exec": {
       "command": "docker",
       "args": [
         "run",
@@ -119,14 +119,14 @@
         "--tmpfs",
         "/root",
         "-e",
-        "PROMO_ALLOW_EXEC=1",
+        "STORYBOARD_ALLOW_EXEC=1",
         "-v",
         "${PWD}:/repo:ro",
         "-v",
-        "promo-video-work:/work",
+        "storyboard-video-work:/work",
         "-v",
-        "${HOME}/.cache/promo-video/music:/music:ro",
-        "harbor.bzd.gg/bzd/promo-video-mcp:latest"
+        "${HOME}/.cache/storyboard-video/music:/music:ro",
+        "harbor.bzd.gg/bzd/storyboard-video-mcp:latest"
       ]
     }
   }

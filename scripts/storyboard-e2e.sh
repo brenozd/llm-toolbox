@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
-# promo-e2e.sh -- the whole shipped path, unattended (U5): read `.claude-plugin/plugin.json`, expand
+# storyboard-e2e.sh -- the whole shipped path, unattended (U5): read `.claude-plugin/plugin.json`, expand
 # `${PWD}`/`${HOME}` the way Claude Code's launcher does, run that entry's verbatim `docker run` argv and
 # drive the MCP server over stdio. Nothing is mocked: real container, real image, real ffmpeg/Kokoro.
 #
-#     scripts/promo-e2e.sh                          # the `promo-video` entry
-#     PROMO_E2E_ENTRY=promo-video-exec scripts/...  # the air-gapped entry (same code path)
-#     PROMO_E2E_IMAGE=promo-video-mcp:local scripts/...   # test an image before it is published
+#     scripts/storyboard-e2e.sh                          # the `storyboard-video` entry
+#     STORYBOARD_E2E_ENTRY=storyboard-video-exec scripts/...  # the air-gapped entry (same code path)
+#     STORYBOARD_E2E_IMAGE=storyboard-video-mcp:local scripts/...   # test an image before it is published
 #
 # Steps (a failure at any one of them exits non-zero and prints the server log's tail):
 #   initialize -> tools/list -> validate_spec -> stills -> narrate -> render(draft) -> verify
 #
 # Two hard preconditions, both checked before docker starts: `${PWD}` must be the repo root (that is
-# what the entry mounts at `/repo`, read-only) and `~/.cache/promo-video/music` must already exist --
+# what the entry mounts at `/repo`, read-only) and `~/.cache/storyboard-video/music` must already exist --
 # `docker run -v` would otherwise create it root-owned on the host and the music skill could not write.
 set -euo pipefail
 
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"  # ${PWD} of the entry is the launch directory: start where the mount points
 
-command -v docker >/dev/null || { echo "promo-e2e: docker not found in PATH" >&2; exit 127; }
-command -v python3 >/dev/null || { echo "promo-e2e: python3 not found in PATH" >&2; exit 127; }
-if [ ! -d "${HOME}/.cache/promo-video/music" ]; then
-    echo "promo-e2e: ${HOME}/.cache/promo-video/music is missing (docker would create it root-owned)." >&2
-    echo "promo-e2e: mkdir -p \"\$HOME/.cache/promo-video/music\" and re-run." >&2
+command -v docker >/dev/null || { echo "storyboard-e2e: docker not found in PATH" >&2; exit 127; }
+command -v python3 >/dev/null || { echo "storyboard-e2e: python3 not found in PATH" >&2; exit 127; }
+if [ ! -d "${HOME}/.cache/storyboard-video/music" ]; then
+    echo "storyboard-e2e: ${HOME}/.cache/storyboard-video/music is missing (docker would create it root-owned)." >&2
+    echo "storyboard-e2e: mkdir -p \"\$HOME/.cache/storyboard-video/music\" and re-run." >&2
     exit 2
 fi
 
 exec python3 - "$ROOT" <<'PY'
-"""MCP client for the promo-video stdio server: stdlib only, so the host needs no `mcp` package.
+"""MCP client for the storyboard-video stdio server: stdlib only, so the host needs no `mcp` package.
 
 The transport is newline-delimited JSON-RPC 2.0, which is what the server writes; a reader thread
 feeds the messages to a queue so every wait can time out instead of hanging the run.
@@ -43,8 +43,8 @@ import time
 from pathlib import Path
 
 ROOT = Path(sys.argv[1])
-ENTRY = os.environ.get("PROMO_E2E_ENTRY", "promo-video")
-TIMEOUT = float(os.environ.get("PROMO_E2E_TIMEOUT", "600"))  # per call, not for the whole run
+ENTRY = os.environ.get("STORYBOARD_E2E_ENTRY", "storyboard-video")
+TIMEOUT = float(os.environ.get("STORYBOARD_E2E_TIMEOUT", "600"))  # per call, not for the whole run
 PROTOCOL = "2025-06-18"  # the server answers with the version it supports; either direction is fine
 
 # A tiny *draft* spec: a title, a bullet list with real evidence, a code scene and a terminal scene.
@@ -58,16 +58,16 @@ SPEC = {
                   "palette": {"bg": "#0f1115", "fg": "#f2f4f8", "accent": "#4cc2ff"},
                   "palette_source": "user", "audio": "voice"},
     "scenes": [
-        {"id": "hook", "type": "title", "title": "promo-video", "subtitle": "e2e do plugin.json",
+        {"id": "hook", "type": "title", "title": "storyboard-video", "subtitle": "e2e do plugin.json",
          "duration_s": 2.5, "narration": "O próprio servidor monta este vídeo."},
         {"id": "why", "type": "bullets", "heading": "O que ele faz", "evidence": "README.md:5",
          "items": ["captura real", "legenda honesta", "vídeo verificado"], "duration_s": 3,
          "narration": "Cada cena nasce de uma captura de verdade."},
-        {"id": "src", "type": "code", "code": "docker run -i --rm promo-video-mcp",
+        {"id": "src", "type": "code", "code": "docker run -i --rm storyboard-video-mcp",
          "source": "README.md:1-6", "duration_s": 2.5,
          "narration": "O container sobe sem estado nenhum."},
         {"id": "run", "type": "terminal", "heading": "rodando",
-         "lines": ["$ scripts/promo-e2e.sh", "promo-e2e: ok"], "duration_s": 2.5,
+         "lines": ["$ scripts/storyboard-e2e.sh", "storyboard-e2e: ok"], "duration_s": 2.5,
          "narration": "Um único script fecha o ciclo completo."},
     ],
 }
@@ -94,8 +94,8 @@ def docker_argv(entry):
         raise Fail(f"cannot expand ${{{name}}} in plugin.json: not set in this shell")
 
     argv = [cfg["command"]] + [re.sub(r"\$\{(\w+)\}|\$(\w+)", sub, a) for a in cfg["args"]]
-    if os.environ.get("PROMO_E2E_IMAGE"):
-        argv[-1] = os.environ["PROMO_E2E_IMAGE"]
+    if os.environ.get("STORYBOARD_E2E_IMAGE"):
+        argv[-1] = os.environ["STORYBOARD_E2E_IMAGE"]
     return argv
 
 
@@ -189,13 +189,13 @@ def ok(step, payload, **must):
 
 def main():
     argv = docker_argv(ENTRY)
-    print(f"promo-e2e: entry {ENTRY}, image {argv[-1]}")
-    log_path = os.environ.get("PROMO_E2E_LOG", "/tmp/promo-e2e-server.log")
+    print(f"storyboard-e2e: entry {ENTRY}, image {argv[-1]}")
+    log_path = os.environ.get("STORYBOARD_E2E_LOG", "/tmp/storyboard-e2e-server.log")
     c = Client(argv, log_path)
     try:
         init = c.request("initialize", {"protocolVersion": PROTOCOL, "capabilities": {},
-                                        "clientInfo": {"name": "promo-e2e", "version": "1"}})
-        print(f"promo-e2e: server {init['serverInfo']['name']} {init['serverInfo']['version']} "
+                                        "clientInfo": {"name": "storyboard-e2e", "version": "1"}})
+        print(f"storyboard-e2e: server {init['serverInfo']['name']} {init['serverInfo']['version']} "
               f"(protocol {init.get('protocolVersion')})")
         c.notify("notifications/initialized")
 
@@ -203,14 +203,14 @@ def main():
         missing = {"validate_spec", "stills", "narrate", "render", "render_status", "verify"} - tools
         if missing:
             raise Fail(f"tools/list is missing {sorted(missing)}")
-        print(f"promo-e2e: {len(tools)} tools")
+        print(f"storyboard-e2e: {len(tools)} tools")
 
         spec = ok("validate_spec", c.call("validate_spec", {"spec": SPEC}), status="ok")
         errors = [f for f in spec.get("findings", []) if f.get("severity") == "error"]
         if errors:
             raise Fail(f"validate_spec: {json.dumps(errors)[:400]}")
         h = spec["spec_hash"]
-        print(f"promo-e2e: validate_spec ok, spec_hash {h}, {spec['duration_s']}s")
+        print(f"storyboard-e2e: validate_spec ok, spec_hash {h}, {spec['duration_s']}s")
 
         still = ok("stills", c.call("stills", {"spec_hash": h}))
         if still.get("audit_warnings"):
@@ -219,12 +219,12 @@ def main():
         shots = [r for r in still["stills"] if r.get("path")]
         if len(shots) != len(SPEC["scenes"]):
             raise Fail(f"stills: {len(shots)} images for {len(SPEC['scenes'])} scenes")
-        print(f"promo-e2e: stills ok, {len(shots)} frames")
+        print(f"storyboard-e2e: stills ok, {len(shots)} frames")
 
         voice = ok("narrate", c.call("narrate", {"spec_hash": h}))
         if not voice.get("total_s"):
             raise Fail(f"narrate: no audio measured: {json.dumps(voice)[:300]}")
-        print(f"promo-e2e: narrate ok, {voice['total_s']}s of speech "
+        print(f"storyboard-e2e: narrate ok, {voice['total_s']}s of speech "
               f"({voice['synthesized']} synthesized, {voice['cached']} cached)")
 
         job = ok("render", c.call("render", {"spec_hash": h, "quality": "draft"}))["job_id"]
@@ -239,17 +239,17 @@ def main():
                 raise Fail(f"render: job {job} still {st.get('progress')} after {TIMEOUT:g}s")
             time.sleep(2)
         rec = st["result"]
-        print(f"promo-e2e: render ok, {rec['width']}x{rec['height']} {rec['frames']} frames -> {rec['video']}")
+        print(f"storyboard-e2e: render ok, {rec['width']}x{rec['height']} {rec['frames']} frames -> {rec['video']}")
 
         ver = ok("verify", c.call("verify", {"video": rec["video"], "spec_hash": h}))
         bad = [f for f in ver.get("findings", []) if f.get("severity") == "error"]
         if bad:
             raise Fail(f"verify: {json.dumps(bad)[:400]}")
         mode = "narrated" if ver.get("narrated") else "silent"
-        print(f"promo-e2e: verify ok, {mode}, {ver.get('expected_duration_s')}s, "
+        print(f"storyboard-e2e: verify ok, {mode}, {ver.get('expected_duration_s')}s, "
               f"audio {ver.get('audio')}, loudness {ver.get('loudness')}")
 
-        print("promo-e2e: ok")
+        print("storyboard-e2e: ok")
         for key in ("video", "srt", "poster"):
             print(f"  {key}: {rec[key]}")
         return 0
@@ -261,14 +261,14 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except Fail as e:
-        print(f"promo-e2e: FAIL {e}", file=sys.stderr)
-        log = os.environ.get("PROMO_E2E_LOG", "/tmp/promo-e2e-server.log")
+        print(f"storyboard-e2e: FAIL {e}", file=sys.stderr)
+        log = os.environ.get("STORYBOARD_E2E_LOG", "/tmp/storyboard-e2e-server.log")
         try:
             tail = Path(log).read_text(errors="replace").splitlines()[-15:]
         except OSError:
             tail = []
         if tail:
-            print(f"promo-e2e: last lines of {log}:", file=sys.stderr)
+            print(f"storyboard-e2e: last lines of {log}:", file=sys.stderr)
             print("\n".join(tail), file=sys.stderr)
         sys.exit(1)
 PY

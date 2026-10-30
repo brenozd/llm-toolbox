@@ -1,4 +1,4 @@
-promo-video-mcp bundles third-party speech-synthesis artifacts. Attribution:
+storyboard-video-mcp bundles third-party speech-synthesis artifacts. Attribution:
 
 Kokoro-82M (model weights) - Apache-2.0 - https://huggingface.co/hexgrad/Kokoro-82M
   The model card lists training data added after v0.19 under Creative Commons Attribution:

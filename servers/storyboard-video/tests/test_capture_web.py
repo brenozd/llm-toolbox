@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from promo_video_mcp import capture, config, render
+from storyboard_video_mcp import capture, config, render
 
 
 def _chromium() -> bool:

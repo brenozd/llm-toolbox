@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""music-search: find, license-gate, verify, trim and stage a music bed for promo-video.
+"""music-search: find, license-gate, verify, trim and stage a music bed for storyboard-video.
 
 python3 stdlib only, plus the host's ffmpeg/ffprobe.
 
@@ -7,7 +7,7 @@ python3 stdlib only, plus the host's ffmpeg/ffprobe.
                         [--min-s N] [--limit N] [--refresh]
   music_search.py fetch <candidate-id> --duration S [--stage-dir DIR]
 
-The exec container mounts $HOME/.cache/promo-video/music read-only at /music, so there is no
+The exec container mounts $HOME/.cache/storyboard-video/music read-only at /music, so there is no
 copy step: `fetch` writes <stage>/<id>.<ext> + <stage>/<id>.json and prints the spec.music
 JSON with path_in_container=/music/<file> (`mount_hint` when the stage is another directory).
 
@@ -133,16 +133,16 @@ def get_json(url, *, tries=3, **kw):
 
 def cache_root():
     base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
-    return Path(base) / "promo-video"
+    return Path(base) / "storyboard-video"
 
 def default_stage():
-    """`$XDG_CACHE_HOME/promo-video/music`; `fetch` prints a `mount_hint` when `/music` cannot
+    """`$XDG_CACHE_HOME/storyboard-video/music`; `fetch` prints a `mount_hint` when `/music` cannot
     see it: a silent miss costs a render, a hint costs one flag."""
     return cache_root() / "music"
 
 def mounted_stage():
     """The host path `.claude-plugin/plugin.json` mounts read-only at /music (not XDG-driven)."""
-    return Path.home() / ".cache" / "promo-video" / "music"
+    return Path.home() / ".cache" / "storyboard-video" / "music"
 
 def cached(key, producer, *, refresh=False, ttl=86400):
     """On-disk cache: the Openverse anon quota is 20/min and 200/day."""
@@ -839,7 +839,7 @@ def build_parser():
     f = sub.add_parser("fetch", help="verify, download, gate and stage one track")
     f.add_argument("target", help="candidate id from a prior `search`")
     f.add_argument("--duration", type=float, required=True, help="seconds needed (video length)")
-    f.add_argument("--stage-dir", help="default: $XDG_CACHE_HOME/promo-video/music (mounted at /music)")
+    f.add_argument("--stage-dir", help="default: $XDG_CACHE_HOME/storyboard-video/music (mounted at /music)")
     return parser
 
 def main(argv=None):

@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 
 # A `-exec` entry is the same image as its base entry, only allowed to run
-# commands: it sets PROMO_ALLOW_EXEC=1 and drops the network.
+# commands: it sets STORYBOARD_ALLOW_EXEC=1 and drops the network.
 EXEC_SUFFIX = "-exec"
-EXEC_FLAG = ("-e", "PROMO_ALLOW_EXEC=1")
+EXEC_FLAG = ("-e", "STORYBOARD_ALLOW_EXEC=1")
 EXEC_NETWORK = ("--network", "none")
 # The only other args allowed to differ between an entry and its `-exec` twin:
 # the base has network (add-host) and the exec twin needs SETGID to drop privs.
@@ -36,12 +36,12 @@ def _strip_arg(tokens: list[str], arg: tuple[str, ...]) -> list[str] | None:
 
 def _check_exec_twin(name: str, base_name: str, base_declared: bool,
                      exec_args: list[str], base_args: list[str]) -> list[str]:
-    """Check the invariant: same image, PROMO_ALLOW_EXEC=1 and --network none."""
+    """Check the invariant: same image, STORYBOARD_ALLOW_EXEC=1 and --network none."""
     errors = []
     if not base_declared:
         errors.append(f"  ✗ MCP server '{name}' has no base entry '{base_name}'")
     if not _has_arg(exec_args, EXEC_FLAG):
-        errors.append(f"  ✗ MCP server '{name}' missing '-e PROMO_ALLOW_EXEC=1'")
+        errors.append(f"  ✗ MCP server '{name}' missing '-e STORYBOARD_ALLOW_EXEC=1'")
     if not _has_arg(exec_args, EXEC_NETWORK):
         errors.append(f"  ✗ MCP server '{name}' missing '--network none'")
 
@@ -67,7 +67,7 @@ def _check_exec_twin(name: str, base_name: str, base_declared: bool,
                       f"extra={extra} missing={missing}")
 
     if not errors:
-        errors.append(f"  ✓ MCP server '{name}' is '{base_name}' + PROMO_ALLOW_EXEC=1, no network")
+        errors.append(f"  ✓ MCP server '{name}' is '{base_name}' + STORYBOARD_ALLOW_EXEC=1, no network")
     return errors
 
 
@@ -149,7 +149,7 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
     # Check MCP servers
     mcp_servers = plugin_data.get("mcpServers", {})
     for server_name, entry in mcp_servers.items():
-        # the `-exec` entry runs the same image with PROMO_ALLOW_EXEC=1: one directory, two entries
+        # the `-exec` entry runs the same image with STORYBOARD_ALLOW_EXEC=1: one directory, two entries
         is_exec = server_name.endswith(EXEC_SUFFIX)
         dir_name = server_name[:-len(EXEC_SUFFIX)] if is_exec else server_name
         server_path = servers_dir / dir_name
@@ -163,8 +163,8 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
                 [str(a) for a in entry.get("args", [])],
                 [str(a) for a in mcp_servers.get(dir_name, {}).get("args", [])],
             ))
-        elif any("PROMO_ALLOW_EXEC" in str(a) for a in entry.get("args", [])):
-            errors.append(f"  ✗ MCP server '{server_name}' must not set PROMO_ALLOW_EXEC")
+        elif any("STORYBOARD_ALLOW_EXEC" in str(a) for a in entry.get("args", [])):
+            errors.append(f"  ✗ MCP server '{server_name}' must not set STORYBOARD_ALLOW_EXEC")
 
     # Check referenced skills (from description parsing)
     desc = plugin_data.get("description", "")

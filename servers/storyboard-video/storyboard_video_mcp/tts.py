@@ -18,8 +18,8 @@ from . import config, spec as S
 # spec.lang -> (kokoro lang code, default voice). Voices: pf_dora is the pt-BR female voice,
 # af_heart the top-graded English one; both ship in voices-v1.0.bin.
 LANGS = {"pt-BR": ("pt-br", "pf_dora"), "en": ("en-us", "af_heart")}
-MODEL = os.environ.get("PROMO_KOKORO_MODEL", "/opt/kokoro/kokoro-v1.0.fp16.onnx")
-VOICES = os.environ.get("PROMO_KOKORO_VOICES", "/opt/kokoro/voices-v1.0.bin")
+MODEL = os.environ.get("STORYBOARD_KOKORO_MODEL", "/opt/kokoro/kokoro-v1.0.fp16.onnx")
+VOICES = os.environ.get("STORYBOARD_KOKORO_VOICES", "/opt/kokoro/voices-v1.0.bin")
 
 _ENGINE = None
 

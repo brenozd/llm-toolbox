@@ -352,7 +352,7 @@ def _lint_direction(spec: dict, add) -> dict:
         if d is None or isinstance(d, dict):
             add("warn", "no_direction", None,
                 "no spec.direction: the purpose, palette and per-scene intent are unstated",
-                "run the director step and put its brief in spec.direction (see skills/promo-video)")
+                "run the director step and put its brief in spec.direction (see skills/storyboard-video)")
         else:
             add("error", "bad_direction", None, f"direction {d!r} is not an object", DIRECTION_FIX)
         _lint_palette({}, spec, add)  # the theme still reaches the pixels, whoever wrote it

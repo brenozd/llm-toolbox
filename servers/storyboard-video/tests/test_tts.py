@@ -3,7 +3,7 @@ import wave
 
 import pytest
 
-from promo_video_mcp import config, spec as S, tts
+from storyboard_video_mcp import config, spec as S, tts
 
 
 class FakeEngine:

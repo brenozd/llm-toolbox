@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from promo_video_mcp import capture, config
+from storyboard_video_mcp import capture, config
 
 needs_gui = pytest.mark.skipif(
     not all(shutil.which(n) for n in ("Xvfb", "ffmpeg", "ffprobe", "xmessage", "xdpyinfo")),
@@ -48,7 +48,7 @@ def test_gui_capture_kills_the_app_and_frees_the_display(tmp_path, monkeypatch):
     monkeypatch.setattr(capture, "LOCKDIR", tmp_path)
     res = capture.capture_gui("xmessage -center bye", aspect="16:9", seconds=1.0)
     assert res["status"] == "ok", res
-    assert not list(tmp_path.glob(".promo-x*.lock")), "the display claim was not released"
+    assert not list(tmp_path.glob(".storyboard-x*.lock")), "the display claim was not released"
 
 
 def test_gui_capture_uses_the_shared_xvfb_helper(tmp_path, monkeypatch):
@@ -61,7 +61,7 @@ def test_gui_capture_uses_the_shared_xvfb_helper(tmp_path, monkeypatch):
 
     monkeypatch.setattr(config, "WORK", tmp_path)
     monkeypatch.setattr(config, "ALLOW_EXEC", True)
-    monkeypatch.setattr(capture, "_claim_display", lambda: (":97", tmp_path / ".promo-x97.lock"))
+    monkeypatch.setattr(capture, "_claim_display", lambda: (":97", tmp_path / ".storyboard-x97.lock"))
     monkeypatch.setattr(capture, "_xvfb", fake_xvfb)
     monkeypatch.setattr(capture.shutil, "which", lambda n: "/usr/bin/" + n)  # CI image has no Xvfb/ffmpeg
     monkeypatch.setattr(capture, "_kill", lambda p: seen.setdefault("killed", True))

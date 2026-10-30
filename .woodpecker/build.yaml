@@ -76,7 +76,7 @@ steps:
         ref: refs/tags/faster-whisper-v*
 
   # The `-exec` entry invariant (M7) lives in scripts/validate-plugin.py: stdlib-only, no image
-  # build and ~1 s, so it gates the pipeline before the promo-video steps below.
+  # build and ~1 s, so it gates the pipeline before the storyboard-video steps below.
   - name: plugin-test
     image: python:3.12-slim
     commands:
@@ -88,47 +88,47 @@ steps:
       - event: pull_request
         path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", ".woodpecker/**"] }
       - event: tag
-        ref: refs/tags/promo-video-v*
+        ref: refs/tags/storyboard-video-v*
 
   # Offline tests (ffmpeg only; chromium/xterm-dependent tests skip themselves). Serial like
   # whatsapp-test: a failure aborts the pipeline before the image build below.
   # Path globs are deliberately wider than the build step's: the tests also read
-  # skills/promo-video/SKILL.md and .claude-plugin/plugin.json (doc/plugin contracts), so a
+  # skills/storyboard-video/SKILL.md and .claude-plugin/plugin.json (doc/plugin contracts), so a
   # change there must run them — but must not rebuild the image.
-  - name: promo-video-test
+  - name: storyboard-video-test
     image: python:3.12-slim
     commands:
       - apt-get update && apt-get install -y --no-install-recommends ffmpeg
-      - cd servers/promo-video
+      - cd servers/storyboard-video
       - pip install --quiet --no-cache-dir . pytest
       - python -m pytest -q tests
     when:
       - event: [push, manual]
         branch: master
-        path: { include: ["servers/promo-video/**", "skills/promo-video/**", ".claude-plugin/**", ".woodpecker/**"] }
+        path: { include: ["servers/storyboard-video/**", "skills/storyboard-video/**", ".claude-plugin/**", ".woodpecker/**"] }
       - event: pull_request
-        path: { include: ["servers/promo-video/**", "skills/promo-video/**", ".claude-plugin/**", ".woodpecker/**"] }
+        path: { include: ["servers/storyboard-video/**", "skills/storyboard-video/**", ".claude-plugin/**", ".woodpecker/**"] }
       - event: tag
-        ref: refs/tags/promo-video-v*
+        ref: refs/tags/storyboard-video-v*
 
-  - name: promo-video
+  - name: storyboard-video
     image: woodpeckerci/plugin-docker-buildx
     settings:
       registry: harbor.bzd.gg
       username: { from_secret: harbor_registry_user }
       password: { from_secret: harbor_registry_password }
-      repo: harbor.bzd.gg/bzd/promo-video-mcp
-      dockerfile: servers/promo-video/Dockerfile
-      context: servers/promo-video
+      repo: harbor.bzd.gg/bzd/storyboard-video-mcp
+      dockerfile: servers/storyboard-video/Dockerfile
+      context: servers/storyboard-video
       platforms: linux/amd64
       provenance: false
       tags: [latest, "sha-${CI_COMMIT_SHA}"]
     when:
       - event: [push, manual]
         branch: master
-        path: { include: ["servers/promo-video/**", ".woodpecker/**"] }
+        path: { include: ["servers/storyboard-video/**", ".woodpecker/**"] }
       - event: tag
-        ref: refs/tags/promo-video-v*
+        ref: refs/tags/storyboard-video-v*
 
   # Offline Python tests: no Go toolchain, no WhatsApp account. libmagic1 because neonize
   # imports python-magic at import time (ffmpeg is not needed by the tests).

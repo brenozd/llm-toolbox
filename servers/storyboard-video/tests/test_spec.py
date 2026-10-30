@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from promo_video_mcp import config, safety, scan, spec as S
+from storyboard_video_mcp import config, safety, scan, spec as S
 
 
 def mk(**kw):
@@ -83,13 +83,13 @@ def test_a_last_scene_keeps_its_own_duration_when_it_is_longer(monkeypatch):
 
 
 def test_music_dir_is_the_mount_point_and_can_be_moved():
-    """MUSIC_DIR is where the host mounts the music cache (plugin.json: /music); PROMO_MUSIC_DIR points
+    """MUSIC_DIR is where the host mounts the music cache (plugin.json: /music); STORYBOARD_MUSIC_DIR points
     the same cache somewhere else instead of hardcoding the default."""
     def music_dir(value: str | None = None) -> str:
-        env = {k: v for k, v in os.environ.items() if k != "PROMO_MUSIC_DIR"}
+        env = {k: v for k, v in os.environ.items() if k != "STORYBOARD_MUSIC_DIR"}
         if value is not None:
-            env["PROMO_MUSIC_DIR"] = value
-        r = subprocess.run([sys.executable, "-c", "from promo_video_mcp import config; print(config.MUSIC_DIR)"],
+            env["STORYBOARD_MUSIC_DIR"] = value
+        r = subprocess.run([sys.executable, "-c", "from storyboard_video_mcp import config; print(config.MUSIC_DIR)"],
                            capture_output=True, text=True, env=env, check=True,
                            cwd=str(Path(S.__file__).resolve().parent.parent))
         return r.stdout.strip()
@@ -196,7 +196,7 @@ def test_a_missing_asset_is_a_lint_error(tmp_path, monkeypatch):
 
 
 def test_exec_gate(monkeypatch):
-    from promo_video_mcp import capture
+    from storyboard_video_mcp import capture
     monkeypatch.setattr(config, "ALLOW_EXEC", False)
     with pytest.raises(PermissionError):
         capture.capture_terminal("echo hi")

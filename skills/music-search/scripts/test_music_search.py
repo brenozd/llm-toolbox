@@ -885,10 +885,10 @@ class MiscTests(unittest.TestCase):
         old = os.environ.get("XDG_CACHE_HOME")
         os.environ["XDG_CACHE_HOME"] = "/tmp/xdg-test"
         try:
-            self.assertEqual(str(M.default_stage()), "/tmp/xdg-test/promo-video/music")
+            self.assertEqual(str(M.default_stage()), "/tmp/xdg-test/storyboard-video/music")
             # the plugin's mount is pinned to $HOME/.cache: `fetch` prints a mount_hint instead
             # of the two silently disagreeing (M3: keep XDG, warn).
-            self.assertEqual(M.mounted_stage(), Path.home() / ".cache" / "promo-video" / "music")
+            self.assertEqual(M.mounted_stage(), Path.home() / ".cache" / "storyboard-video" / "music")
         finally:
             if old is None:
                 os.environ.pop("XDG_CACHE_HOME", None)

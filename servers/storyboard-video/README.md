@@ -1,11 +1,11 @@
-# promo-video MCP
+# storyboard-video MCP
 
 Builds a captioned promo video (MP4 + SRT + poster) from a repo, with every claim tied to a capture or `file:line`, plus an offline voice-over.
-Works for web, CLI and GUI projects. Pair it with [`skills/promo-video`](../../skills/promo-video/). An `image` scene also accepts `video` (mp4/webm/gif, e.g. recorded by [`skills/screencapture`](../../skills/screencapture/)) in place of a still.
+Works for web, CLI and GUI projects. Pair it with [`skills/storyboard-video`](../../skills/storyboard-video/). An `image` scene also accepts `video` (mp4/webm/gif, e.g. recorded by [`skills/screencapture`](../../skills/screencapture/)) in place of a still.
 
 ## Tools
 `preflight`, `scan_repo`, `brand_tokens`, `extract_code`, `capture_web`, `capture_terminal`*, `capture_terminal_session`*, `capture_gui`*, `validate_spec`, `narrate`, `stills`, `audit_layout`, `reframe`, `render` + `render_status`, `verify`.
-(*) run repo code: only enabled when the container has `PROMO_ALLOW_EXEC=1`, which the operator sets (plugin entry `promo-video-exec`), not the model.
+(*) run repo code: only enabled when the container has `STORYBOARD_ALLOW_EXEC=1`, which the operator sets (plugin entry `storyboard-video-exec`), not the model.
 
 ## 16:9 and 9:16
 Every capture tool takes `aspect` (`16:9` default, or `9:16`) and fills in that format's geometry, because the format is baked into the pixels: a landscape screenshot letterboxes in a portrait frame.
@@ -29,14 +29,14 @@ Size the window to the run — `rows = printed lines + 1` (the 16-row default le
 The image also ships **gcc + libc6-dev**, so a CLI demo can compile its own sample program inside the exec container and show the real compile (`gcc -O0 -o leak leak.c`) instead of shipping a binary.
 
 ## Voice-over (offline)
-The image bundles no music. A track is found, licence-checked and staged by the [`skills/music-search`](../../skills/music-search/) skill into `${XDG_CACHE_HOME:-~/.cache}/promo-video/music`, which both plugin entries mount read-only at `/music` (the `XDG_CACHE_HOME` trap is in **Two plugin entries**); `spec.music = {"path": "/music/<id>.mp3", "start_s", "license", "volume_db", "duck"}` is linted against it (`music_path_missing`, `music_license_missing`, `music_license_incompatible`) and mixed by the render (see **Mix and loudness**). No track is not an error: a silent video is the default.
+The image bundles no music. A track is found, licence-checked and staged by the [`skills/music-search`](../../skills/music-search/) skill into `${XDG_CACHE_HOME:-~/.cache}/storyboard-video/music`, which both plugin entries mount read-only at `/music` (the `XDG_CACHE_HOME` trap is in **Two plugin entries**); `spec.music = {"path": "/music/<id>.mp3", "start_s", "license", "volume_db", "duck"}` is linted against it (`music_path_missing`, `music_license_missing`, `music_license_incompatible`) and mixed by the render (see **Mix and loudness**). No track is not an error: a silent video is the default.
 
 `narrate(spec_hash)` synthesizes every `scene.narration` with Kokoro-82M (`kokoro-onnx`, Apache-2.0 weights; espeak-ng G2P for `pt-BR` and `en`) into one WAV per scene under `/work/audio/<spec_hash>/`, plus a `manifest.json` with the durations measured from the files. The model and the 54-voice pack are baked into the image and sha256-checked at build time: no network, no torch. Cache key = `text + voice + speed + lang + model identity (name:size)` and `resolved_hash` also carries `RENDER_VERSION`, so a re-baked model or a template change invalidates the cached WAVs/stills.
 A scene then lasts `max(duration_s, audio + 0.4 s)`, and `spec.timeline()` reads the manifest — so the *resolved* hash (`spec_hash` + audio digest) changes when the speech changes, and old stills/renders are never reused (delivery is refused until you re-run `stills`).
 `spec.lang` (`pt-BR`|`en`) is required as soon as a scene has narration; `spec.voice` overrides the default (`pf_dora` / `af_heart`). `spec.say = {"LD_PRELOAD": "el di preload"}` is applied to the text *before* synthesis: `lint` warns (`say_missing`) for every acronym, snake_case/camelCase token or on-screen identifier a scene speaks without a mapping, and for speech faster than ~3.2 words/s (`narration_pace`). Transcribe the delivered MP4 with the `faster-whisper` MCP (`transcribe(audio_path=<the MP4>, language=spec.lang)`) and hold the round trip to a WER of **~0.15** on accent-stripped tokens; judge it with `small` (the default, `WHISPER_MODEL=small`) — `tiny` misreads enough to score a good line at 0.40. Spoken numbers need `scene.evidence` like any other claim (and the lint's blind spot is in **Limits**: it only fires on a number with a unit).
 
 ## Mix and loudness
-The render builds one soundtrack per video (`promo_video_mcp/audio.py`), then muxes it: the picture is
+The render builds one soundtrack per video (`storyboard_video_mcp/audio.py`), then muxes it: the picture is
 copied untouched, the audio becomes **AAC 192 kbit/s** 48 kHz stereo, exactly as long as the picture.
 
 | layer | what it does |
@@ -67,8 +67,8 @@ writes next to the audio (`license_evidence`, `source_url`, `sha256`) and use it
 ## Two plugin entries
 | entry | network | exec tools |
 |-------|---------|-----------|
-| `promo-video` | host-reachable (`host.docker.internal`) | off |
-| `promo-video-exec` | none, `--cap-drop ALL` (+`SETGID` for xterm) | on |
+| `storyboard-video` | host-reachable (`host.docker.internal`) | off |
+| `storyboard-video-exec` | none, `--cap-drop ALL` (+`SETGID` for xterm) | on |
 
 The exec entry needs `--cap-add SETGID`: without it xterm dies silently and a session recording never finds a window.
 
@@ -76,12 +76,12 @@ Both entries harden the container the same way: `--read-only`, `--cap-drop ALL`,
 
 The image ships **no GTK/Qt**: inside the container a GUI capture is `xterm` or `xmessage`; a GTK/Qt app needs a custom image with its libraries.
 
-Both mount `${PWD}:/repo:ro`, a named volume `promo-video-work:/work` and `${HOME}/.cache/promo-video/music:/music:ro` (the staged soundtrack, `music-search` writes it). **Start Claude Code from the repo root**: `${PWD}` is the launcher's working directory, not the project root — launched from `$HOME`, a desktop entry or an IDE, `/repo` is the wrong tree, and with `PWD` unset docker rejects `:/repo:ro`.
+Both mount `${PWD}:/repo:ro`, a named volume `storyboard-video-work:/work` and `${HOME}/.cache/storyboard-video/music:/music:ro` (the staged soundtrack, `music-search` writes it). **Start Claude Code from the repo root**: `${PWD}` is the launcher's working directory, not the project root — launched from `$HOME`, a desktop entry or an IDE, `/repo` is the wrong tree, and with `PWD` unset docker rejects `:/repo:ro`.
 
-**The mount is `${HOME}/.cache`, the stage is XDG**: `music-search` stages into `${XDG_CACHE_HOME:-~/.cache}/promo-video/music`, so if you set `XDG_CACHE_HOME` `fetch` returns a `mount_hint` — pass `--stage-dir "$HOME/.cache/promo-video/music"` (or change the `-v` source), or the track is staged where `/music` cannot see it (`music_path_missing`). Never mount `${HOME}` itself.
+**The mount is `${HOME}/.cache`, the stage is XDG**: `music-search` stages into `${XDG_CACHE_HOME:-~/.cache}/storyboard-video/music`, so if you set `XDG_CACHE_HOME` `fetch` returns a `mount_hint` — pass `--stage-dir "$HOME/.cache/storyboard-video/music"` (or change the `-v` source), or the track is staged where `/music` cannot see it (`music_path_missing`). Never mount `${HOME}` itself.
 
 ## Direction (the look, decided before the script)
-`spec.direction` is the director's brief; `skills/promo-video` runs that step on the host (network, web research in `research`) and writes the same content to `/work/direction.md`. Every field has a reader, so nothing here is decoration:
+`spec.direction` is the director's brief; `skills/storyboard-video` runs that step on the host (network, web research in `research`) and writes the same content to `/work/direction.md`. Every field has a reader, so nothing here is decoration:
 
 | field | reader |
 |---|---|
@@ -106,4 +106,4 @@ Scenes become an HTML timeline; Playwright (Chromium) seeks frame by frame and f
 - `uncited_stat` needs a unit next to the number (`40%`, `8ms`); a bare integer on screen is not linted, so cite it yourself.
 
 ## Dev
-`pip install -e . pytest && pytest tests`. Two optional dev scripts drive the shipped path: `scripts/promo-e2e.sh` runs the whole `plugin.json` entry end to end (real container, real render; `PROMO_E2E_ENTRY` picks the `-exec` twin) and `scripts/check-release.py` asserts a published tag is the image this repo builds (`--self-test` runs offline). Neither is in CI. Outside Docker set `PROMO_WORK`, `PROMO_REPO` (and `PROMO_MUSIC_DIR` if the soundtrack is not mounted at `/music`; it widens the read allowlist, operator-set only); Fedora ffmpeg lacks libx264 so the renderer falls back to openh264.
+`pip install -e . pytest && pytest tests`. Two optional dev scripts drive the shipped path: `scripts/storyboard-e2e.sh` runs the whole `plugin.json` entry end to end (real container, real render; `STORYBOARD_E2E_ENTRY` picks the `-exec` twin) and `scripts/check-release.py` asserts a published tag is the image this repo builds (`--self-test` runs offline). Neither is in CI. Outside Docker set `STORYBOARD_WORK`, `STORYBOARD_REPO` (and `STORYBOARD_MUSIC_DIR` if the soundtrack is not mounted at `/music`; it widens the read allowlist, operator-set only); Fedora ffmpeg lacks libx264 so the renderer falls back to openh264.

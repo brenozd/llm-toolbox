@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from promo_video_mcp import audio as A, config, spec as S
+from storyboard_video_mcp import audio as A, config, spec as S
 
 SUMMARY = """[Parsed_ebur128_0 @ 0x1] t: 4.9   TARGET:-23 LUFS  I: -27.8 LUFS
 [Parsed_ebur128_0 @ 0x1] Summary:

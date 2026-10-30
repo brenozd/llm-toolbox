@@ -79,7 +79,7 @@ shared `.agents/skills/` path above.
 ## MCP servers
 
 The plugin (`/plugin install llm-toolbox@llm-toolbox`) registers
-`actual-budget`, `woodpecker`, `vikunja`, `faster-whisper`, `promo-video`, `promo-video-exec`, and `whatsapp` MCPs automatically — no
+`actual-budget`, `woodpecker`, `vikunja`, `faster-whisper`, `storyboard-video`, `storyboard-video-exec`, and `whatsapp` MCPs automatically — no
 need to hand-copy JSON. `actual-budget`, `woodpecker`, `vikunja` and `whatsapp` each need their own
 `config.json` (see
 [`servers/actual-budget/README.md`](servers/actual-budget/README.md#config)
