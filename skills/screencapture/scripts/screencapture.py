@@ -511,6 +511,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--list", action="store_true", help="list this session's screenshots and exit")
     p.add_argument("--clear", action="store_true", help="delete this session's screenshots (asks first)")
     p.add_argument("--clear-yes", action="store_true", help="delete this session's screenshots, no prompt")
+    p.add_argument("--record", choices=["term", "web", "desktop"],
+                   help="record video/gif (output ext .mp4/.webm/.gif, default .mp4); web needs --web URL")
+    p.add_argument("--steps", metavar="JSON|FILE", help="scripted steps for --record term/web (see record.py)")
+    p.add_argument("--seconds", type=float, default=5, help="--record desktop duration")
+    p.add_argument("--fps", type=int, default=15)
+    p.add_argument("--cols", type=int, default=80, help="--record term columns")
+    p.add_argument("--rows", type=int, default=20, help="--record term rows")
+    p.add_argument("--cwd", help="--record term working directory")
+    p.add_argument("--setup", help="--record term: shell snippet run before recording")
+    p.add_argument("--gif", action="store_true", help="--record: write a .gif instead of .mp4")
     p.add_argument("--selftest", action="store_true", help="run self-check and exit")
     return p
 
@@ -519,6 +529,28 @@ def default_output(ext: str = "png") -> Path:
     d = Path.cwd() / ".screenshots"
     d.mkdir(exist_ok=True)
     return d / f"shot-{datetime.now():%Y%m%d-%H%M%S}.{ext}"
+
+
+def _record(args) -> int:
+    import record
+    ext = ".gif" if args.gif else ".mp4"
+    output = args.output or default_output(ext.lstrip("."))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if args.record == "desktop":
+        meta = record.record_desktop(output, args.seconds, args.fps)
+    else:
+        if not args.steps:
+            raise SystemExit("--record term/web needs --steps")
+        steps = record.load_steps(args.steps)
+        if args.record == "web":
+            if not args.web:
+                raise SystemExit("--record web needs --web URL")
+            meta = record.record_web(args.web, steps, output, args.web_width, args.web_height, args.fps, args.dark)
+        else:
+            meta = record.record_term(steps, output, args.cols, args.rows, fps=args.fps, cwd=args.cwd, setup=args.setup)
+    _track(output)
+    print(output)
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -532,6 +564,9 @@ def main(argv: list[str] | None = None) -> int:
         return clear_screenshots(confirm=True)
     if args.clear_yes:
         return clear_screenshots(confirm=False)
+
+    if args.record:
+        return _record(args)
 
     width, height = args.web_width, args.web_height
     if args.mobile:

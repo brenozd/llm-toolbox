@@ -23,10 +23,10 @@ Manual alternative — symlink individual skills instead of the whole plugin:
 
 ```bash
 # all projects
-ln -s "$(pwd)/skills/screenshot" ~/.claude/skills/screenshot
+ln -s "$(pwd)/skills/screencapture" ~/.claude/skills/screencapture
 
 # one project only
-ln -s "$(pwd)/skills/screenshot" /path/to/project/.claude/skills/screenshot
+ln -s "$(pwd)/skills/screencapture" /path/to/project/.claude/skills/screencapture
 ```
 
 Some skills (`guided-build`) expect the
@@ -40,10 +40,10 @@ same skill directories:
 
 ```bash
 # user-wide
-ln -s "$(pwd)/skills/screenshot" ~/.gemini/skills/screenshot
+ln -s "$(pwd)/skills/screencapture" ~/.gemini/skills/screencapture
 
 # workspace only
-ln -s "$(pwd)/skills/screenshot" /path/to/project/.gemini/skills/screenshot
+ln -s "$(pwd)/skills/screencapture" /path/to/project/.gemini/skills/screencapture
 ```
 
 To share one copy across Gemini CLI, Cursor, and Codex CLI, symlink into

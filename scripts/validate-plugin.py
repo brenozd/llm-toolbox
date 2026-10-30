@@ -168,7 +168,7 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
 
     # Check referenced skills (from description parsing)
     desc = plugin_data.get("description", "")
-    for skill_name in ["deep-clean", "doc-audit", "guided-build", "image", "screenshot", "tech-blog-post", "refactor", "icon-search", "music-search", "pr-opener"]:
+    for skill_name in ["deep-clean", "doc-audit", "guided-build", "image", "screencapture", "tech-blog-post", "refactor", "icon-search", "music-search", "pr-opener"]:
         if skill_name in desc:
             skill_path = skills_dir / skill_name
             if not skill_path.is_dir():

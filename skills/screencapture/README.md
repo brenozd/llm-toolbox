@@ -1,4 +1,4 @@
-# screenshot
+# screencapture
 
 Captures desktop or web-page screenshots with Python + Pillow, styled after
 [claudeshot](https://github.com/naieum/claudeshot). Cross-platform: Linux
@@ -12,13 +12,13 @@ claudeshot does.
 
 ## Trigger
 
-`/screenshot`, or phrases like "screenshot", "capture the screen", "screenshot
+`/screencapture` (or `/screenshot`), or phrases like "screenshot", "capture the screen", "screenshot
 this page", "screenshot localhost:3000", "screenshot mobile view".
 
 ## Usage
 
 ```bash
-python3 scripts/shot.py [flags]
+python3 scripts/screencapture.py [flags]
 ```
 
 ## Flags
@@ -49,23 +49,23 @@ python3 scripts/shot.py [flags]
 
 ```bash
 # Full screen, saved to .screenshots/
-python3 scripts/shot.py
+python3 scripts/screencapture.py
 
 # Region select, straight to clipboard
-python3 scripts/shot.py --mode region --clipboard
+python3 scripts/screencapture.py --mode region --clipboard
 
 # Full-page web screenshot, resized
-python3 scripts/shot.py --web http://localhost:3000 --small
+python3 scripts/screencapture.py --web http://localhost:3000 --small
 
 # Web viewport only, as JPEG
-python3 scripts/shot.py --web https://example.com --viewport --jpeg
+python3 scripts/screencapture.py --web https://example.com --viewport --jpeg
 
 # Mobile viewport + DOM dump, for debugging a CSS issue
-python3 scripts/shot.py --web http://localhost:3000 --mobile --dom
+python3 scripts/screencapture.py --web http://localhost:3000 --mobile --dom
 
 # Review and clean up this session's captures
-python3 scripts/shot.py --list
-python3 scripts/shot.py --clear
+python3 scripts/screencapture.py --list
+python3 scripts/screencapture.py --clear
 ```
 
 ## Platform support
@@ -85,3 +85,10 @@ Desktop capture tool is auto-detected at runtime; the first one found on PATH
 - Python 3 + Pillow
 - One of the desktop-capture tools above, present already on most desktop Linux/macOS installs
 - `chromium-browser` / `chromium` / `google-chrome` on PATH (or `/Applications` on macOS) for web capture
+
+## Recording flags
+
+`--record term|web|desktop`, `--steps JSON|FILE`, `--gif`, `--fps N` (15), `--seconds N` (desktop, 5),
+`--cols/--rows` (term, 80x20), `--cwd`, `--setup`; web reuses `--web URL`, `--web-width/--web-height`, `--dark`.
+Implementation: `scripts/record.py`. Deps: ffmpeg always; term: Xvfb, xterm, xdotool, script (util-linux);
+web: `pip install playwright` plus a Chromium; desktop: spectacle/wf-recorder (Wayland) or ffmpeg x11grab.

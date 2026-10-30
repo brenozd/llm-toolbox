@@ -73,11 +73,11 @@ trace/copy a result 1:1 (license risk); the output must be your own geometry.
 
 ## 2. Render
 
-Rasterize to PNG to actually see it before judging it, via the `screenshot` skill’s
+Rasterize to PNG to actually see it before judging it, via the `screencapture` skill’s
 web-capture path — Chromium renders bare `.svg` files directly, no HTML wrapper needed:
 
 ```bash
-python3 <path-to-screenshot-skill>/scripts/shot.py --web "file://$(realpath file.svg)" --viewport --output /tmp/svg-preview.png
+python3 <path-to-screenshot-skill>/scripts/screencapture.py --web "file://$(realpath file.svg)" --viewport --output /tmp/svg-preview.png
 ```
 
 Fallback if Chromium isn't on PATH: `rsvg-convert -w 512 -h 512 file.svg -o /tmp/svg-preview.png`

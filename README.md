@@ -43,7 +43,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`skills/music-search`](skills/music-search/) — finds a licence-cleared music bed (Openverse, Internet Archive, ccMixter), verifies the licence at the origin and stages it for promo-video.
 - [`skills/promo-video`](skills/promo-video/) — workflow for the promo-video MCP: honest storyboard from the code, review stills, render, verify.
 - [`skills/pr-opener`](skills/pr-opener/) — opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates draft PR (forge-agnostic).
-- [`skills/screenshot`](skills/screenshot/) — captures desktop/web screenshots with Python + Pillow (Linux/macOS/Windows).
+- [`skills/screencapture`](skills/screencapture/) — captures desktop/web screenshots and scripted videos/GIFs (terminal, web, desktop) (Linux/macOS/Windows).
 - [`skills/svg-generator`](skills/svg-generator/) — hand-writes SVG markup via a write/render/self-evaluate/revise loop.
 - [`skills/tech-blog-post`](skills/tech-blog-post/) — writes a technical blog post in a senior-engineer voice.
 - [`skills/ui-review`](skills/ui-review/) — full multi-agent web UI review (UX, visual, a11y, responsiveness), consolidated into one prioritized report.

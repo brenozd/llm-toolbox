@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
-import shot  # noqa: E402
+import screencapture as shot  # noqa: E402
 
 
 class ResizeFormatTests(unittest.TestCase):
@@ -113,3 +113,24 @@ class ArgParsingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_record_steps_validation():
+    import record
+    import pytest
+    ok = record.load_steps('[{"type":"type","text":"ls"},{"type":"click","x":1,"y":2},{"type":"hold_s","s":1}]')
+    assert len(ok) == 3
+    for bad in ('[]', '[{"type":"nope"}]', '[{"type":"type"}]', '[{"type":"click"}]', '[{"type":"wait_for"}]'):
+        with pytest.raises(ValueError):
+            record.load_steps(bad)
+
+
+def test_record_finalize_gif(tmp_path):
+    import record
+    import subprocess
+    src = tmp_path / "a.mp4"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=d=1:s=64x64:r=10",
+                    "-pix_fmt", "yuv420p", str(src)], check=True)
+    for ext in (".gif", ".webm", ".mp4"):
+        record.finalize(src, tmp_path / f"o{ext}")
+        assert (tmp_path / f"o{ext}").stat().st_size > 0
