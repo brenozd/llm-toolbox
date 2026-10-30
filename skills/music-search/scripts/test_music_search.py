@@ -15,15 +15,18 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.error
 from datetime import date
 from hashlib import sha256
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import music_search as M  # noqa: E402
 
 FIXTURES = HERE / "fixtures"
+REAL_HTTP_GET = M.http_get  # the suite replaces M.http_get freely; HttpTests need the real one
 
 
 def fixture(name):
@@ -205,13 +208,22 @@ class PolicyTests(unittest.TestCase):
             got = self.verdict(raw)
             self.assertTrue(got["jurisdiction_note"], raw)
             self.assertIn(got["content_id_risk"], ("low", "medium", "high"), raw)
+            self.assertTrue(got["content_id_reasons"], raw)  # a level alone argues nothing
             self.assertIn(got["verdict"], ("allow", "attribution", "deny"), raw)
 
-    def test_content_id_risk(self):
-        self.assertEqual(M.policy(M._cand(license_id="cc0", source="ia"))["content_id_risk"], "low")
-        self.assertEqual(
-            M.policy(M._cand(license_id="pd", published_year=1908))["content_id_risk"], "high"
-        )
+    def test_content_id_risk_and_its_reasons(self):
+        low = M.policy(M._cand(license_id="cc0", source="ia"))
+        self.assertEqual(low["content_id_risk"], "low")
+        self.assertEqual(low["content_id_reasons"], ["cc0_or_pdm_from_rights_holder"])
+        high = M.policy(M._cand(license_id="pd", published_year=1908))
+        self.assertEqual(high["content_id_risk"], "high")
+        self.assertEqual(high["content_id_reasons"], ["pd_era_disc_reissued_by_a_label"])
+        by = M.policy(M._cand(license_id="by", license_version="4.0"))
+        self.assertEqual(by["content_id_risk"], "medium")
+        self.assertEqual(by["content_id_reasons"], ["cc_by_without_credit_is_an_easy_claim_target"])
+        # the sidecar has to say how to answer a claim, not only that one is possible
+        for word in ("license_evidence", "source_url", "sha256", "counter-notice"):
+            self.assertIn(word, M.CONTENT_ID_DISPUTE)
 
 
 class AttributionTests(unittest.TestCase):
@@ -345,6 +357,78 @@ class SearchTests(unittest.TestCase):
         out = M.search("calm ambient")
         self.assertIn("openverse:", " ".join(out["sources"]) + ":")
         self.assertGreaterEqual(out["count"], 1)
+
+    def test_provenance_breaks_a_vibe_tie(self):
+        def fake(vibe, limit, *, refresh=False):
+            return [M._cand(id="ia-b", source="ia", title="B", creator="b", license_id="by",
+                            license_version="4.0", duration_s=300),
+                    M._cand(id="ia-a", source="ia", title="A", creator="a", license_id="cc0",
+                            duration_s=300)]
+
+        old = M.SEARCHERS["ia"]
+        M.SEARCHERS["ia"] = fake
+        self.addCleanup(lambda: M.SEARCHERS.__setitem__("ia", old))
+        out = M.search("calm ambient", source="ia")
+        self.assertEqual([c["id"] for c in out["results"]], ["ia-a", "ia-b"])
+        self.assertEqual([c["content_id_risk"] for c in out["results"]], ["low", "medium"])
+
+
+class HttpTests(unittest.TestCase):
+    """M6: the Openverse call has 10 s a shot and waits out a 429 instead of burning 3 tries."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.old_xdg = os.environ.get("XDG_CACHE_HOME")
+        self.old_http = M.http_get
+        M.http_get = REAL_HTTP_GET  # a stub left behind by an earlier class must not answer here
+        os.environ["XDG_CACHE_HOME"] = self.tmp.name
+        self.addCleanup(self.tmp.cleanup)
+        self.addCleanup(lambda: setattr(M, "http_get", self.old_http))
+        self.addCleanup(lambda: os.environ.__setitem__("XDG_CACHE_HOME", self.old_xdg)
+                        if self.old_xdg else os.environ.pop("XDG_CACHE_HOME", None))
+
+    def test_openverse_asks_for_a_ten_second_timeout(self):
+        seen = {}
+
+        def fake(url, *, timeout=25, tries=3):
+            seen["timeout"] = timeout
+            return json.dumps({"results": []})
+
+        M.http_get = fake
+        M.search("calm ambient", source="openverse")
+        self.assertEqual(seen["timeout"], 10)
+
+    def test_a_429_is_waited_as_long_as_the_origin_asks(self):
+        err = urllib.error.HTTPError("https://api.openverse.org/x", 429, "Too Many Requests",
+                                     {"Retry-After": "2"}, None)
+        slept = []
+        with mock.patch.object(M.urllib.request, "urlopen", side_effect=err), \
+                mock.patch.object(M.time, "sleep", slept.append):
+            with self.assertRaises(M.HttpStatusError) as ctx:
+                M.http_get("https://api.openverse.org/v1/audio/?q=calm")
+        self.assertEqual(ctx.exception.status, 429)
+        self.assertEqual(slept, [2.0, 2.0])  # both retries at the origin's pace, not 1.5/3.0
+
+    def test_retry_after_is_capped_inside_the_call_budget(self):
+        err = urllib.error.HTTPError("https://api.openverse.org/y", 503, "busy",
+                                     {"Retry-After": "600"}, None)
+        slept = []
+        with mock.patch.object(M.urllib.request, "urlopen", side_effect=err), \
+                mock.patch.object(M.time, "sleep", slept.append):
+            with self.assertRaises(M.HttpStatusError):
+                M.http_get("https://api.openverse.org/y", tries=2)
+        self.assertEqual(slept, [10.0])  # 600 s would blow the caller's budget twice over
+
+    def test_the_status_code_reaches_the_skip_reason(self):
+        def boom(url, **kw):
+            err = urllib.error.HTTPError("u", 429, "x", {}, None)
+            self.addCleanup(err.close)
+            raise M.HttpStatusError(url, 3, err)
+
+        M.http_get = boom
+        out = M.search("calm ambient", source="openverse")
+        self.assertIn("openverse:error:HTTP429", out["sources"])
+        self.assertIn("openverse:error:HTTP429", out["reason"])
 
 
 class OriginVerifyTests(unittest.TestCase):
@@ -512,6 +596,7 @@ class FetchTests(unittest.TestCase):
         for key in ("id", "title", "creator", "license", "license_version", "license_url",
                     "source_url", "retrieved_at", "attribution_required", "attribution_text",
                     "verdict", "verdict_reason", "license_evidence", "content_id_risk",
+                    "content_id_reasons", "content_id_dispute",
                     "jurisdiction_note", "recording_is_original_transfer", "sha256",
                     "duration_s", "mood", "bpm"):
             self.assertIn(key, side)
@@ -520,8 +605,10 @@ class FetchTests(unittest.TestCase):
         self.assertGreaterEqual(side["start_s"], 1.0)
         self.assertLessEqual(side["start_s"] + 30, 300.0 - 1.0)
         for key in ("path_in_container", "start_s", "title", "creator", "license",
-                    "license_url", "source_url", "attribution"):
+                    "license_url", "source_url", "attribution", "content_id_reasons",
+                    "content_id_dispute"):
             self.assertIn(key, out)
+        self.assertEqual(side["content_id_dispute"], M.CONTENT_ID_DISPUTE)
 
     def test_ccmixter_download_sends_a_referer(self):
         payload = [{"upload_id": 61841, "license_name": "CC0 (CC Zero)",
@@ -609,6 +696,59 @@ class FetchTests(unittest.TestCase):
         self.assertEqual(out["error"], "download_failed")
         self.assertIn("404", out["reason"])
 
+    def fetched_ok(self, stage, ident="item-hint"):
+        """The smallest happy path: cc0 record, one streamed block, a 300 s probe."""
+        http, _ = stub_http({f"archive.org/metadata/{ident}": ia_item(
+            ident, "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        M.http_stream = stub_stream([b"ID3hint"])
+        self.index(self.ia_cand(ident, license_id="cc0"))
+        return M.fetch(f"ia-{ident}", duration=30, stage_dir=stage)
+
+    def test_mount_hint_warns_when_the_stage_is_not_the_mounted_dir(self):
+        out = self.fetched_ok(self.stage)
+        self.assertNotIn("error", out)
+        self.assertIn("--stage-dir", out["mount_hint"])
+        self.assertIn(str(M.mounted_stage()), out["mount_hint"])
+
+    def test_no_mount_hint_when_staging_into_the_mounted_dir(self):
+        old = M.mounted_stage
+        M.mounted_stage = lambda: self.stage
+        self.addCleanup(lambda: setattr(M, "mounted_stage", old))
+        self.assertNotIn("mount_hint", self.fetched_ok(self.stage))
+
+    def test_oversized_listing_is_refused_before_the_first_byte(self):
+        files = [{"name": "item-big.mp3", "format": "VBR MP3", "size": "60000000"},
+                 {"name": "item-big.ogg", "format": "Ogg Vorbis", "size": "5000000"}]
+        http, _ = stub_http({"archive.org/metadata/item-big": ia_item(
+            "item-big", "https://creativecommons.org/publicdomain/zero/1.0/", files=files)})
+        M.http_get = http
+        streams = []
+        M.http_stream = stub_stream([b"x"], streams)
+        self.index(self.ia_cand("item-big", license_id="cc0"))
+        out = M.fetch("ia-item-big", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "download_too_large")
+        self.assertEqual(out["size_bytes"], 60000000)
+        self.assertEqual(out["limit_bytes"], M.MAX_DOWNLOAD_BYTES)
+        self.assertIn("item-big.ogg", out["reason"])  # names the smaller formats it skipped
+        self.assertEqual(streams, [])  # not one byte of a 60 MB file
+        self.assertFalse(self.stage.exists() and any(self.stage.iterdir()))
+
+    def test_slow_download_is_a_result_payload(self):
+        http, _ = stub_http({"archive.org/metadata/item-slow": ia_item(
+            "item-slow", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        M.http_stream = stub_stream([b"x" * 8, b"y" * 8])
+        old = M._monotonic
+        ticks = iter([0.0, 0.0, 99.0])  # start, one block in time, then past the 45 s budget
+        M._monotonic = lambda: next(ticks, 99.0)
+        self.addCleanup(lambda: setattr(M, "_monotonic", old))
+        self.index(self.ia_cand("item-slow", license_id="cc0"))
+        out = M.fetch("ia-item-slow", duration=30, stage_dir=self.stage)
+        self.assertEqual(out["error"], "download_too_slow")
+        self.assertEqual(out["deadline_s"], M.DOWNLOAD_DEADLINE_S)
+        self.assertFalse(self.stage.exists() and any(self.stage.iterdir()))
+
 
 def subprocess_timeout():
     import subprocess
@@ -631,6 +771,45 @@ class DownloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(RuntimeError):
                 M.download("https://cdn.example/big.mp3", Path(tmp) / "t.bin", max_bytes=40)
+
+    def test_the_deadline_is_a_total_budget_not_a_per_read_timeout(self):
+        M.http_stream = stub_stream([b"x" * 8, b"y" * 8])
+        old = M._monotonic
+        ticks = iter([0.0, 0.0, 99.0])
+        M._monotonic = lambda: next(ticks, 99.0)
+        self.addCleanup(lambda: setattr(M, "_monotonic", old))
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(M.DownloadError) as ctx:
+                M.download("https://cdn.example/slow.mp3", Path(tmp) / "t.bin")
+        self.assertEqual(ctx.exception.code, "download_too_slow")
+        self.assertEqual(ctx.exception.detail["deadline_s"], M.DOWNLOAD_DEADLINE_S)
+
+    def test_the_read_timeout_never_outlives_the_download_budget(self):
+        """A bare 90 s socket timeout can outlast a 45 s budget on one stalled read."""
+        seen = []
+
+        def capturing(url, *, timeout=90, referer=None, chunk=1 << 20):
+            seen.append(timeout)
+            yield b"ID3"
+
+        M.http_stream = capturing
+        with tempfile.TemporaryDirectory() as tmp:
+            M.download("https://cdn.example/a.mp3", Path(tmp) / "a.bin")
+            M.download("https://cdn.example/b.mp3", Path(tmp) / "b.bin", deadline_s=7)
+            M.download("https://cdn.example/c.mp3", Path(tmp) / "c.bin", deadline_s=600)
+        self.assertEqual(seen, [M.DOWNLOAD_DEADLINE_S, 7, M.READ_TIMEOUT_S])
+        self.assertLessEqual(M.DOWNLOAD_DEADLINE_S, 60)  # still inside the caller's Bash timeout
+
+    def test_ia_listing_reports_the_size_and_the_smaller_formats(self):
+        files = [{"name": "item-z.ogg", "format": "Ogg Vorbis", "size": "50000000"},
+                 {"name": "item-z.mp3", "format": "VBR MP3", "size": "60000000"}]
+        http, calls = stub_http({"archive.org/metadata/item-z": ia_item("item-z", files=files)})
+        M.http_get = http
+        url, size, others = M.ia_file("item-z")
+        self.assertEqual(url, "https://archive.org/download/item-z/item-z.mp3")
+        self.assertEqual(size, 60000000)  # mp3 wins the format order even when it is bigger
+        self.assertEqual(others, ["item-z.ogg (47 MB)"])
+        self.assertEqual(len(calls), 1)  # one listing feeds both the url and its size
 
 
 class AnalysisTests(unittest.TestCase):
@@ -702,11 +881,14 @@ class AnalysisTests(unittest.TestCase):
 
 
 class MiscTests(unittest.TestCase):
-    def test_default_stage_dir_is_the_mounted_cache_dir(self):
+    def test_default_stage_follows_xdg_and_the_mount_does_not(self):
         old = os.environ.get("XDG_CACHE_HOME")
         os.environ["XDG_CACHE_HOME"] = "/tmp/xdg-test"
         try:
             self.assertEqual(str(M.default_stage()), "/tmp/xdg-test/promo-video/music")
+            # the plugin's mount is pinned to $HOME/.cache: `fetch` prints a mount_hint instead
+            # of the two silently disagreeing (M3: keep XDG, warn).
+            self.assertEqual(M.mounted_stage(), Path.home() / ".cache" / "promo-video" / "music")
         finally:
             if old is None:
                 os.environ.pop("XDG_CACHE_HOME", None)

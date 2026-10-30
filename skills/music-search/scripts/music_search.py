@@ -7,19 +7,14 @@ python3 stdlib only, plus the host's ffmpeg/ffprobe.
                         [--min-s N] [--limit N] [--refresh]
   music_search.py fetch <candidate-id> --duration S [--stage-dir DIR]
 
-The containers mount $XDG_CACHE_HOME/promo-video/music read-only at /music, so there is no
+The exec container mounts $HOME/.cache/promo-video/music read-only at /music, so there is no
 copy step: `fetch` writes <stage>/<id>.<ext> + <stage>/<id>.json and prints the spec.music
-JSON with path_in_container=/music/<file>.
+JSON with path_in_container=/music/<file> (`mount_hint` when the stage is another directory).
 
 `search` indexes every cleared candidate on disk; `fetch` takes only such an id and re-reads
 the source's own structured record (archive.org /metadata, ccMixter query, Openverse audio
 record) before it downloads a byte - a bare file URL carries no license, and an HTML landing
-page is not structured evidence.
-
-Policy (never send `mix` something you cannot defend): allow = CC0 / PDM / PD original
-recording; attribution = CC BY; deny = BY-SA (sync-to-picture is an adaptation, so the whole
-video would have to be BY-SA), any NC (a promo is commercial), any ND (we trim), unknown
-licenses, PD with a third-party recording, and every Freesound-hosted file."""
+page is not structured evidence. Licenses: see `policy` and skills/music-search/SKILL.md."""
 
 import argparse
 import hashlib
@@ -31,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date
@@ -46,13 +42,18 @@ PD_RECORDING_YEARS = 95  # 17 U.S.C. 1401: first publication + 95y (1923-1946 ra
 START_PAD_S = 2.0  # the window keeps 1 s of head and 1 s of tail: refuse anything shorter
 START_OFFSET_S = 3.0  # fixed lead-in, past the encoder's own attack and any fade-in
 MAX_LRA = 32.0  # LU; above this the track's texture moves too much to sit under a whole video
+MAX_DOWNLOAD_BYTES = 40 << 20  # the caller has 60 s and IA serves ~1 MB/s: 40 MB is the ceiling
+DOWNLOAD_DEADLINE_S = 45.0  # total wall budget for a download; probe+analyze+gate need the rest
+READ_TIMEOUT_S = 90  # per-read socket timeout, clamped to what is left of the budget in download()
+RISK_RANK = {"low": 0, "medium": 1, "high": 2}  # tie-break: provenance beats a claim magnet
+CONTENT_ID_DISPUTE = (
+    "Content ID claim? Keep <id>.json - license_evidence, source_url, sha256 are the whole "
+    "counter-notice: dispute with that record, never re-upload or re-download around it.")
 AUDIO_EXT = {"mp3": "mp3", "ogg": "ogg", "flac": "flac", "wav": "wav", "m4a": "m4a", "mp4": "m4a"}
-# Licenses doc s7: only the rights-holder's own upload carries a usable license. `mirror`
-# alone is a common track name, so only the explicit claims are markers.
+# Licenses doc s7: a rights field on a reupload proves nothing; "mirror" is a track name, not a claim.
 REUPLOAD_RE = re.compile(r"\bre-?upload|\bno copyright(?: infringement)? intended\b|\bnot mine\b"
                          r"|\bripped\b|\bpromoted upload\b|\bfull album upload\b", re.I)
-# Vibe -> extra tags. Source tags are the only stable ranker (audio features flip top-1
-# between windows: see the vibe report), so ranking is a tag intersection, nothing else.
+# Vibe -> extra tags, the only stable ranker (audio features flip top-1: see the vibe report).
 VIBES = {
     "ambient": ["ambient", "atmosphere", "atmospheric", "drone", "soundscape", "relaxing"],
     "calm": ["calm", "chill", "chillout", "soft", "mellow", "peaceful", "downtempo", "relaxing"],
@@ -61,8 +62,8 @@ VIBES = {
     "playful": ["playful", "upbeat", "happy", "fun", "quirky", "bouncy", "energetic"],
     "elegant": ["elegant", "piano", "classical", "minimal", "acoustic", "gentle"],
 }
-# License signatures, most specific first: a bare "licenses/by" is a prefix of by-sa, by-nc,
-# by-nd, so the long forms must win the scan.
+# License signatures, most specific first: a bare "licenses/by" prefixes by-sa/by-nc/by-nd, so scan
+# the long forms first.
 SIGNATURES = {
     "by-nc-nd": ("by-nc-nd", "byncnd", "by_nc_nd"),
     "by-nc-sa": ("by-nc-sa", "byncsa", "by_nc_sa"),
@@ -85,11 +86,18 @@ CANON_URL = {"cc0": "https://creativecommons.org/publicdomain/zero/1.0/",
 
 # ---- io
 
-def http_get(url, *, timeout=25, tries=3):
-    """The single network door for JSON/text (tests replace this).
+class HttpStatusError(RuntimeError):
+    """A failed GET that remembers why: the status code, or the exception that killed it."""
 
-    One shot is not enough: api.openverse.org times out behind Cloudflare and archive.org's
-    search backend returns transient 200s with an error body."""
+    def __init__(self, url, tries, err):
+        super().__init__(f"GET {url} failed after {tries} tries: {err}")
+        self.status, self.kind = getattr(err, "code", None), type(err).__name__
+
+def http_get(url, *, timeout=25, tries=3):
+    """The single network door for JSON/text (tests replace this). One shot is not enough:
+    api.openverse.org times out behind Cloudflare and archive.org's search backend returns
+    transient 200s with an error body. A 429/503 is a wait, so its Retry-After wins over our
+    own backoff (capped: one call has 60 s in total)."""
     err, headers = None, {"User-Agent": UA, "Accept": "*/*"}
     for i in range(tries):
         try:
@@ -99,8 +107,16 @@ def http_get(url, *, timeout=25, tries=3):
         except Exception as exc:  # noqa: BLE001 - retry anything transient
             err = exc
             if i + 1 < tries:
-                time.sleep(1.5 * (i + 1))
-    raise RuntimeError(f"GET {url} failed after {tries} tries: {err}")
+                asked = _retry_after(exc) if isinstance(exc, urllib.error.HTTPError) else None
+                time.sleep(asked if asked is not None else 1.5 * (i + 1))
+    raise HttpStatusError(url, tries, err)
+
+def _retry_after(exc, cap=10.0):
+    """-> seconds the origin asked us to wait, or None. Capped: one call has 60 s in total."""
+    try:
+        return min(max(float((exc.headers or {}).get("Retry-After")), 0.0), cap)
+    except (AttributeError, TypeError, ValueError):
+        return None
 
 def get_json(url, *, tries=3, **kw):
     """archive.org answers 200 with {"error": "[BACKEND_ERROR] ..."} while Elasticsearch is
@@ -120,7 +136,13 @@ def cache_root():
     return Path(base) / "promo-video"
 
 def default_stage():
+    """`$XDG_CACHE_HOME/promo-video/music`; `fetch` prints a `mount_hint` when `/music` cannot
+    see it: a silent miss costs a render, a hint costs one flag."""
     return cache_root() / "music"
+
+def mounted_stage():
+    """The host path `.claude-plugin/plugin.json` mounts read-only at /music (not XDG-driven)."""
+    return Path.home() / ".cache" / "promo-video" / "music"
 
 def cached(key, producer, *, refresh=False, ttl=86400):
     """On-disk cache: the Openverse anon quota is 20/min and 200/day."""
@@ -197,8 +219,7 @@ def policy(cand, *, today=None):
         verdict, reason = "deny", "reupload_or_mirror"
         note = "Origin is a reupload/mirror channel, not the rights-holder: refuse."
     elif "freesound" in host or str(cand.get("provider") or "").lower() == "freesound":
-        # Freesound's API ToS forbids using its content outside the Freesound app; Openverse
-        # audio is ~100% Freesound previews on cdn.freesound.org, so skip them.
+        # Freesound ToS forbids use outside their app; Openverse audio is ~100% their previews.
         verdict, reason = "deny", "freesound_preview_tos"
         note = "Freesound ToS: API content may not be used outside their app."
     elif lic == "cc0":
@@ -244,15 +265,19 @@ def policy(cand, *, today=None):
         verdict, reason = "deny", "license_unknown"
         note = "No usable license string at the origin: refuse."
     out.update(verdict=verdict, verdict_reason=reason, jurisdiction_note=note)
-    out["content_id_risk"] = content_id_risk(cand, lic, year, cutoff)
+    out["content_id_risk"], out["content_id_reasons"] = content_id_assessment(cand, lic, year, cutoff)
     return out
 
-def content_id_risk(cand, lic, year, cutoff):
+def content_id_assessment(cand, lic, year, cutoff):
+    """-> (level, reasons). A bare level cannot be argued with; the reasons are the brief."""
     if lic in ("cc0", "pdm") and cand.get("source") in ("ia", "ccmixter"):
-        return "low"
+        return "low", ["cc0_or_pdm_from_rights_holder"]
     if lic == "pd" or (year and int(year) < cutoff):
-        return "high"  # PD-era discs reissued by a label are the classic Content ID claim
-    return "medium"
+        # the remaster of a PD-era disc asserts a new phonogram right: the classic claim
+        return "high", ["pd_era_disc_reissued_by_a_label"]
+    if lic in LICENSE_NAME:
+        return "medium", ["cc_by_without_credit_is_an_easy_claim_target"]
+    return "medium", ["cc0_or_pdm_via_an_aggregator_not_the_rights_holder"]
 
 def attribution_block(track, changes="trimmed and synced to video, no other edits"):
     """CC BY 4.0 s3(a)(1)(A)-(E): creator, copyright notice, license name+URI, material URI,
@@ -304,7 +329,9 @@ def search_openverse(vibe, limit, *, refresh=False):
     # license=pdm returns 0 audio items on Openverse (live-check), so PDM rides in from IA.
     params = {"q": vibe, "license": "cc0,by", "page_size": str(min(20, max(limit * 4, 10)))}
     url = "https://api.openverse.org/v1/audio/?" + urllib.parse.urlencode(params)
-    data = cached(f"openverse-{vibe}-{limit}", lambda: get_json(url), refresh=refresh)
+    # 10 s a shot: 3 shots + backoff stay inside the caller's 60 s; the cache hides a slow read.
+    data = cached(f"openverse-{vibe}-{limit}",
+                  lambda: get_json(url, timeout=10), refresh=refresh)
     out = []
     for r in data.get("results") or []:
         file_url = r.get("url") or ""
@@ -325,8 +352,7 @@ def search_openverse(vibe, limit, *, refresh=False):
 
 def search_ia(vibe, limit, *, refresh=False):
     # licenseurl is uploader-set, so it is only a claim: fetch re-verifies at /metadata/.
-    # Wildcards with a slash (`*licenses/by*`) make archive.org's ES answer BACKEND_ERROR;
-    # `*by*` is the same net and stays up.
+    # A slash wildcard (`*licenses/by*`) makes archive.org's ES answer BACKEND_ERROR; `*by*` does not.
     words = " OR ".join(w for w in re.findall(r"[a-z0-9]+", vibe.lower()) if len(w) > 2) or vibe
     params = [("q", f"({words}) AND mediatype:audio AND "
                     "(licenseurl:*publicdomain* OR licenseurl:*by*)"),
@@ -348,8 +374,7 @@ def search_ia(vibe, limit, *, refresh=False):
             license_url=d.get("licenseurl") or license_url_for(lic, ver),
             source_url=f"https://archive.org/details/{ident}",
             file_url="",  # resolved per item in fetch: a 1 h item can hold 145 MB files
-            # archive.org's `year`/`date` is the uploader's own field, so it is only a claim:
-            # fetch re-reads the item metadata and sets published_year_source.
+            # archive.org's `year`/`date` is the uploader's own field: fetch re-reads the item metadata.
             published_year_source="uploader" if year else "",
             reupload=_reupload(d.get("title"), " ".join(str(s) for s in subject)),
             original_transfer=not _remastered(" ".join(str(x) for x in (d.get("title"), subject))),
@@ -390,9 +415,8 @@ def _ccm_cand(item):
 SEARCHERS = {"openverse": search_openverse, "ia": search_ia, "ccmixter": search_ccmixter}
 
 def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None):
-    """Rank candidates by tag overlap, then drop what the policy denies.
-
-    No fallback track: an empty pool is a valid answer and the mix stays silent."""
+    """Rank candidates by tag overlap, then drop what the policy denies. No fallback track: an
+    empty pool is a valid answer and the mix stays silent."""
     tags = vibe_tags(vibe)
     notes, raw = [], []
     for name in ([source] if source else SOURCES):
@@ -401,7 +425,10 @@ def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None):
             notes.append(f"{name}:{len(got)}")
             raw += got
         except Exception as exc:  # noqa: BLE001 - a dead source is not a dead search
-            notes.append(f"{name}:error:{type(exc).__name__}")
+            # "HTTP429" (wait) and "connection reset" (dead) are not the same story
+            status = getattr(exc, "status", None)
+            why = f"HTTP{status}" if status else getattr(exc, "kind", type(exc).__name__)
+            notes.append(f"{name}:error:{why}")
     kept, skipped = [], {}
     for cand in raw:
         cand.update(policy(cand, today=today))
@@ -417,7 +444,9 @@ def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None):
         cand["bpm"] = cand.get("bpm") or 0
         kept.append(cand)
     seen, unique = set(), []
-    for cand in sorted(kept, key=lambda c: (-c["vibe_score"], c["source"], c["title"].lower())):
+    # Vibe first, then provenance: at equal overlap CC0/PDM from the rights holder beats CC BY.
+    for cand in sorted(kept, key=lambda c: (-c["vibe_score"], RISK_RANK.get(c["content_id_risk"], 9),
+                                            c["source"], c["title"].lower())):
         key = (cand["title"].lower(), cand["creator"].lower())
         if key not in seen:
             seen.add(key)
@@ -455,8 +484,8 @@ def remember(cands):
     index_path().write_text(json.dumps(idx, indent=1))
 
 def resolve_candidate(target):
-    """`fetch` takes a candidate id from a prior `search`: only the index knows what the
-    aggregator claimed, which source record to re-read and which file to pull."""
+    """`fetch` takes a candidate id from a prior `search`: only the index knows what the aggregator
+    claimed, which source record to re-read and which file to pull."""
     return dict(load_index().get(str(target).strip()) or {})
 
 # ---- verify at the origin
@@ -473,8 +502,7 @@ def verify_at_origin(cand):
             raw = meta.get("licenseurl") or meta.get("license") or ""
             lic, ver = parse_license(raw)
             out = _verified(raw, lic, ver, raw, f'archive.org metadata licenseurl="{raw}"', cand)
-            # Cross-check the year: the search result's `year` is the uploader's field, the
-            # item metadata is the same claim in a second place - disagree, and we refuse.
+            # Cross-check the year: uploader `year` vs item metadata - disagree, and we refuse.
             year = _year(meta.get("date") or meta.get("year") or meta.get("publicdate"))
             if out.get("ok") and year and cand.get("published_year") and int(cand["published_year"]) != year:
                 return {"ok": False, "detail": f"year conflict: search said {cand['published_year']}, metadata says {year}"}
@@ -540,10 +568,7 @@ def probe(path):
 
 def analyze(path, *, start=0.0, duration=None):
     """One ffmpeg pass over the picked window only -> loudness + spectral centroid/rolloff.
-
-    Only that window reaches the mix, so only it is worth gating (and a 1 h item stays cheap).
-    Gating on centroid/rolloff, not flatness: flatness ranked the noisiest fixture lowest
-    (0.0031), so it cannot separate a hiss-dominated transfer from a quiet recording."""
+    Only that window reaches the mix, so only it is worth gating (a 1 h item stays cheap)."""
     cmd = [FFMPEG, "-hide_banner", "-nostats", "-ss", f"{max(0.0, start):.3f}"]
     if duration:
         cmd += ["-t", f"{duration:.3f}"]
@@ -596,8 +621,7 @@ def gate(analysis):
         return "lra_too_high"
     centroid = _median(f["centroid"] for f in frames)
     rolloff = _median(f["rolloff"] for f in frames)
-    # Hiss/cicadas put the rolloff near Nyquist; a 78rpm transfer without noise reduction sits
-    # low with almost no energy above 2 kHz.
+    # Hiss/cicadas put rolloff near Nyquist; a 78rpm transfer without cleanup sits low with no energy.
     if rolloff > 12000.0 or centroid > 4000.0:
         return "noise_dominated"
     if centroid < 250.0 and rolloff < 600.0:
@@ -605,15 +629,22 @@ def gate(analysis):
     return None
 
 def pick_start(total_s, want_s):
-    """Fixed lead-in, clamped so the window keeps 1 s of head and 1 s of tail.
-
-    A plain offset beats scoring every window of a 1 h item, and 3 s still lands on musical
-    material, so the mix engine's fade-in rises out of a note."""
+    """Fixed lead-in, clamped so the window keeps 1 s of head and 1 s of tail: a plain offset
+    beats scoring every window of a 1 h item, and 3 s still lands on musical material."""
     return round(min(START_OFFSET_S, max(1.0, total_s - want_s - 1.0)), 2)
 
 # ---- fetch
 
-def http_stream(url, *, timeout=90, referer=None, chunk=1 << 20):
+_monotonic = time.monotonic  # one seam for the download deadline (tests replace it)
+
+class DownloadError(RuntimeError):
+    """A download that must surface as a result payload, not a traceback."""
+
+    def __init__(self, code, reason, **detail):
+        super().__init__(reason)
+        self.code, self.detail = code, detail
+
+def http_stream(url, *, timeout=READ_TIMEOUT_S, referer=None, chunk=1 << 20):
     """Single network door for downloads: yield the body in chunks, never buffer it all."""
     headers = {"User-Agent": UA, "Accept": "*/*"}
     if referer:
@@ -626,34 +657,50 @@ def http_stream(url, *, timeout=90, referer=None, chunk=1 << 20):
                 return
             yield block
 
-def download(url, dest, *, referer=None, max_bytes=250 * 1024 * 1024):
-    """Stream to disk, hashing as we go: a 145 MB archive file never sits in memory."""
-    digest, size = hashlib.sha256(), 0
+def download(url, dest, *, referer=None, max_bytes=250 * 1024 * 1024,
+             deadline_s=DOWNLOAD_DEADLINE_S):
+    """Stream to disk, hashing as we go: a 145 MB archive file never sits in memory.
+    deadline_s is a *total* wall budget, not a per-read socket timeout: at IA's ~1 MB/s the
+    caller's 60 s Bash timeout would kill a slow file mid-flight, so it fails as a result.
+    The socket timeout is clamped to the budget too: a bare READ_TIMEOUT_S read could otherwise
+    block past the caller's 60 s on its own (the loop re-checks the budget after every block)."""
+    digest, size, started = hashlib.sha256(), 0, _monotonic()
     with Path(dest).open("wb") as fh:
-        for block in http_stream(url, referer=referer):
+        for block in http_stream(url, referer=referer,
+                                 timeout=max(1.0, min(READ_TIMEOUT_S, deadline_s))):
             size += len(block)
             if size > max_bytes:
-                raise RuntimeError(f"file larger than {max_bytes // 1024 // 1024} MB: {url}")
+                raise DownloadError("download_too_large", f"stream passed {max_bytes >> 20} MB: {url}",
+                                    bytes_downloaded=size, limit_bytes=max_bytes)
+            if _monotonic() - started > deadline_s:
+                raise DownloadError("download_too_slow",
+                                    f"fewer than {size >> 10} KB in {deadline_s:g} s: {url}",
+                                    bytes_downloaded=size, deadline_s=deadline_s)
             digest.update(block)
             fh.write(block)
     return size, digest.hexdigest()
 
-def ia_file_url(identifier):
-    """One item can hold a 1 h, 145 MB file; pick the smallest mp3 (bed quality is fine)."""
+def ia_file(identifier):
+    """-> (url, size_bytes, other_formats). One item can hold a 1 h, 145 MB file, so the smallest
+    mp3 wins and its size comes from the same listing: `fetch` refuses an oversized file before
+    the first byte, not 40 s into the stream."""
     files = [f for f in (get_json(f"https://archive.org/metadata/{identifier}").get("files") or [])
              if str(f.get("format", "")).lower() in ("vbr mp3", "128kbps mp3", "mp3", "ogg vorbis")
              or str(f.get("name", "")).lower().endswith((".mp3", ".ogg", ".oga"))]
     if not files:
-        return ""
+        return "", 0, []
     order = {"mp3": 0, "ogg": 1}
     files.sort(key=lambda f: (order.get(str(f.get("name", "")).rsplit(".", 1)[-1].lower(), 9),
                               int(f.get("size") or 0)))
-    return f"https://archive.org/download/{identifier}/{urllib.parse.quote(files[0]['name'])}"
-
+    pick = files[0]
+    url = f"https://archive.org/download/{identifier}/{urllib.parse.quote(pick['name'])}"
+    others = [f"{f['name']} ({int(f.get('size') or 0) >> 20} MB)" for f in files[1:4]]
+    return url, int(pick.get("size") or 0), others
 def resolve_file_url(cand):
+    """-> (url, size_bytes, other_formats); size 0 means the source record listed no size."""
     if cand.get("source") == "ia" and not cand.get("file_url"):
-        cand["file_url"] = ia_file_url(cand.get("ia_id") or "")
-    return cand.get("file_url") or ""
+        return ia_file(cand.get("ia_id") or "")
+    return cand.get("file_url") or "", 0, []
 
 def _denied(cand):
     return {"error": "license_denied", "id": cand["id"], "verdict": cand["verdict"],
@@ -666,9 +713,7 @@ def fetch(target, *, duration, stage_dir=None, today=None):
     if not cand.get("id"):
         return {"error": "unknown_candidate",
                 "reason": f"{target} is not in the candidate index: run `search`, then use its id"}
-    # Refuse on what the aggregator already proves (Freesound ToS, reupload, NC/ND/SA) before
-    # spending a request on the origin record, then refuse again on the origin's own field:
-    # the source wins, so a stale label can only tighten the verdict.
+    # Refuse on what the aggregator proves (Freesound/NC/ND/SA/reupload), then on the origin record.
     cand.update(policy(cand, today=today))
     if cand["verdict"] not in OK_VERDICTS and cand["verdict_reason"] in FATAL_REASONS:
         return _denied(cand)
@@ -681,17 +726,25 @@ def fetch(target, *, duration, stage_dir=None, today=None):
     cand.update(policy(cand, today=today))
     if cand["verdict"] not in OK_VERDICTS:
         return _denied(cand)
-    file_url = resolve_file_url(cand)
+    file_url, size_bytes, other_formats = resolve_file_url(cand)
     if not file_url:
         return {"error": "no_file_url", "id": cand["id"],
                 "reason": "source exposed no downloadable audio file"}
+    if size_bytes > MAX_DOWNLOAD_BYTES:  # before the first byte: 40 MB already costs 60 s
+        return {"error": "download_too_large", "id": cand["id"], "size_bytes": size_bytes,
+                "limit_bytes": MAX_DOWNLOAD_BYTES,
+                "reason": f"smallest audio file is {size_bytes >> 20} MB (cap "
+                          f"{MAX_DOWNLOAD_BYTES >> 20} MB for a 60 s call); other audio files on "
+                          f"the item: {'; '.join(other_formats) or 'none'}"}
     stage.mkdir(parents=True, exist_ok=True)
     tmp = Path(tempfile.mkdtemp(prefix="music-search-"))
     try:
         raw = tmp / "track.bin"
         try:
-            _, sha = download(file_url, raw,
+            _, sha = download(file_url, raw, deadline_s=DOWNLOAD_DEADLINE_S,
                               referer=cand.get("source_url") if cand.get("source") == "ccmixter" else None)
+        except DownloadError as exc:  # the cap and the wall clock are results, not crashes
+            return {"id": cand["id"], **exc.detail, "error": exc.code, "reason": str(exc)}
         except Exception as exc:  # noqa: BLE001 - a dead file is a result, not a crash
             return {"error": "download_failed", "id": cand["id"], "reason": str(exc)}
         try:  # ffprobe/ffmpeg trouble is a result too, never a traceback
@@ -719,6 +772,8 @@ def fetch(target, *, duration, stage_dir=None, today=None):
             "verdict": cand["verdict"], "verdict_reason": cand["verdict_reason"],
             "license_evidence": cand.get("license_evidence", ""), "start_s": start,
             "content_id_risk": cand["content_id_risk"], "jurisdiction_note": cand["jurisdiction_note"],
+            "content_id_reasons": cand.get("content_id_reasons") or [],
+            "content_id_dispute": CONTENT_ID_DISPUTE,
             "recording_is_original_transfer": cand["recording_is_original_transfer"],
             "duration_s": round(total, 3), "mood": cand.get("mood") or [],
             "bpm": cand.get("bpm") or 0, "staged_file": str(dest), "stage_dir": str(stage),
@@ -728,9 +783,15 @@ def fetch(target, *, duration, stage_dir=None, today=None):
         shutil.rmtree(tmp, ignore_errors=True)
     payload = {k: record[k] for k in (
         "path_in_container", "start_s", "title", "creator", "license", "license_url",
-        "source_url", "id", "duration_s", "verdict", "content_id_risk", "sha256")}
+        "source_url", "id", "duration_s", "verdict", "content_id_risk", "content_id_reasons",
+        "sha256")}
     payload["attribution"] = record["attribution_text"]
+    payload["content_id_dispute"] = CONTENT_ID_DISPUTE
     payload["sidecar"] = str(sidecar)
+    if stage.resolve() != mounted_stage().resolve():
+        payload["mount_hint"] = (
+            f"staged in {stage}, but /music only sees {mounted_stage()} - pass "
+            f'--stage-dir "{mounted_stage()}" or the render fails with music_path_missing')
     return payload
 
 # ---- misc
