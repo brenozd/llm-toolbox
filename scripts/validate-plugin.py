@@ -5,6 +5,71 @@ import json
 import sys
 from pathlib import Path
 
+# A `-exec` entry is the same image as its base entry, only allowed to run
+# commands: it sets PROMO_ALLOW_EXEC=1 and drops the network.
+EXEC_SUFFIX = "-exec"
+EXEC_FLAG = ("-e", "PROMO_ALLOW_EXEC=1")
+EXEC_NETWORK = ("--network", "none")
+# The only other args allowed to differ between an entry and its `-exec` twin:
+# the base has network (add-host) and the exec twin needs SETGID to drop privs.
+EXEC_ONLY_ARGS = (EXEC_FLAG, EXEC_NETWORK, ("--cap-add", "SETGID"))
+BASE_ONLY_ARGS = (("--add-host=host.docker.internal:host-gateway",),)
+
+
+def _has_arg(tokens: list[str], arg: tuple[str, ...]) -> bool:
+    """True if `arg` is in `tokens`, as tokens or as its joined `-e=X` form."""
+    return _strip_arg(tokens, arg) is not None
+
+
+def _strip_arg(tokens: list[str], arg: tuple[str, ...]) -> list[str] | None:
+    """Drop one occurrence of `arg` from `tokens`; None if absent."""
+    n = len(arg)
+    for i in range(len(tokens) - n + 1):
+        if tuple(tokens[i:i + n]) == arg:
+            return tokens[:i] + tokens[i + n:]
+    joined = "=".join(arg)
+    if joined in tokens:
+        i = tokens.index(joined)
+        return tokens[:i] + tokens[i + 1:]
+    return None
+
+
+def _check_exec_twin(name: str, base_name: str, base_declared: bool,
+                     exec_args: list[str], base_args: list[str]) -> list[str]:
+    """Check the invariant: same image, PROMO_ALLOW_EXEC=1 and --network none."""
+    errors = []
+    if not base_declared:
+        errors.append(f"  ✗ MCP server '{name}' has no base entry '{base_name}'")
+    if not _has_arg(exec_args, EXEC_FLAG):
+        errors.append(f"  ✗ MCP server '{name}' missing '-e PROMO_ALLOW_EXEC=1'")
+    if not _has_arg(exec_args, EXEC_NETWORK):
+        errors.append(f"  ✗ MCP server '{name}' missing '--network none'")
+
+    exec_image = exec_args[-1] if exec_args else None
+    base_image = base_args[-1] if base_args else None
+    if exec_image != base_image:
+        errors.append(f"  ✗ MCP server '{name}' image '{exec_image}' != "
+                      f"'{base_name}' image '{base_image}'")
+
+    exec_rest, base_rest = list(exec_args), list(base_args)
+    for arg in EXEC_ONLY_ARGS:
+        stripped = _strip_arg(exec_rest, arg)
+        if stripped is not None:
+            exec_rest = stripped
+    for arg in BASE_ONLY_ARGS:
+        stripped = _strip_arg(base_rest, arg)
+        if stripped is not None:
+            base_rest = stripped
+    extra = [a for a in exec_rest if a not in base_rest]
+    missing = [a for a in base_rest if a not in exec_rest]
+    if extra or missing:
+        errors.append(f"  ✗ MCP server '{name}' args drift from '{base_name}': "
+                      f"extra={extra} missing={missing}")
+
+    if not errors:
+        errors.append(f"  ✓ MCP server '{name}' is '{base_name}' + PROMO_ALLOW_EXEC=1, no network")
+    return errors
+
 
 def check_yaml_frontmatter(md_path: Path, expected_name: str) -> list[str]:
     """Validate YAML frontmatter: exists, has required keys, name matches dir."""
@@ -83,13 +148,23 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
 
     # Check MCP servers
     mcp_servers = plugin_data.get("mcpServers", {})
-    for server_name in mcp_servers.keys():
+    for server_name, entry in mcp_servers.items():
         # the `-exec` entry runs the same image with PROMO_ALLOW_EXEC=1: one directory, two entries
-        server_path = servers_dir / server_name.removesuffix("-exec")
+        is_exec = server_name.endswith(EXEC_SUFFIX)
+        dir_name = server_name[:-len(EXEC_SUFFIX)] if is_exec else server_name
+        server_path = servers_dir / dir_name
         if not server_path.is_dir():
             errors.append(f"  ✗ MCP server '{server_name}' not found in servers/")
         else:
             errors.append(f"  ✓ MCP server '{server_name}' exists")
+        if is_exec:
+            errors.extend(_check_exec_twin(
+                server_name, dir_name, dir_name in mcp_servers,
+                [str(a) for a in entry.get("args", [])],
+                [str(a) for a in mcp_servers.get(dir_name, {}).get("args", [])],
+            ))
+        elif any("PROMO_ALLOW_EXEC" in str(a) for a in entry.get("args", [])):
+            errors.append(f"  ✗ MCP server '{server_name}' must not set PROMO_ALLOW_EXEC")
 
     # Check referenced skills (from description parsing)
     desc = plugin_data.get("description", "")
