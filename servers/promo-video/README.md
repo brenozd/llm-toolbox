@@ -1,7 +1,7 @@
 # promo-video MCP
 
 Builds a captioned promo video (MP4 + SRT + poster) from a repo, with every claim tied to a capture or `file:line`, plus an offline voice-over.
-Works for web, CLI and GUI projects. Pair it with [`skills/promo-video`](../../skills/promo-video/).
+Works for web, CLI and GUI projects. Pair it with [`skills/promo-video`](../../skills/promo-video/). An `image` scene also accepts `video` (mp4/webm/gif, e.g. recorded by [`skills/screencapture`](../../skills/screencapture/)) in place of a still.
 
 ## Tools
 `preflight`, `scan_repo`, `brand_tokens`, `extract_code`, `capture_web`, `capture_terminal`*, `capture_terminal_session`*, `capture_gui`*, `validate_spec`, `narrate`, `stills`, `audit_layout`, `reframe`, `render` + `render_status`, `verify`.

@@ -73,10 +73,9 @@ function seek(f){
   el.querySelectorAll('.step').forEach(r=>{r.style.visibility=l>=(+r.dataset.d)?'visible':'hidden'});
   const vb=el.querySelector('[data-vmap]');
   if(vb){const m=JSON.parse(vb.dataset.vmap),fr=vb.querySelectorAll('img'),k=m[Math.max(0,Math.min(m.length-1,Math.floor(l)))];fr.forEach((x,j)=>{x.style.display=j===k?'block':'none'})}
-  const im=el.querySelector('img[data-z]');
-  if(im){const q=(window.__ZOOM||{})[el.id];
-   if(q){const zz=M==='still'?q.z:1+(q.z-1)*ease(cl(l/(s.dur*(M==='lively'?0.7:0.25))));   /* origin sits on the pivot, so it holds still while z grows */
-    im.style.transform='translate('+(-q.ox)+'px,'+(-q.oy)+'px) scale('+zz+')'}}
+  const q=(window.__ZOOM||{})[el.id];
+  if(q){const zz=M==='still'?q.z:1+(q.z-1)*ease(cl(l/(s.dur*(M==='lively'?0.7:0.25))));   /* origin sits on the pivot, so it holds still while z grows */
+   el.querySelectorAll('img[data-z]').forEach(im=>{im.style.transform='translate('+(-q.ox)+'px,'+(-q.oy)+'px) scale('+zz+')'})}
  });
 }
 """
@@ -137,8 +136,8 @@ def _cls(sc: dict) -> str:
     return 'class="c center"' if sc.get("align") == "center" else 'class="c"'
 
 
-def _terminal_video(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, aspect: str = "16:9") -> str:
-    """A real session recording, one still per scene frame, inside a fake window title bar."""
+def _clip(sc: dict, dur: int) -> tuple[dict, list[str]]:
+    """Probe a scene's clip (mp4, webm or gif) and decompose it into at most one still per scene frame."""
     pr = _probe(str(safe_path(sc["video"])))
     n = max(1, min(dur, round(pr["duration"] * pr["fps"])))
     try:
@@ -149,6 +148,12 @@ def _terminal_video(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, 
         frames = [str(safe_path(sc["poster"]))]
     if not frames:
         raise RuntimeError(f"could not read frames from {sc['video']}")
+    return pr, frames
+
+
+def _terminal_video(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, aspect: str = "16:9") -> str:
+    """A real session recording, one still per scene frame, inside a fake window title bar."""
+    pr, frames = _clip(sc, dur)
     s = _box_scale(w, h, aspect, bool(sc.get("heading")), pr["width"], pr["height"])
     size = f"width:{round(pr['width'] * s)}px;height:{round(pr['height'] * s)}px"
     imgs = "".join(f'<img src="{_img_uri(p)}" style="display:{"block" if i == 0 else "none"};{size}">'
@@ -184,7 +189,14 @@ def _scene(sc: dict, fps: int, dur: int, w: int = 1920, h: int = 1080, aspect: s
         # cover + a zoom that keeps scene.focus centred (layout.zoom_plan); no letterbox bars
         z = f' data-z="{sc.get("zoom", 1.6)}"' if sc.get("focus") else ""
         head = f'<h2 class="rv" data-d="0">{E(sc["heading"])}</h2>' if sc.get("heading") else ""
-        body = f'<div {_cls(sc)}>{head}<div class="frame"><img src="{_img_uri(sc["image"])}"{z}></div></div>'
+        if sc.get("video"):  # a screen recording / gif: same cover + zoom, one still per scene frame
+            pr, frames = _clip(sc, dur)
+            imgs = "".join(f'<img src="{_img_uri(p)}"{z} style="display:{"block" if i == 0 else "none"}">'
+                           for i, p in enumerate(frames))
+            vm = E(json.dumps(_vmap(len(frames), dur, pr["fps"], fps)))
+            body = f'<div {_cls(sc)}>{head}<div class="frame" data-vmap="{vm}">{imgs}</div></div>'
+        else:
+            body = f'<div {_cls(sc)}>{head}<div class="frame"><img src="{_img_uri(sc["image"])}"{z}></div></div>'
     cap = f'<div class="cap">{E(sc["caption"])}</div>' if sc.get("caption") else ""
     return f'<section class="scene" id="{E(sc["id"])}">{body}{cap}</section>'
 
@@ -228,9 +240,9 @@ MEASURE_IMG_JS = """() => {const s=[...document.querySelectorAll('.scene')];
  return m}"""
 
 # Apply the planned cover box / pivot to each image, and hand the animation its numbers.
-FIT_JS = """(items) => {items.forEach(([id,st])=>{const im=document.querySelector('#'+CSS.escape(id)+' img[data-z]');
- if(!im)return; Object.assign(im.style,{left:st.x+'px',top:st.y+'px',width:st.w+'px',height:st.h+'px',
-  transformOrigin:st.ox+'px '+st.oy+'px'})},0)}"""
+FIT_JS = """(items) => {items.forEach(([id,st])=>{document.querySelectorAll('#'+CSS.escape(id)+' img[data-z]').forEach(im=>
+  Object.assign(im.style,{left:st.x+'px',top:st.y+'px',width:st.w+'px',height:st.h+'px',
+  transformOrigin:st.ox+'px '+st.oy+'px'}))})}"""
 
 
 def _zoom_map(pg, spec: dict) -> dict:
@@ -468,6 +480,15 @@ def start(h: str, quality: str) -> str:
     return jid
 
 
+def _duration(j: dict) -> float:
+    """Container duration; a gif may not carry one, then frames / fps."""
+    try:
+        return float(j["format"]["duration"])
+    except (KeyError, TypeError, ValueError):
+        a, b = j["streams"][0]["r_frame_rate"].split("/")
+        return int(j["streams"][0]["nb_frames"]) * int(b) / int(a)
+
+
 def _probe(video: str) -> dict:
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                         "stream=width,height,r_frame_rate,nb_frames:format=duration", "-of", "json", video],
@@ -475,7 +496,7 @@ def _probe(video: str) -> dict:
     j = json.loads(r.stdout)
     a, b = j["streams"][0]["r_frame_rate"].split("/")
     return {"width": j["streams"][0]["width"], "height": j["streams"][0]["height"],
-            "fps": int(a) / int(b), "duration": float(j["format"]["duration"])}
+            "fps": int(a) / int(b), "duration": _duration(j)}
 
 
 def _probe_audio(video: str) -> dict | None:

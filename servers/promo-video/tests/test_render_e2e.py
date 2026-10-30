@@ -89,3 +89,31 @@ def test_a_music_bed_is_not_unexpected_audio(work):
     assert v["audio"] is not None and v["narrated"] is False
     assert "unexpected_audio" not in codes(v["findings"]), v["findings"]
     assert v["loudness"]["integrated_lufs"] is not None
+
+
+def _clip(work, name):
+    out = work / name
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=d=2:s=320x180:r=10",
+                    "-pix_fmt", "yuv420p" if name.endswith("mp4") else "rgb8", str(out)], check=True)
+    return str(out)
+
+
+def test_an_image_scene_takes_a_clip_instead_of_a_still(work):
+    sp = S.normalize({"fps": 10, "scenes": [{"id": "c", "type": "image", "video": "x.mp4", "duration_s": 2}]})
+    assert "missing_field" not in codes(S.lint(sp))
+    sp = S.normalize({"fps": 10, "scenes": [{"id": "c", "type": "image", "duration_s": 2}]})
+    assert "missing_field" in codes(S.lint(sp))  # neither still nor clip
+
+
+@pytest.mark.skipif(not _chromium(), reason="chromium is needed to render the template")
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg is needed")
+@pytest.mark.parametrize("name", ["clip.mp4", "clip.gif"])
+def test_an_image_scene_renders_a_clip(work, name):
+    clip = _clip(work, name)
+    sp = S.normalize({"fps": 10, "scenes": [{"id": "c", "type": "image", "video": clip, "duration_s": 2,
+                                             "heading": "Live", "focus": {"x": 0.1, "y": 0.1, "w": 0.4, "h": 0.4}}]})
+    h = S.persist(sp)
+    rec = render.render_sync(h, "draft", {})
+    v = render.verify(rec["video"], h)
+    assert v["status"] == "ok", v["findings"]
+    assert render._var(rec["video"], 0.3) > render.BLANK_VAR  # not blank, with the focus zoom applied

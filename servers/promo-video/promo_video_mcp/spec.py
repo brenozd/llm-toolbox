@@ -447,6 +447,8 @@ def lint(spec: dict) -> list[dict]:
         if not (1.5 <= sc["duration_s"] <= 12):
             add("error", "duration", sid, f"{sc['duration_s']}s", "use 1.5..12 s")
         need = {"title": ["title"], "bullets": ["heading", "items"], "terminal": [], "image": ["image"], "code": ["code", "source"]}[ty]
+        if ty == "image" and sc.get("video"):
+            need = []  # a clip stands in for the still
         for k in need:
             if not sc.get(k):
                 add("error", "missing_field", sid, f"{ty} needs '{k}'", f"set {k}")
