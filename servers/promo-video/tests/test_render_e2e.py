@@ -117,3 +117,14 @@ def test_an_image_scene_renders_a_clip(work, name):
     v = render.verify(rec["video"], h)
     assert v["status"] == "ok", v["findings"]
     assert render._var(rec["video"], 0.3) > render.BLANK_VAR  # not blank, with the focus zoom applied
+
+
+@pytest.mark.skipif(not _chromium(), reason="chromium is needed to render the template")
+def test_stills_follow_a_clip_through_time(work):
+    """A clip scene is not frozen on its first frame: two moments give two different stills."""
+    clip = _clip(work, "clip.mp4")
+    sp = S.normalize({"fps": 10, "scenes": [{"id": "c", "type": "image", "video": clip, "duration_s": 2,
+                                             "focus": {"x": 0.1, "y": 0.1, "w": 0.4, "h": 0.4}}]})
+    h = S.persist(sp)
+    a, b = (render.stills(h, t)[0]["digest"] for t in (0.1, 1.5))
+    assert a != b
