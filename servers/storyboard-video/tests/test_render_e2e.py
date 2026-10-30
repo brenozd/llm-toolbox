@@ -7,6 +7,7 @@
 - `unexpected_audio` warned about the music bed the render itself had mixed in.
 """
 
+import os
 import shutil
 import subprocess
 
@@ -128,3 +129,23 @@ def test_stills_follow_a_clip_through_time(work):
     h = S.persist(sp)
     a, b = (render.stills(h, t)[0]["digest"] for t in (0.1, 1.5))
     assert a != b
+
+
+def test_clip_frames_are_jpeg_for_video_and_png_for_gif(work):
+    mp4, gif = _clip(work, "c.mp4"), _clip(work, "c.gif")
+    assert render.clip_frames(mp4, 5, 10)[0].endswith(".jpg")
+    assert render.clip_frames(gif, 5, 10)[0].endswith(".png")
+    assert render._img_uri(render.clip_frames(mp4, 1, 10)[0]).startswith("data:image/jpeg;base64,")
+
+
+def test_old_frame_dirs_are_evicted_but_not_the_current_one(work):
+    root = config.WORK / "frames"
+    root.mkdir(parents=True, exist_ok=True)
+    old = []
+    for i in range(10):
+        d = root / f"old{i}"
+        d.mkdir()
+        os.utime(d, (1, 1 + i))
+        old.append(d)
+    render.clip_frames(_clip(work, "c.mp4"), 3, 10)
+    assert sum(d.exists() for d in old) <= 8  # the newest few stay, the ancient ones go

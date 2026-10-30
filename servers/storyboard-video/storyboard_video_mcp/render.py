@@ -5,7 +5,10 @@ import hashlib
 import html
 import json
 import mimetypes
+import os
+import shutil
 import statistics
+import time
 import subprocess
 import threading
 import uuid
@@ -99,17 +102,34 @@ def clip_frames(video: str, n: int, fps: float) -> list[str]:
     seeks the same images (a <video> seek would not be deterministic frame for frame)."""
     p = safe_path(video)
     st = p.stat()
-    key = hashlib.sha256(f"{config.RENDER_VERSION}|{p}|{st.st_size}|{st.st_mtime_ns}|{n}|{fps}".encode()).hexdigest()[:12]
-    d = config.WORK / "frames" / key
-    have = sorted(d.glob("*.png")) if d.is_dir() else []
+    # JPEG 4:4:4 keeps monospace text crisp at a fraction of PNG's size; a gif may carry alpha, so it stays PNG
+    ext = "png" if p.suffix.lower() == ".gif" else "jpg"
+    key = hashlib.sha256(f"{config.RENDER_VERSION}|{ext}|{p}|{st.st_size}|{st.st_mtime_ns}|{n}|{fps}".encode()).hexdigest()[:12]
+    root = config.WORK / "frames"
+    d = root / key
+    have = sorted(d.glob(f"*.{ext}")) if d.is_dir() else []
     if len(have) < n:
         d.mkdir(parents=True, exist_ok=True)
-        for old in d.glob("*.png"):
+        for old in d.glob(f"*.{ext}"):
             old.unlink()
+        enc = ["-c:v", "png"] if ext == "png" else ["-c:v", "mjpeg", "-q:v", "2", "-pix_fmt", "yuvj444p"]
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(p), "-vf", f"fps={fps},scale='min(iw,1920)':-2",
-                        "-frames:v", str(n), str(d / "%04d.png")], check=True)
-        have = sorted(d.glob("*.png"))
+                        *enc, "-frames:v", str(n), str(d / f"%04d.{ext}")], check=True)
+        have = sorted(d.glob(f"*.{ext}"))
+    os.utime(d)  # a lease: a render in progress is never the oldest
+    _evict_frames(root, keep=d)
     return [str(x) for x in have[:n]]
+
+
+def _evict_frames(root: Path, keep: Path, newest: int = 8, min_age_s: int = 3600) -> None:
+    """Frame dirs only grow otherwise. Drop old ones beyond the newest few; never one a render may be reading."""
+    try:
+        dirs = sorted((x for x in root.iterdir() if x.is_dir()), key=lambda x: x.stat().st_mtime, reverse=True)
+    except OSError:  # another render evicted at the same time
+        return
+    for x in dirs[newest:]:
+        if x != keep and time.time() - x.stat().st_mtime > min_age_s:
+            shutil.rmtree(x, ignore_errors=True)
 
 
 def _vmap(n: int, dur: int, clip_fps: float, fps: int) -> list[int]:

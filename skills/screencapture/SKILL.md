@@ -74,9 +74,20 @@ python3 scripts/screencapture.py --record desktop --seconds 8 --gif
 
 Steps (JSON list or file): `type`, `key`, `click` (x,y or selector, `button` 1-3), `move`, `scroll` (`dy`),
 `wait_for` (text/selector, `timeout_s`), `hold_s`, and `goto` (web). `key` is an xdotool keysym in
-term (`Return`, `ctrl+c`) and a Playwright key in web (`Enter`, `Control+c`). term, gui and web recordings write a
-`.json` receipt beside it. Missing tools are reported with the install command. `gui` needs Xvfb, xdotool, ffmpeg; no
+term (`Return`, `ctrl+c`) and a Playwright key in web (`Enter`, `Control+c`). term, gui, web and desktop recordings write a
+`.json` receipt beside it (typed text and shell output are left out unless `--keep-output`; a secret-looking string only raises a warning). Missing tools are reported with the install command. `gui` needs Xvfb, xdotool, ffmpeg; no
 `wait_for`/selectors there (use `hold_s`, x/y). Wayland-only apps are not supported yet.
+
+For a storyboard-video clip add `--format 16:9|9:16`: it sets the terminal grid/font and the gui/web window to
+the server's geometry (explicit `--cols/--rows/--font/--size` win). Without it the old defaults apply.
+
+## Trust model
+
+Recording runs on the host with the shell's powers: `--app` launches any command, `--setup` is raw shell sourced in
+the recorded bash, `type` steps are keystrokes into a real shell, web pages load in a `--no-sandbox` Chromium
+fallback, and `--clear` deletes tracked files. Treat steps from an untrusted source like untrusted code: run them in
+the `distrobox` skill or the `storyboard-video-exec` container. The video is never redacted, and `desktop`
+(experimental, untested here) records the whole screen, notifications included.
 
 ## Flags
 

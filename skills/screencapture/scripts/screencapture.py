@@ -516,8 +516,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--steps", metavar="JSON|FILE", help="scripted steps for --record term/gui/web (see record.py)")
     p.add_argument("--seconds", type=float, default=5, help="--record desktop duration")
     p.add_argument("--fps", type=int, default=15)
-    p.add_argument("--cols", type=int, default=80, help="--record term columns")
-    p.add_argument("--rows", type=int, default=20, help="--record term rows")
+    p.add_argument("--cols", type=int, help="--record term columns (default 80)")
+    p.add_argument("--rows", type=int, help="--record term rows (default 20)")
+    p.add_argument("--font", type=int, help="--record term font size (default 18)")
+    p.add_argument("--format", choices=["16:9", "9:16"], help="--record: capture geometry for a video of this aspect (storyboard-video)")
+    p.add_argument("--size", metavar="WxH", help="--record gui/web: window size (overrides --format)")
+    p.add_argument("--keep-output", action="store_true", help="--record: keep typed text and shell output in the .json receipt")
     p.add_argument("--app", help='--record gui: command to run, e.g. "kcalc" (forced to X11 on a virtual display)')
     p.add_argument("--cwd", help="--record term/gui working directory")
     p.add_argument("--setup", help="--record term: shell snippet run before recording")
@@ -543,17 +547,28 @@ def _record(args) -> int:
         if not args.steps:
             raise SystemExit("--record term/gui/web needs --steps")
         steps = record.load_steps(args.steps)
+        geo = record.GEOMETRY.get(args.format or "")
+        kind = "gui" if args.record == "gui" else "web"
+        if args.size:
+            w, h = (int(v) for v in args.size.lower().split("x"))
+        else:
+            w, h = geo[kind] if geo else (args.web_width, args.web_height)
+        keep = args.keep_output
         if args.record == "gui":
             if not args.app:
                 raise SystemExit("--record gui needs --app")
-            meta = record.record_gui(args.app, steps, output, args.web_width, args.web_height, args.fps, args.cwd)
+            meta = record.record_gui(args.app, steps, output, w, h, args.fps, keep_output=keep, cwd=args.cwd)
         elif args.record == "web":
             if not args.web:
                 raise SystemExit("--record web needs --web URL")
-            meta = record.record_web(args.web, steps, output, args.web_width, args.web_height, args.fps, args.dark)
+            meta = record.record_web(args.web, steps, output, w, h, args.fps, keep_output=keep, dark=args.dark)
         else:
-            meta = record.record_term(steps, output, args.cols, args.rows, fps=args.fps, cwd=args.cwd, setup=args.setup)
+            meta = record.record_term(
+                steps, output, args.cols or (geo["cols"] if geo else 80), args.rows or (geo["rows"] if geo else 20),
+                args.font or (geo["font"] if geo else 18), args.fps, cwd=args.cwd, setup=args.setup, keep_output=keep)
     _track(output)
+    if output.with_suffix(".json").exists():
+        _track(output.with_suffix(".json"))  # so --clear removes the receipt too
     print(output)
     return 0
 

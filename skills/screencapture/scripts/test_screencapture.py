@@ -6,6 +6,7 @@ aren't exercised here -- only the pure/stdlib pieces are (resize, format
 conversion, CDP web capture, DOM capture, session list/clear).
 """
 
+import json
 import sys
 import tempfile
 import unittest
@@ -111,8 +112,6 @@ class ArgParsingTests(unittest.TestCase):
         self.assertEqual(shot.VIEWPORTS["tablet"], (768, 1024))
 
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 def test_record_steps_validation():
@@ -141,3 +140,30 @@ def test_record_gui_rejects_web_steps(tmp_path):
     import pytest
     with pytest.raises((ValueError, RuntimeError)):
         record.record_gui("true", [{"type": "goto", "url": "x"}], tmp_path / "o.mp4")
+
+
+class RecordPrivacy(unittest.TestCase):
+    def test_receipt_omits_typed_text_and_output_by_default(self):
+        import record, tempfile
+        out = Path(tempfile.mkdtemp()) / "a.mp4"
+        meta = {"steps": [{"type": "type", "text": "export K=secret"}, {"type": "key", "key": "Return"}], "output": "x"}
+        record.write_receipt(out, meta, False)
+        saved = json.loads(out.with_suffix(".json").read_text())
+        self.assertEqual(saved["steps"][0]["text"], "<omitted>")
+        self.assertNotIn("output", saved)
+
+    def test_secret_scan(self):
+        import record
+        self.assertTrue(record.secret_warnings("AWS key " + "AKIA" + "ABCDEFGHIJKLMNOP"))
+        self.assertTrue(record.secret_warnings('{"api_' + 'key": "sk-' + 'abcdef1234567890"}'))
+        self.assertTrue(record.secret_warnings("Authorization: Bear" + "er abcdef1234567890xyz"))
+        self.assertFalse(record.secret_warnings('password = os.environ["PASSWORD_VAR_X"]'))
+        self.assertFalse(record.secret_warnings("hello world"))
+
+    def test_geometry_table(self):
+        import record
+        self.assertEqual(record.GEOMETRY["9:16"]["gui"], (720, 1280))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -16,6 +16,7 @@ import re
 import shlex
 import shutil
 import signal
+import sys
 import subprocess
 import tempfile
 import time
@@ -24,6 +25,47 @@ from pathlib import Path
 STEP_TYPES = {"type", "key", "click", "move", "scroll", "wait_for", "hold_s", "goto"}
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07")
 FORMATS = {".mp4", ".webm", ".gif"}
+
+# Capture geometry per delivery format, a copy of FORMATS in storyboard-video's spec.py (a test keeps them
+# equal): the format is baked into the pixels, so a 9:16 video wants portrait takes. web: the viewport
+# (video is recorded at 1x, so the 9:16 take is lower-res than the 2x the server captures).
+GEOMETRY = {
+    "16:9": {"cols": 80, "rows": 16, "font": 22, "gui": (1280, 720), "web": (1440, 810)},
+    "9:16": {"cols": 44, "rows": 28, "font": 15, "gui": (720, 1280), "web": (540, 960)},
+}
+
+# Best effort, never blocking: the video itself is not redacted either.
+SECRET = re.compile(
+    r"AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    r"|(?i:(?:api[_-]?key|secret|token|passw(?:or)?d|authorization)[\"']?\s*[:=]\s*[\"']?(?:bearer\s+)?)"
+    r"(?!\$|os\.|process\.|<)[A-Za-z0-9_\-./+=]{12,}")
+
+
+def secret_warnings(*texts: str) -> list[str]:
+    hit = any(SECRET.search(t) for t in texts)
+    return ["the recording may show a secret (key/token/password): the video is not redacted, review it"] if hit else []
+
+
+def write_receipt(out: Path, meta: dict, keep_output: bool) -> dict:
+    """The .json beside a recording. Typed text and the shell output stay out unless --keep-output."""
+    if not keep_output:
+        meta["steps"] = [{**s, "text": "<omitted>"} if s.get("type") == "type" else s for s in meta.get("steps", [])]
+        meta.pop("output", None)
+    for w in meta.get("warnings", []):
+        print(f"warning: {w}", file=sys.stderr)
+    out.with_suffix(".json").write_text(json.dumps(meta, indent=2))
+    return meta
+
+
+def _duration_of(p: Path) -> float | None:
+    if not shutil.which("ffprobe"):
+        return None
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(p)],
+                       capture_output=True, text=True)
+    try:
+        return float(r.stdout.strip())
+    except ValueError:
+        return None
 
 
 def _h264() -> list[str]:
@@ -213,7 +255,7 @@ class XSession:
 
 def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, font_size: int = 18, fps: int = 15,
                 cwd: str | None = None, delay_ms: int = 60, jitter_ms: int = 30, seed: int = 0,
-                tail_s: float = 1.2, setup: str | None = None) -> dict:
+                tail_s: float = 1.2, setup: str | None = None, keep_output: bool = False) -> dict:
     """Xvfb -> xterm -> bash, keys via xdotool, grabbed with ffmpeg x11grab. The typing speed is staged;
     the output is the real shell running the real command."""
     check_tools("Xvfb", "xterm", "xdotool", "ffmpeg", "script")
@@ -257,11 +299,15 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
         _stop_ffmpeg(ff)
         ff = None
         finalize(raw, out, fps)
-        output = ANSI.sub("", log.read_bytes().decode("utf-8", "replace")).replace("\r", "")
+        with log.open("rb") as f:  # a runaway command can fill the log: only the tail is read
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 200_000))
+            output = ANSI.sub("", f.read().decode("utf-8", "replace")).replace("\r", "")
+        typed = "\n".join(s.get("text", "") for s in steps if s["type"] == "type")
         meta = {"mode": "term", "video": str(out), "duration_s": round(dur, 2), "size": list(box[2:]),
-                "seed": seed, "steps": steps, "output": output[-4000:]}
-        out.with_suffix(".json").write_text(json.dumps(meta, indent=2))
-        return meta
+                "seed": seed, "steps": steps, "output": output[-4000:],
+                "warnings": secret_warnings(output, typed, setup or "")}
+        return write_receipt(out, meta, keep_output)
     finally:
         if ff:
             _stop_ffmpeg(ff)
@@ -271,7 +317,7 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
 
 
 def record_gui(app: str, steps: list[dict], out: Path, width: int = 1280, height: int = 720, fps: int = 15,
-               cwd: str | None = None, delay_ms: int = 60, jitter_ms: int = 30, seed: int = 0,
+               keep_output: bool = False, cwd: str | None = None, delay_ms: int = 60, jitter_ms: int = 30, seed: int = 0,
                tail_s: float = 1.0, start_s: float = 1.5) -> dict:
     """Run a GUI app on a private Xvfb (forced to X11 even on a Wayland host), stretch its window over the
     whole screen at 0,0 (so click x/y are window coordinates), drive it with xdotool and grab it."""
@@ -311,10 +357,10 @@ def record_gui(app: str, steps: list[dict], out: Path, width: int = 1280, height
         _stop_ffmpeg(ff)
         ff = None
         finalize(raw, out, fps)
+        typed = "\n".join(s.get("text", "") for s in steps if s["type"] == "type")
         meta = {"mode": "gui", "video": str(out), "app": app, "duration_s": round(dur, 2),
-                "size": [width, height], "seed": seed, "steps": steps}
-        out.with_suffix(".json").write_text(json.dumps(meta, indent=2))
-        return meta
+                "size": [width, height], "seed": seed, "steps": steps, "warnings": secret_warnings(typed)}
+        return write_receipt(out, meta, keep_output)
     finally:
         if ff:
             _stop_ffmpeg(ff)
@@ -358,6 +404,7 @@ def _launch(p):
 
 
 def record_web(url: str, steps: list[dict], out: Path, width: int = 1280, height: int = 720, fps: int = 15,
+               keep_output: bool = False,
                dark: bool = False, delay_ms: int = 60, tail_s: float = 1.0) -> dict:
     from playwright.sync_api import sync_playwright  # lazy: only this mode needs it
     work = Path(tempfile.mkdtemp(prefix="screencapture-"))
@@ -414,9 +461,10 @@ def record_web(url: str, steps: list[dict], out: Path, width: int = 1280, height
             raw = Path(vid.path())
             br.close()
         finalize(raw, out, fps)
-        meta = {"mode": "web", "video": str(out), "url": url, "size": [width, height], "steps": steps}
-        out.with_suffix(".json").write_text(json.dumps(meta, indent=2))
-        return meta
+        typed = "\n".join(s.get("text", "") for s in steps if s["type"] == "type")
+        meta = {"mode": "web", "video": str(out), "url": url, "size": [width, height], "steps": steps,
+                "warnings": secret_warnings(typed)}
+        return write_receipt(out, meta, keep_output)
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -460,7 +508,12 @@ def record_desktop(out: Path, seconds: float, fps: int = 15) -> dict:
                            capture_output=True, timeout=seconds + 60)
         if not raw.exists() or raw.stat().st_size < 1024:
             raise RuntimeError("the recorder produced no video (permission dialog dismissed?)")
+        got = _duration_of(raw)  # probe the raw take: a gif has no reliable duration
+        if got is not None and got < seconds * 0.5:
+            raise RuntimeError(f"asked for {seconds}s but the recorder produced {got:.1f}s")
         finalize(raw, out, fps)
-        return {"mode": "desktop", "video": str(out), "duration_s": seconds}
+        meta = {"mode": "desktop", "video": str(out), "duration_s": round(got, 2) if got is not None else None,
+                "warnings": ["desktop records the WHOLE screen, notifications and other windows included (experimental)"]}
+        return write_receipt(out, meta, True)
     finally:
         shutil.rmtree(work, ignore_errors=True)

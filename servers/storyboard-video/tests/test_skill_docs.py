@@ -87,3 +87,19 @@ def test_the_documented_spec_lints_clean_outside_the_placeholder_paths(monkeypat
         assert not stray, f"documented spec has real errors: {stray}"
         # And the placeholder errors are the ones we predicted, not a silent drift of the example.
         assert {f["code"] for f in errors} <= PLACEHOLDER_CODES
+
+
+def test_screencapture_geometry_matches_the_server_formats():
+    """The skill is standalone, so record.py keeps a copy of spec.FORMATS: this fails when they drift."""
+    import importlib.util
+    rec = REPO_ROOT / "skills" / "screencapture" / "scripts" / "record.py"
+    if not rec.is_file():
+        pytest.skip("skills/screencapture is not mounted")
+    m = importlib.util.spec_from_file_location("sc_record", rec)
+    mod = importlib.util.module_from_spec(m)
+    m.loader.exec_module(mod)
+    for aspect, f in S.FORMATS.items():
+        g = mod.GEOMETRY[aspect]
+        assert (g["cols"], g["rows"], g["font"]) == (f["cols"], f["rows"], f["font"])
+        assert "x".join(map(str, g["gui"])) == f["gui"]
+        assert g["web"] == (f["viewport"]["width"], f["viewport"]["height"])
