@@ -11,6 +11,8 @@ Context-first → propose → confirm → execute bucket by bucket, with checkpo
 
 ## Phase 1 — Context Reconnaissance (silent, before asking anything)
 
+If the goal is large or ambiguous (many open decisions, not just 2 unknowns), run the `grilling` skill after the recon below instead of the 2-question limit, then build the Goal Summary from its answers.
+
 Before presenting anything to the user, do the following silently:
 
 **1. Read available context:**
