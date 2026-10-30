@@ -17,9 +17,3 @@ espeak-ng 1.52.0 (libespeak-ng.so.1.52.0, GPL-3.0-or-later) - https://github.com
   Source for that exact version: https://github.com/espeak-ng/espeak-ng/releases/tag/1.52.0
 
 onnxruntime (MIT) - https://github.com/microsoft/onnxruntime
-
-Bundled music (music/) is CC0 1.0 or public domain *per the cited sources*: each track in
-music/catalog.json records its origin page (`source_url`), its licence page (`license_url`) and
-whether a credit is required (`attribution_required`), and scripts/fetch_music.py re-verifies the
-sha256 at fetch time. Copyright terms differ by jurisdiction and by recording (a composition can be
-PD while a particular recording is not): verify the licence for your country before publishing.

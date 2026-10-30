@@ -410,6 +410,7 @@ def render_sync(h: str, quality: str, job: dict) -> dict:
     # Mix (music bed + voice, ducked), normalise to -16 LUFS and mux: the picture is already made, so
     # this cannot change a single frame (and the poster is taken from the muxed file).
     mix = A.mux(mp4, spec, narration_track(spec), tl["frames"] / tl["fps"])
+    credits = A.write_credits(spec, out)  # /work/CREDITS.txt + out/<hash>/CREDITS.txt for the description
     (out / f"{quality}.srt").write_text(srt(spec))
     poster = out / f"{quality}.jpg"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp4), "-vf", f"select=eq(n\\,{tl['frames'] // 2})",
@@ -417,7 +418,7 @@ def render_sync(h: str, quality: str, job: dict) -> dict:
     rec = {"video": str(mp4), "srt": str(out / f"{quality}.srt"), "poster": str(poster), "spec_hash": h,
            "resolved_hash": rh, "quality": quality, "width": ow, "height": oh, "fps": tl["fps"],
            "frames": tl["frames"], "frame_digest": dig.hexdigest()[:16],
-           "audio": (mix or {}).get("mix"), "mix": mix}
+           "credits": credits, "audio": (mix or {}).get("mix"), "mix": mix}
     (out / f"{quality}.receipt.json").write_text(json.dumps(rec, indent=1))
     return rec
 
@@ -498,6 +499,27 @@ def _var(video: str, t: float) -> float:
     return statistics.pvariance(list(r.stdout)) if len(r.stdout) > 1 else 0.0
 
 
+def credits_finding(spec: dict, video: str | Path | None = None) -> dict | None:
+    """A track that needs a credit must have reached a credit file with the render: the credit is the
+    licence condition (CC BY), so a delivery that cannot show it is not shippable. The file written
+    next to the video is checked first (a later render unlinks /work/CREDITS.txt), then /work."""
+    m = spec.get("music")
+    if not isinstance(m, dict) or not str(m.get("attribution") or "").strip():
+        return None
+    key = str(m.get("title") or m.get("attribution")).strip()[:40]
+    paths = ([Path(video).parent / "CREDITS.txt"] if video else []) + [config.WORK / "CREDITS.txt"]
+    for p in paths:
+        try:
+            txt = p.read_text()
+        except OSError:
+            continue
+        if key and key in txt:
+            return None
+    return {"severity": "error", "code": "credits_missing",
+            "message": f"no credit for {key!r} in {paths[0]}: re-render so the credit block ships "
+                       f"with the video"}
+
+
 def verify(video: str, h: str) -> dict:
     spec = S.load(h)
     tl = S.timeline(spec)
@@ -528,9 +550,13 @@ def verify(video: str, h: str) -> dict:
     au = _probe_audio(str(p))
     voiced = narrated(spec)
     findings += audio_findings(pr["duration"], voiced, au, (rec.get("mix") or {}).get("voice"))
+    cred = credits_finding(spec, p)
+    if cred:
+        findings.append(cred)
     loud = A.check(str(p), pr["duration"], voiced) if au else {"loudness": None, "silences": [], "findings": []}
-    findings += loud["findings"]
+    music = spec.get("music") if isinstance(spec.get("music"), dict) else {}
     return {"status": "error" if any(x["severity"] == "error" for x in findings) else "ok", "probe": pr,
             "aspect": spec["aspect"], "expected_size": [ew, eh],
             "expected_duration_s": round(exp, 3), "audio": au, "narrated": voiced,
+            "music_license": music.get("license"), "credits": rec.get("credits"),
             "loudness": loud["loudness"], "silences": loud["silences"], "findings": findings}

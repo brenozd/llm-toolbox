@@ -5,8 +5,8 @@ from pathlib import Path
 
 WORK = Path(os.environ.get("PROMO_WORK", "/work"))
 REPO = Path(os.environ.get("PROMO_REPO", "/repo"))
-# Bundled CC0/PD soundtrack (music/catalog.json next to the package), read-only, baked into the image.
-MUSIC = Path(os.environ.get("PROMO_MUSIC") or Path(__file__).resolve().parent.parent / "music")
+# Read-only music cache the music-search skill stages tracks into (mounted at /music by plugin.json).
+MUSIC_DIR = Path("/music")
 # Set by the operator in `docker run`, never by the model: gates every tool that runs repo code.
 ALLOW_EXEC = os.environ.get("PROMO_ALLOW_EXEC") == "1"
 WEB_HOSTS = {"localhost", "127.0.0.1", "host.docker.internal"}

@@ -8,7 +8,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import config, music as music_module
+from . import config
+from .safety import safe_path
 
 TYPES = {"title", "bullets", "terminal", "image", "code"}
 ASPECTS = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
@@ -48,7 +49,7 @@ def normalize(spec: dict) -> dict:
     s.setdefault("aspect", "16:9")
     s.setdefault("transition_s", 0.5)
     s["theme"] = {**THEME, **(s.get("theme") or {})}
-    if isinstance(s.get("music"), dict):  # a track id from list_music, plus the mix levels
+    if isinstance(s.get("music"), dict):  # a track the music-search skill staged, plus the mix levels
         s["music"] = {"volume_db": MUSIC_DEFAULTS["volume_db"], "duck": MUSIC_DEFAULTS["duck"], **s["music"]}
     for sc in s.get("scenes", []):
         sc.setdefault("duration_s", 3.0)
@@ -181,21 +182,65 @@ def _sparse(path: str) -> bool:
     return px is not None and _ink_ratio(px) < 0.005  # a bare '$ ' measures ~0.1%, two real lines 5%
 
 
+def music_verdict(license: str) -> str:
+    """allow | attribution | deny, derived from the licence string alone (never from a passed-in field).
+
+    A promo is published and commercial, and syncing is an adaptation: NC, ND and SA are always out.
+    Everything that is not a known CC0 / public-domain / CC BY string is out too: an allow-list fails
+    closed, a deny-list lets "All rights reserved" (or a bespoke EULA) through uncredited."""
+    toks = set(re.split(r"[^a-z0-9]+", str(license or "").lower()))
+    if toks & {"nc", "nd", "sa"}:  # CC BY-NC / -ND / -SA, however it is written
+        return "deny"
+    if "by" in toks:  # CC BY 4.0, or a licence URL carrying /by/
+        return "attribution"
+    if toks & {"cc0", "pdm", "pd", "publicdomain"} or {"public", "domain"} <= toks:
+        return "allow"
+    return "deny"  # unknown: never assume a licence the skill did not report
+
+
+def has_license_url(music: dict) -> bool:
+    """A CC BY credit has to link the licence it grants: a bare "CC BY 4.0" is not an attribution."""
+    if str(music.get("license_url") or "").strip().lower().startswith(("http://", "https://")):
+        return True
+    return bool(re.search(r"https?://", str(music.get("attribution") or "")))
+
+
 def _lint_music(music, add) -> list[dict]:
-    """spec.music names a bundled CC0/PD track: an id the catalog does not have is a lint error, so a
-    typo never silently renders a video with no soundtrack."""
+    """spec.music points at a track the music-search skill staged under /music (/work or /repo also
+    resolve): a path that is not there would silently render a silent video, and a licence the promo
+    cannot use (or a BY track with no credit) must never reach a published video."""
     if not isinstance(music, dict):
         add("error", "bad_music", None, "music must be an object",
-            'spec.music = {"id": "moonlight-sonata", "volume_db": -18, "duck": 12}')
+            'spec.music = {"path": "/music/<id>.mp3", "license": "CC0 1.0", "volume_db": -18, "duck": 12}')
         return []
-    tid = music.get("id")
-    if not isinstance(tid, str) or not tid:
-        add("error", "bad_music", None, "music.id missing", "pick an id from list_music")
-        return []
-    if music_module.get(tid) is None:
-        known = [t["id"] for t in music_module.tracks()]
-        add("error", "unknown_music", None, f"no bundled track {tid!r}",
-            f"use list_music; bundled ids: {', '.join(known) or '(none)'}")
+    p = music.get("path")
+    roots = [config.MUSIC_DIR, config.WORK, config.REPO]
+    try:
+        ok = isinstance(p, str) and bool(p) and safe_path(p, roots).is_file()
+    except PermissionError:
+        ok = False
+    if not ok:  # a typo, an unmounted /music, or a path outside the roots
+        add("error", "music_path_missing", None, f"music.path {p!r} is not a file under /music, /work or /repo",
+            "stage the track with the music-search skill and use its /music/<id> path")
+    lic = music.get("license")
+    if not isinstance(lic, str) or not lic.strip():
+        add("error", "music_license_missing", None, "music.license missing",
+            'set the licence the music-search skill reported, e.g. "CC0 1.0" or "CC BY 4.0"')
+    elif music_verdict(lic) == "deny":
+        add("error", "music_license_incompatible", None, f"licence {lic!r} cannot be used in a promo",
+            "use CC0 1.0, public domain or CC BY 4.0: NC/ND/SA are out (commercial, and syncing is an "
+            "adaptation) and so is any string the skill did not report as one of those")
+    elif music_verdict(lic) == "attribution" and not str(music.get("attribution") or "").strip():
+        add("error", "music_license_missing", None, f"{lic} needs an attribution and music.attribution is empty",
+            "paste the credit string the music-search skill returned (creator, licence link, changes line)")
+    elif music_verdict(lic) == "attribution" and not has_license_url(music):
+        add("error", "music_license_missing", None, f"{lic} needs a licence link and music.license_url is empty",
+            "paste the licence URL the music-search skill returned (or put it inside the attribution)")
+    st = music.get("start_s")
+    if st is not None and (isinstance(st, bool) or not isinstance(st, (int, float))
+                           or not 0 <= st < 1e6):  # "abc" kills render, -5 empties the trim, nan poisons ffmpeg
+        add("error", "bad_music_start", None, f"start_s {st!r}",
+            "use a number of seconds >= 0, as the music-search skill reported it")
     vol = music.get("volume_db")
     lo, hi = config.MUSIC_VOLUME_DB
     if isinstance(vol, bool) or not isinstance(vol, (int, float)) or not (lo <= vol <= hi):

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from promo_video_mcp import audio as A, config, music as M, spec as S
+from promo_video_mcp import audio as A, config, spec as S
 
 SUMMARY = """[Parsed_ebur128_0 @ 0x1] t: 4.9   TARGET:-23 LUFS  I: -27.8 LUFS
 [Parsed_ebur128_0 @ 0x1] Summary:
@@ -115,11 +115,12 @@ def _tone(path: Path, seconds: float, freq: int = 440, gain: str = "-6dB") -> Pa
 
 
 def test_build_loops_the_bed_to_the_picture_length(work):
-    """The bundled track in a 12 s video: trimmed to the picture, at the level the spec asked for."""
+    """A staged track in a 12 s video: trimmed to the picture, at the level the spec asked for."""
     if not shutil.which("ffmpeg"):
         pytest.skip("ffmpeg not installed")
-    track = M.get("chill-main-menu") or M.tracks()[0]
-    s = S.normalize({"fps": 10, "lang": "pt-BR", "music": {"id": track["id"], "volume_db": -6, "duck": 20},
+    track = _tone(work / "track.wav", 8.0, 220)  # shorter than the video: it has to loop
+    s = S.normalize({"fps": 10, "lang": "pt-BR",
+                     "music": {"path": str(track), "license": "CC0 1.0", "volume_db": -6, "duck": 20},
                      "scenes": [{"id": "a", "type": "title", "title": "a", "duration_s": 12,
                                  "narration": "Uma fala."}]})
     voice = _tone(work / "voice.wav", 3.0, 440)  # speech from 0 to 3 s, bed alone afterwards
@@ -175,8 +176,8 @@ def test_mux_delivers_the_whole_soundtrack_at_minus_16_lufs(work):
     mp4 = work / "pic.mp4"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=black:s=64x64:r=10:d=4",
                     "-c:v", "mpeg4", "-pix_fmt", "yuv420p", str(mp4)], check=True)
-    track = M.get("chill-main-menu") or M.tracks()[0]
-    s = S.normalize({"music": {"id": track["id"], "volume_db": -30, "duck": 12},
+    track = _tone(work / "track.wav", 6.0, 220)
+    s = S.normalize({"music": {"path": str(track), "license": "CC0 1.0", "volume_db": -30, "duck": 12},
                      "scenes": [{"id": "a", "type": "title", "title": "a", "duration_s": 4,
                                  "narration": "Uma fala."}]})
     voice = _tone(work / "voice.wav", 4.0, 440, "-30dB")  # quiet inputs: loudnorm has to lift the mix

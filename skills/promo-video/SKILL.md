@@ -22,7 +22,7 @@ Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline v
    - (a) **format/aspect** (16:9, 9:16 or both — 3:4 is not supported yet) and target **duration**;
    - (b) **language** of captions and narration (default: the README's; pt-BR or en for TTS);
    - (c) **narration** on/off, and the voice when on;
-   - (d) **music**: none, ambient or tech (`list_music` for the choice);
+   - (d) **music** (optional, never required): none, or a **vibe** — ambient / calm / tech / epic / playful / elegant. The `music-search` skill finds, licence-checks and stages the track (see **Music**); no match means a **silent** video, which is the default, and you say "no results" plus the reason instead of picking something by hand;
    - (e) **which features to show**: list the candidates from the code analysis, recommend a subset with a one-line reason each, let the user pick some or all;
    - (f) **demo honesty**: real programs only, and never claim a bug the tool did not report.
    Record the answers in a short file in the work dir (`/work/interview.md`) and refer to it in the spec.
@@ -45,7 +45,7 @@ Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline v
 
 ## Spec
 ```json
-{"fps":30,"aspect":"16:9","lang":"pt-BR","music":{"id":"moonlight-sonata","volume_db":-18,"duck":12},"theme":{"bg":"#0f1115","fg":"#f2f4f8","accent":"#4cc2ff"},
+{"fps":30,"aspect":"16:9","lang":"pt-BR","music":{"path":"/music/<id>.mp3","start_s":3.2,"title":"…","creator":"…","license":"CC BY 4.0","license_url":"https://creativecommons.org/licenses/by/4.0/","source_url":"…","attribution":"…","volume_db":-18,"duck":12},"theme":{"bg":"#0f1115","fg":"#f2f4f8","accent":"#4cc2ff"},
  "scenes":[{"id":"hook","type":"title","title":"…","subtitle":"…","duration_s":3,"caption":"…"},
   {"id":"why","type":"bullets","heading":"…","items":["…"],"evidence":"README.md:5","duration_s":4},
   {"id":"run","type":"terminal","heading":"…","lines":["$ cmd","out"],"duration_s":5},
@@ -56,7 +56,7 @@ Burns captions, renders 16:9 or 9:16 (`.srt` alongside) and can add an offline v
 Types: title, bullets (≤5, ≤4 in 9:16), terminal (≤18 `lines`, or a recorded `video`+`poster` shown in a window frame), image (`focus` + `zoom`): the capture covers the frame and the focus is centred, with the pan and the zoom clamped so the focus stays in shot, code (≤18 lines). Text ≤18 words per element. A near-empty capture gets a `sparse_capture` warning — re-run it, don't ship a blank screen.
 
 ## Done when
-`verify` returns `ok`, you reviewed the stills, the layout audit reports no warnings, every captured asset matches the delivery aspect, and every number or claim traces to a capture or `file:line`. With narration, `verify` also reports the `audio` stream (codec/duration) and errors when the voice-over is missing or its duration differs from the picture by more than 0.1 s. When `spec.music` is set the render mixes that bed under the voice, ducked, and normalises the whole soundtrack to **-16 LUFS** (AAC 192k, true peak under -1.5 dBTP); `verify` reports the measured `loudness` (`integrated_lufs`, `lra_lu`, `true_peak_db`) and `silences`, and errors on a miss or when a narrated video has more than 3 s of silence. A narrated spec rendered without its voice-over (bed only) is `no_voice`, not ok.
+`verify` returns `ok`, you reviewed the stills, the layout audit reports no warnings, every captured asset matches the delivery aspect, and every number or claim traces to a capture or `file:line`. With narration, `verify` also reports the `audio` stream (codec/duration) and errors when the voice-over is missing or its duration differs from the picture by more than 0.1 s. When `spec.music` has a `path` the render mixes that bed under the voice, ducked, and normalises the whole soundtrack to **-16 LUFS** (AAC 192k, true peak under -1.5 dBTP); `verify` reports the measured `loudness` (`integrated_lufs`, `lra_lu`, `true_peak_db`), `silences` and the track's `music_license`, and errors on a miss, on more than 3 s of silence in a narrated video, or with `credits_missing` when the credit block never reached `/work/CREDITS.txt` or `out/<resolved_hash>/CREDITS.txt`. A narrated spec rendered without its voice-over (bed only) is `no_voice`, not ok.
 
 ## Voice-over
 Only when the user asked for narration. `spec.lang` (`pt-BR`|`en`) is required for it, and every spoken line is `scene.narration` (a sentence or two, written to be *heard*, not read: no `--flags`, no identifiers).
@@ -68,4 +68,12 @@ Only when the user asked for narration. `spec.lang` (`pt-BR`|`en`) is required f
 6. **Check what the video actually says.** Transcribe the delivered MP4 with the `faster-whisper` MCP (`transcribe(audio_path=<the MP4>, language=spec.lang)`) and compare the transcript to your `scene.narration` lines word by word. A dropped last syllable, a mispronounced identifier or a wrong number means fix the line/`say` mapping and re-narrate — do not ship a video you have not heard.
 
 ## Music
-Only when the user asked for a soundtrack. The image bundles a small catalog of **CC0 / public-domain** tracks and nothing else: `list_music()` returns `{id, title, artist, mood[], duration_s, license, license_url, attribution_required, available}`, `list_music(mood="calm")` filters it (moods include calm, epic, playful, elegant, ambient). Pick an `id`, then set `spec.music = {"id": ..., "volume_db": -18, "duck": 12}` — `volume_db` is the bed level (a bed belongs at about -18 dB, never above -6) and `duck` is how far it drops under narration (roughly 7 dB at the default 12, saturating near 8 dB — a direction, not a dB scale). `validate_spec` errors on an unknown id (`unknown_music`) and on out-of-range levels. Every track is CC0/PD, so no on-screen credit is required; `music/CREDITS.txt` exists only when a track would need one.
+Optional, and **silent by default**: the image bundles no music. When the interview answered with a vibe, use the [`skills/music-search`](../music-search/) skill (host, network):
+
+1. `python3 skills/music-search/scripts/music_search.py search --vibe "<vibe>"` → candidates already filtered by licence verdict (allow: CC0/PDM; attribution: CC BY 4.0).
+2. `… fetch <candidate-id|url> --duration <video seconds>` → verifies the licence at the origin, downloads, gates the audio, picks the window and stages the file in `${XDG_CACHE_HOME:-~/.cache}/promo-video/music`, which both plugin entries mount read-only at `/music`. There is **no copy step**: the path just works.
+3. Put its JSON into `spec.music`: `{"path": "/music/<id>.mp3", "start_s": 3.2, "title", "creator", "license", "license_url", "source_url", "attribution", "volume_db": -18, "duck": 12}`. `volume_db` is the bed level (about -18 dB, never above -6) and `duck` is how far it drops under narration (roughly 7 dB at the default 12 — a direction, not a dB scale).
+
+`validate_spec` errors on `music_path_missing` (not a file under `/music`, `/work` or `/repo`), `music_license_missing` (no licence, a **CC BY** track with an empty `attribution` or no licence link, or a licence string it does not recognise: the gate is an allow-list — CC0, public domain, CC BY — and fails closed), `music_license_incompatible` (NC/ND/SA: a promo is commercial and syncing is an adaptation), `bad_music_start` (`start_s` is not a number ≥ 0) and out-of-range levels. The render writes the credit block to `/work/CREDITS.txt` and to `out/<resolved_hash>/CREDITS.txt` next to the video, and `verify` errors `credits_missing` when neither carries the track — **CC BY means the credit is a licence condition**: hand the file's lines to the user for the video description (CC BY 4.0 §3(a): creator, title, licence name + link, source, and the `Changes:` line).
+
+No candidate for the vibe → report "no results" with the skill's `reason` and render **without** music. Never substitute a track you did not licence-check, and never present a track as claim-proof: **Content ID risk is unmitigated** (no Pixabay/Mixkit catalogue behind `/music`), so keep the sidecar `music-search` wrote next to the audio (`license_evidence`, `source_url`, `sha256`) for a dispute.

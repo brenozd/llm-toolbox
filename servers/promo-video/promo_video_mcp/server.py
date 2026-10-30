@@ -6,7 +6,7 @@ import shutil
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from . import capture as C, config, music as M, render as R, scan as SC, spec as S, tts as T
+from . import capture as C, config, render as R, scan as SC, spec as S, tts as T
 
 mcp = FastMCP("promo-video")
 
@@ -104,12 +104,6 @@ async def capture_gui(command: str, cwd: str | None = None, seconds: float = 3.0
 
 
 @mcp.tool()
-def list_music(mood: str | None = None) -> object:
-    """Bundled soundtrack: CC0 / public-domain tracks only (music/catalog.json in the image). Filter with `mood` (calm, epic, playful, elegant, ambient...). Put the id in spec.music = {id, volume_db, duck}; a bed sits at about -18 dB and ducks ~12 dB under narration."""
-    return M.list_music(mood)
-
-
-@mcp.tool()
 def validate_spec(spec: dict) -> object:
     """Lint a video spec and persist it. Returns findings[{severity,code,scene,fix}], spec_hash and duration. Every later tool needs spec_hash. Errors block rendering."""
     s = S.normalize(spec)
@@ -162,7 +156,7 @@ async def audit_layout(spec_hash: str) -> object:
 
 @mcp.tool()
 async def render(spec_hash: str, quality: str = "draft") -> object:
-    """Start a background render (quality draft|delivery). Returns job_id; poll render_status. Output is MP4 + SRT + poster in the work dir."""
+    """Start a background render (quality draft|delivery). Returns job_id; poll render_status. Output is MP4 + SRT + poster in the work dir, plus /work/CREDITS.txt and out/<resolved_hash>/CREDITS.txt when the spec has music."""
     if quality not in ("draft", "delivery"):
         return {"status": "error", "message": "quality must be draft or delivery"}
     if quality == "delivery" and not R.stills_done(spec_hash):
@@ -178,7 +172,7 @@ def render_status(job_id: str) -> object:
 
 @mcp.tool()
 async def verify(video: str, spec_hash: str) -> object:
-    """Check the rendered MP4 against the spec: size (1080x1920 for a 9:16 delivery), fps, duration (+-1 frame), non-blank frames at 5/50/95%, and the audio: the stream must be as long as the picture (+-0.1 s), EBU R128 integrated within 1.5 LU of -16 LUFS, true peak <= -1.5 dBTP, and no silence longer than 3 s in a narrated video. Returns the measured numbers as `loudness` {integrated_lufs, lra_lu, true_peak_db} and `silences`; `audio` is null when silent, `narrated` tells which bar applied. Errors when the file is missing."""
+    """Check the rendered MP4 against the spec: size (1080x1920 for a 9:16 delivery), fps, duration (+-1 frame), non-blank frames at 5/50/95%, the credit block (`credits_missing` when a track needs a credit and neither /work/CREDITS.txt nor out/<resolved_hash>/CREDITS.txt carries it), and the audio: the stream must be as long as the picture (+-0.1 s), EBU R128 integrated within 1.5 LU of -16 LUFS, true peak <= -1.5 dBTP, and no silence longer than 3 s in a narrated video. Returns the measured numbers as `loudness` {integrated_lufs, lra_lu, true_peak_db}, `silences` and the track's `music_license`; `audio` is null when silent, `narrated` tells which bar applied. Errors when the file is missing."""
     return await _guard(R.verify, video, spec_hash)
 
 

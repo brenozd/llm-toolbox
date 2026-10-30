@@ -84,7 +84,8 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
     # Check MCP servers
     mcp_servers = plugin_data.get("mcpServers", {})
     for server_name in mcp_servers.keys():
-        server_path = servers_dir / server_name
+        # the `-exec` entry runs the same image with PROMO_ALLOW_EXEC=1: one directory, two entries
+        server_path = servers_dir / server_name.removesuffix("-exec")
         if not server_path.is_dir():
             errors.append(f"  ✗ MCP server '{server_name}' not found in servers/")
         else:
@@ -92,7 +93,7 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
 
     # Check referenced skills (from description parsing)
     desc = plugin_data.get("description", "")
-    for skill_name in ["deep-clean", "doc-audit", "guided-build", "image", "screenshot", "tech-blog-post", "refactor", "icon-search", "pr-opener"]:
+    for skill_name in ["deep-clean", "doc-audit", "guided-build", "image", "screenshot", "tech-blog-post", "refactor", "icon-search", "music-search", "pr-opener"]:
         if skill_name in desc:
             skill_path = skills_dir / skill_name
             if not skill_path.is_dir():

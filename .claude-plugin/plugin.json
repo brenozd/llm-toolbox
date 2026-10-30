@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
-  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, pr-opener, screenshot, svg-generator, promo-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.0.56",
+  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screenshot, svg-generator, promo-video, tech-blog-post, ui-review, wiki-writing.",
+  "version": "1.0.58",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -90,6 +90,8 @@
         "${PWD}:/repo:ro",
         "-v",
         "promo-video-work:/work",
+        "-v",
+        "${HOME}/.cache/promo-video/music:/music:ro",
         "registry.bzd.gg/bzd/promo-video-mcp:latest"
       ]
     },
@@ -120,6 +122,8 @@
         "${PWD}:/repo:ro",
         "-v",
         "promo-video-work:/work",
+        "-v",
+        "${HOME}/.cache/promo-video/music:/music:ro",
         "registry.bzd.gg/bzd/promo-video-mcp:latest"
       ]
     }
