@@ -88,7 +88,7 @@ Desktop capture tool is auto-detected at runtime; the first one found on PATH
 
 ## Recording flags
 
-`--record term|web|desktop`, `--steps JSON|FILE`, `--gif`, `--fps N` (15), `--seconds N` (desktop, 5),
-`--cols/--rows` (term, 80x20), `--cwd`, `--setup`; web reuses `--web URL`, `--web-width/--web-height`, `--dark`.
-Implementation: `scripts/record.py`. Deps: ffmpeg always; term: Xvfb, xterm, xdotool, script (util-linux);
+`--record term|gui|web|desktop`, `--steps JSON|FILE`, `--gif`, `--fps N` (15), `--seconds N` (desktop, 5),
+`--app CMD` (gui), `--cols/--rows` (term, 80x20), `--cwd`, `--setup`; web reuses `--web URL`, `--web-width/--web-height`, `--dark`.
+Implementation: `scripts/record.py`. Deps: ffmpeg always; term: Xvfb, xterm, xdotool, script (util-linux); gui: Xvfb, xdotool;
 web: `pip install playwright` plus a Chromium; desktop: spectacle/wf-recorder (Wayland) or ffmpeg x11grab.

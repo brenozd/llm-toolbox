@@ -134,3 +134,10 @@ def test_record_finalize_gif(tmp_path):
     for ext in (".gif", ".webm", ".mp4"):
         record.finalize(src, tmp_path / f"o{ext}")
         assert (tmp_path / f"o{ext}").stat().st_size > 0
+
+
+def test_record_gui_rejects_web_steps(tmp_path):
+    import record
+    import pytest
+    with pytest.raises((ValueError, RuntimeError)):
+        record.record_gui("true", [{"type": "goto", "url": "x"}], tmp_path / "o.mp4")

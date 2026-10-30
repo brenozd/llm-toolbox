@@ -1,4 +1,4 @@
-"""Scripted recordings: `term` (real xterm on a virtual X display), `web` (Playwright) and `desktop`
+"""Scripted recordings: `term` (real xterm on a virtual X display), `gui` (any app on a virtual X display), `web` (Playwright) and `desktop`
 (the real screen, no input). Output by extension: .mp4, .webm or .gif.
 
 Steps are JSON, shared by term and web:
@@ -13,6 +13,7 @@ import os
 import platform
 import random
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -121,7 +122,7 @@ def _until(pred, timeout: float, step: float = 0.1):
 
 
 # ---------------------------------------------------------------------------
-# Virtual X display + xdotool (shared by `term`, and by `gui` in the next phase)
+# Virtual X display + xdotool (shared by `term` and `gui`)
 # ---------------------------------------------------------------------------
 
 class XSession:
@@ -142,6 +143,8 @@ class XSession:
         self.home = tempfile.mkdtemp(prefix="screencapture-home-")  # keeps host dotfiles out of the take
         self.env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": self.home, "DISPLAY": self.display,
                     "TERM": "xterm-256color", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PS1": "$ "}
+        if os.environ.get("LD_LIBRARY_PATH"):  # a user-local xdotool (no root) needs its libxdo
+            self.env["LD_LIBRARY_PATH"] = os.environ["LD_LIBRARY_PATH"]
 
     def xdo(self, *argv: str) -> str:
         """xdotool, failing loudly: a dropped keystroke silently desynchronises the take."""
@@ -183,6 +186,8 @@ class XSession:
             elif ty == "key":
                 self.xdo("key", "--clearmodifiers", s["key"])
             elif ty in ("click", "move"):
+                if "x" not in s:
+                    raise ValueError(f"{ty} on a virtual X display needs x/y (selectors are web-only)")
                 self.xdo("mousemove", "--sync", str(int(s["x"])), str(int(s["y"])))
                 if ty == "click":
                     self.xdo("click", str(s.get("button", 1)))
@@ -190,7 +195,9 @@ class XSession:
                 for _ in range(max(1, abs(int(s.get("dy", 100))) // 100)):
                     self.xdo("click", "5" if s.get("dy", 100) > 0 else "4")
             elif ty == "wait_for":
-                if wait_text is None or not wait_text(s["text"], float(s.get("timeout_s", 8))):
+                if wait_text is None:
+                    raise ValueError("wait_for is not available for gui (no text stream): use hold_s")
+                if not wait_text(s["text"], float(s.get("timeout_s", 8))):
                     raise RuntimeError(f"wait_for {s['text']!r} timed out: no half clip shipped")
             elif ty == "hold_s":
                 time.sleep(max(0.0, float(s.get("s", 0.5))))
@@ -261,6 +268,59 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
         shutil.rmtree(work, ignore_errors=True)
 
 
+def record_gui(app: str, steps: list[dict], out: Path, width: int = 1280, height: int = 720, fps: int = 15,
+               cwd: str | None = None, delay_ms: int = 60, jitter_ms: int = 30, seed: int = 0,
+               tail_s: float = 1.0, start_s: float = 1.5) -> dict:
+    """Run a GUI app on a private Xvfb (forced to X11 even on a Wayland host), stretch its window over the
+    whole screen at 0,0 (so click x/y are window coordinates), drive it with xdotool and grab it."""
+    check_tools("Xvfb", "xdotool", "ffmpeg")
+    if any(s["type"] in ("goto", "wait_for") for s in steps):
+        raise ValueError("'goto' is a web step and 'wait_for' is term/web only")
+    work = Path(tempfile.mkdtemp(prefix="screencapture-"))
+    raw = work / "raw.mp4"
+    xs = XSession(width, height)
+    xs.env.update({"GDK_BACKEND": "x11", "QT_QPA_PLATFORM": "xcb", "SDL_VIDEODRIVER": "x11",
+                   "MOZ_ENABLE_WAYLAND": "0", "ELECTRON_OZONE_PLATFORM_HINT": "x11"})
+    xs.env["PATH"] = os.environ.get("PATH", xs.env["PATH"])
+    proc = ff = None
+    try:
+        proc = subprocess.Popen(shlex.split(app), cwd=cwd, env=xs.env, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
+        # the launcher may fork (pid != window owner), so take the first visible window on this private display
+        def find():
+            if proc.poll() not in (None, 0):
+                raise RuntimeError(f"app exited early (rc={proc.returncode}): {proc.stderr.read()[-300:].decode(errors='replace')}")
+            r = subprocess.run(["xdotool", "search", "--onlyvisible", "--class", "."], env=xs.env,
+                               capture_output=True, text=True, timeout=10)
+            return (r.stdout.split() or [None])[-1]
+        win = _until(find, 30)
+        if not win:
+            raise RuntimeError("the app opened no window on the virtual display")
+        xs.xdo("windowmove", win, "0", "0")
+        xs.xdo("windowsize", win, str(width), str(height))
+        xs.xdo("windowfocus", win)
+        time.sleep(start_s)
+        ff = xs.start_ffmpeg(raw, (0, 0, width // 2 * 2, height // 2 * 2), fps)
+        time.sleep(0.3)
+        t0 = time.monotonic()
+        xs.run_steps(steps, None, None, seed, delay_ms, jitter_ms)
+        time.sleep(tail_s)
+        dur = time.monotonic() - t0
+        _stop_ffmpeg(ff)
+        ff = None
+        finalize(raw, out, fps)
+        meta = {"mode": "gui", "video": str(out), "app": app, "duration_s": round(dur, 2),
+                "size": [width, height], "seed": seed, "steps": steps}
+        out.with_suffix(".json").write_text(json.dumps(meta, indent=2))
+        return meta
+    finally:
+        if ff:
+            _stop_ffmpeg(ff)
+        _kill(proc)
+        xs.close()
+        shutil.rmtree(work, ignore_errors=True)
+
+
 # ---------------------------------------------------------------------------
 # Web (Playwright). It records the page without a cursor, so one is drawn with an injected overlay.
 # ---------------------------------------------------------------------------
@@ -268,11 +328,18 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
 CURSOR_JS = """(() => {
  const add = () => { if (document.getElementById('__sc_cursor')) return;
   const c = document.createElement('div'); c.id = '__sc_cursor';
-  c.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;width:18px;height:18px;margin:-3px 0 0 -3px;' +
-   'border-radius:50%;background:rgba(255,80,80,.55);border:2px solid #fff;box-shadow:0 0 4px #000;left:-50px;top:-50px;transition:transform .08s';
+  // arrow tip is the SVG origin, so the tip lands exactly on the pointer coordinates
+  c.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" style="display:block;filter:drop-shadow(1px 2px 2px rgba(0,0,0,.45))">' +
+   '<path d="M2 1.5v18l4.8-4.3 3.2 7.2 3-1.4-3.2-7H17z" fill="#000" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  c.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;left:-50px;top:-50px;transform-origin:2px 1.5px;transition:transform .08s';
   document.documentElement.appendChild(c);
   addEventListener('mousemove', e => { c.style.left = e.clientX + 'px'; c.style.top = e.clientY + 'px' }, true);
-  addEventListener('mousedown', () => { c.style.transform = 'scale(.7)' }, true);
+  addEventListener('mousedown', e => { c.style.transform = 'scale(.8)';
+   const r = document.createElement('div');  // click ripple
+   r.style.cssText = 'position:fixed;z-index:2147483646;pointer-events:none;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;' +
+    'border:2px solid rgba(22,81,255,.8);left:' + e.clientX + 'px;top:' + e.clientY + 'px;transition:transform .4s,opacity .4s';
+   document.documentElement.appendChild(r);
+   requestAnimationFrame(() => { r.style.transform = 'scale(2)'; r.style.opacity = '0' }); setTimeout(() => r.remove(), 450); }, true);
   addEventListener('mouseup', () => { c.style.transform = '' }, true); };
  document.readyState === 'loading' ? addEventListener('DOMContentLoaded', add) : add(); })()"""
 
