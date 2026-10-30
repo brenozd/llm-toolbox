@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screenshot, svg-generator, promo-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.0.69",
+  "version": "1.0.70",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -50,6 +50,8 @@
         "--rm",
         "-v",
         "${HOME}:${HOME}:ro",
+        "-v",
+        "${HOME}/.cache/huggingface:/root/.cache/huggingface",
         "harbor.bzd.gg/bzd/faster-whisper-mcp:latest"
       ]
     },

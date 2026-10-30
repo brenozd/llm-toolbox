@@ -10,8 +10,8 @@ MCP server exposing speech-to-text transcription via
 > **Non-obvious:** no weights are baked into the image. The model is downloaded
 > from Hugging Face on first use into `/root/.cache/huggingface` inside the
 > container, which is thrown away with `--rm`. On a slow link the first call can
-> take minutes; mount `-v whisper-cache:/root/.cache/huggingface` to keep it
-> across runs.
+> take minutes; the plugin entry mounts `${HOME}/.cache/huggingface` (the host HF cache, shared)
+> so it is downloaded once. (`XDG_CACHE_HOME` is not expanded by the plugin launcher, so the path is fixed.)
 
 ## Config
 
@@ -70,6 +70,7 @@ docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 faster-whisper-mcp
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}:${HOME}:ro",
+        "-v", "${HOME}/.cache/huggingface:/root/.cache/huggingface",
         "harbor.bzd.gg/bzd/faster-whisper-mcp:latest"
       ]
     }
