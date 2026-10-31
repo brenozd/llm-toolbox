@@ -17,6 +17,7 @@ this file; when neither exists the tests skip. Run inside the image with the rep
         python -m pytest -q tests/test_skill_docs.py
 """
 
+import asyncio
 import json
 import os
 import re
@@ -25,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from storyboard_video_mcp import config
+from storyboard_video_mcp import server
 from storyboard_video_mcp import spec as S
 
 
@@ -103,3 +105,46 @@ def test_screencapture_geometry_matches_the_server_formats():
         assert (g["cols"], g["rows"], g["font"]) == (f["cols"], f["rows"], f["font"])
         assert "x".join(map(str, g["gui"])) == f["gui"]
         assert g["web"] == (f["viewport"]["width"], f["viewport"]["height"])
+
+
+# The role enum is the video's beat list (Fase 1: `spec.DIRECTION_ENUMS["role"]`). The skill has to name
+# every one of them -- a beat nobody documents is a beat the model will not plan for -- and the sentence
+# that lists them has to match the server, so neither side drifts alone.
+DOC_ROLES = tuple(sorted(S.DIRECTION_ENUMS["role"]))
+
+
+def test_the_skill_names_every_role_of_the_enum():
+    text = SKILL.read_text(encoding="utf-8")
+    missing = [r for r in DOC_ROLES if not re.search(rf"(?<![\w-]){r}(?![\w-])", text)]
+    assert not missing, f"{SKILL.name} never mentions the role(s) {missing}"
+
+
+def test_the_documented_role_list_is_the_server_enum():
+    """`role` ∈ a|b|c in the skill vs `spec.DIRECTION_ENUMS["role"]`. Fase 1 widens the enum to the 8
+    beats; on a server that predates it this fails on purpose (the doc is ahead of the code, not wrong)."""
+    text = SKILL.read_text(encoding="utf-8")
+    m = re.search(r"`role` ∈ ([a-z|]+)", text)
+    assert m, f"{SKILL.name} no longer states `role` ∈ … -- this check reads that sentence"
+    documented = set(m.group(1).split("|"))
+    assert documented == set(S.DIRECTION_ENUMS["role"]), (
+        f"{SKILL.name} documents {sorted(documented)}, "
+        f"spec.py accepts {sorted(S.DIRECTION_ENUMS['role'])}")
+
+
+def test_the_tools_that_do_not_exist_yet_are_marked_as_future():
+    """Every step the plan puts in a later phase has to carry its `(Fase N, ainda não disponível)`: a
+    documented tool the server lacks is an instruction the session cannot follow, and it would rather
+    invent it than degrade to the current flow.
+
+    A tool the server *does* implement is not future any more (Fase 2 landed `animatic` and `shot_list`, Fase 3 `scene.cues`, Fase 4 `scene.sfx`),
+    so the marker is required only for the names this image still lacks: the list is the server's, not a
+    literal in this file, and a phase can land without editing the test."""
+    lines = SKILL.read_text(encoding="utf-8").splitlines()
+    live = {t.name for t in asyncio.run(server.mcp.list_tools())}
+    for name in ("cutdown",):
+        hits = [line for line in lines if name in line]
+        assert hits, f"{SKILL.name} never mentions {name} (the plan's Fase 0 marks it as future)"
+        if name in live:  # implemented: the step is an instruction, not a promise
+            continue
+        unmarked = [line for line in hits if not re.search(r"\(Fase [0-9], ainda não disponível", line)]
+        assert not unmarked, f"{name} is documented as if it existed: {unmarked}"

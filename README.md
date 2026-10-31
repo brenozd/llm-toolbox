@@ -40,7 +40,7 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`skills/guided-build`](skills/guided-build/) — goal-first, checkpoint-driven build process.
 - [`skills/icon-search`](skills/icon-search/) — searches SVG icons (Iconify, OpenIconLibrary, Flaticon) with license info.
 - [`skills/image`](skills/image/) — crop/rotate/resize/blur/watermark and other light edits with Python + Pillow.
-- [`skills/music-search`](skills/music-search/) — finds a licence-cleared music bed (Openverse, Internet Archive, ccMixter), verifies the licence at the origin and stages it for storyboard-video.
+- [`skills/music-search`](skills/music-search/) — finds a licence-cleared music bed (Openverse, Internet Archive; `--kind sfx` for CC0 sound effects), verifies the licence at the origin and stages it for storyboard-video.
 - [`skills/storyboard-video`](skills/storyboard-video/) — workflow for the storyboard-video MCP: honest storyboard from the code, review stills, render, verify.
 - [`skills/pr-opener`](skills/pr-opener/) — opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates draft PR (forge-agnostic).
 - [`skills/screencapture`](skills/screencapture/) — captures desktop/web screenshots and scripted videos/GIFs (terminal, web, desktop) (Linux/macOS/Windows).

@@ -25,6 +25,7 @@ BASE_ARGS = [
     "--add-host=host.docker.internal:host-gateway",
     "-v", "${PWD}:/repo:ro", "-v", "storyboard-video-work:/work",
     "-v", "${HOME}/.cache/storyboard-video/music:/music:ro",
+    "-v", "${HOME}/.cache/storyboard-video/sfx:/sfx:ro",
     IMAGE,
 ]
 
@@ -36,6 +37,7 @@ EXEC_ARGS = [
     "-e", "STORYBOARD_ALLOW_EXEC=1",
     "-v", "${PWD}:/repo:ro", "-v", "storyboard-video-work:/work",
     "-v", "${HOME}/.cache/storyboard-video/music:/music:ro",
+    "-v", "${HOME}/.cache/storyboard-video/sfx:/sfx:ro",
     IMAGE,
 ]
 

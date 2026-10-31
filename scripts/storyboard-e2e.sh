@@ -6,12 +6,14 @@
 #     scripts/storyboard-e2e.sh                          # the `storyboard-video` entry
 #     STORYBOARD_E2E_ENTRY=storyboard-video-exec scripts/...  # the air-gapped entry (same code path)
 #     STORYBOARD_E2E_IMAGE=storyboard-video-mcp:local scripts/...   # test an image before it is published
+#     STORYBOARD_E2E_REPO=../mint STORYBOARD_E2E_SPEC=spec.json STORYBOARD_E2E_QUALITY=delivery scripts/...
+#                                                        # another project as /repo, your own spec (JSON)
 #
 # Steps (a failure at any one of them exits non-zero and prints the server log's tail):
 #   initialize -> tools/list -> validate_spec -> stills -> narrate -> render(draft) -> verify
 #
 # Two hard preconditions, both checked before docker starts: `${PWD}` must be the repo root (that is
-# what the entry mounts at `/repo`, read-only) and `~/.cache/storyboard-video/music` must already exist --
+# what the entry mounts at `/repo`, read-only) and `~/.cache/storyboard-video/{music,sfx}` must already exist --
 # `docker run -v` would otherwise create it root-owned on the host and the music skill could not write.
 set -euo pipefail
 
@@ -20,11 +22,13 @@ cd "$ROOT"  # ${PWD} of the entry is the launch directory: start where the mount
 
 command -v docker >/dev/null || { echo "storyboard-e2e: docker not found in PATH" >&2; exit 127; }
 command -v python3 >/dev/null || { echo "storyboard-e2e: python3 not found in PATH" >&2; exit 127; }
-if [ ! -d "${HOME}/.cache/storyboard-video/music" ]; then
-    echo "storyboard-e2e: ${HOME}/.cache/storyboard-video/music is missing (docker would create it root-owned)." >&2
-    echo "storyboard-e2e: mkdir -p \"\$HOME/.cache/storyboard-video/music\" and re-run." >&2
+for d in music sfx; do
+if [ ! -d "${HOME}/.cache/storyboard-video/$d" ]; then
+    echo "storyboard-e2e: ${HOME}/.cache/storyboard-video/$d is missing (docker would create it root-owned)." >&2
+    echo "storyboard-e2e: mkdir -p \"\$HOME/.cache/storyboard-video/$d\" and re-run." >&2
     exit 2
 fi
+done
 
 exec python3 - "$ROOT" <<'PY'
 """MCP client for the storyboard-video stdio server: stdlib only, so the host needs no `mcp` package.
@@ -73,6 +77,11 @@ SPEC = {
 }
 
 
+if os.environ.get("STORYBOARD_E2E_SPEC"):
+    SPEC = json.loads(Path(os.environ["STORYBOARD_E2E_SPEC"]).read_text())
+QUALITY = os.environ.get("STORYBOARD_E2E_QUALITY", "draft")
+
+
 class Fail(Exception):
     pass
 
@@ -83,7 +92,7 @@ def docker_argv(entry):
     cfg = plugin["mcpServers"].get(entry)
     if cfg is None:
         raise Fail(f"no mcpServers[{entry!r}] in .claude-plugin/plugin.json")
-    known = {"PWD": str(ROOT), "HOME": os.environ.get("HOME", "")}
+    known = {"PWD": str(Path(os.environ.get("STORYBOARD_E2E_REPO") or ROOT).resolve()), "HOME": os.environ.get("HOME", "")}
 
     def sub(m):
         name = m.group(1) or m.group(2)
@@ -227,7 +236,7 @@ def main():
         print(f"storyboard-e2e: narrate ok, {voice['total_s']}s of speech "
               f"({voice['synthesized']} synthesized, {voice['cached']} cached)")
 
-        job = ok("render", c.call("render", {"spec_hash": h, "quality": "draft"}))["job_id"]
+        job = ok("render", c.call("render", {"spec_hash": h, "quality": QUALITY}))["job_id"]
         end = time.time() + TIMEOUT
         while True:
             st = c.call("render_status", {"job_id": job})

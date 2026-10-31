@@ -5,9 +5,9 @@ Run: python3 -I skills/music-search/scripts/test_music_search.py
      (also collectable by pytest: `python3 -m pytest skills/music-search/scripts`)
 
 Recorded fixtures in ./fixtures/ are trimmed real responses (2026-xx): Openverse audio for
-"calm ambient", archive.org advancedsearch, ccMixter lic=zero. Source records answered by
-the stubs (archive.org /metadata, ccMixter ids=, Openverse audio id) are synthetic dicts
-shaped like the live ones, so `fetch` is exercised without the network.
+"calm ambient", archive.org advancedsearch (music and `--kind sfx`). Source records answered by
+the stubs (archive.org /metadata, Openverse audio id) are synthetic dicts shaped like the live
+ones, so `fetch` is exercised without the network.
 """
 
 import json
@@ -16,6 +16,7 @@ import sys
 import tempfile
 import unittest
 import urllib.error
+import urllib.parse
 from datetime import date
 from hashlib import sha256
 from pathlib import Path
@@ -297,17 +298,16 @@ class SearchTests(unittest.TestCase):
         # fetch re-reads this item later: the identifier must survive the search
         self.assertTrue(all(c["ia_id"] for c in out["results"]))
 
-    def test_ccmixter_cc0_is_usable(self):
-        http, _ = stub_http({"ccmixter.org/api/query": fixture("ccmixter_ambient.json")})
+    def test_music_is_the_default_kind(self):
+        http, calls = stub_http({"archive.org/advancedsearch": fixture("ia_calm_ambient.json")})
         M.http_get = http
-        out = M.search("ambient", source="ccmixter", limit=3)
-        self.assertGreaterEqual(out["count"], 1)
-        titles = [c["title"] for c in out["results"]]
-        self.assertIn("Pianetto Lead", titles)
-        for top in out["results"]:
-            self.assertEqual(top["verdict"], "allow")
-            self.assertTrue(top["file_url"].endswith(".mp3"))
-            self.assertGreater(top["vibe_score"], 0)
+        out = M.search("calm ambient", source="ia")
+        self.assertEqual(out["kind"], "music")
+        self.assertTrue(all(c["kind"] == "music" for c in out["results"]))
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(calls[0]).query)["q"][0]
+        self.assertNotIn("sound effects", q)  # the music query is unchanged
+        self.assertIn("mediatype:audio", q)
+        self.assertIn("licenseurl:*by*", q)
 
     def test_ia_results_are_indexed_for_fetch(self):
         http, _ = stub_http({"archive.org/advancedsearch": fixture("ia_calm_ambient.json")})
@@ -318,14 +318,66 @@ class SearchTests(unittest.TestCase):
         self.assertEqual(M.resolve_candidate("https://example.org/track.mp3"), {})
 
     def test_min_s_and_limit(self):
-        # the recorded ccMixter files are 0:21 and 2:28, so a longer minimum drops them
-        http, _ = stub_http({"ccmixter.org/api/query": fixture("ccmixter_ambient.json")})
-        M.http_get = http
-        too_long = M.search("ambient", source="ccmixter", min_s=600)
+        def fake(vibe, limit, *, refresh=False):
+            return [M._cand(id="ia-long", source="ia", title="Long", creator="a",
+                            license_id="cc0", duration_s=300.0),
+                    M._cand(id="ia-brief", source="ia", title="Brief", creator="b",
+                            license_id="cc0", duration_s=21.0)]
+
+        old = M.SEARCHERS["ia"]
+        M.SEARCHERS["ia"] = fake
+        self.addCleanup(lambda: M.SEARCHERS.__setitem__("ia", old))
+        too_long = M.search("ambient", source="ia", min_s=600)
         self.assertEqual(too_long["count"], 0)
-        self.assertGreaterEqual(too_long["skipped"]["too_short"], 1)
-        kept = M.search("ambient", source="ccmixter", min_s=100, limit=2)
-        self.assertEqual([c["title"] for c in kept["results"]], ["After the storm"])
+        self.assertGreaterEqual(too_long["skipped"]["too_short"], 2)
+        kept = M.search("ambient", source="ia", min_s=100, limit=2)
+        self.assertEqual([c["title"] for c in kept["results"]], ["Long"])
+
+    def test_sfx_queries_ia_for_the_sfx_subject_and_cc0_pdm_only(self):
+        http, calls = stub_http({"archive.org/advancedsearch": fixture("ia_sfx_whoosh.json")})
+        M.http_get = http
+        M.search("whoosh", kind="sfx")
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(calls[0]).query)["q"][0]
+        self.assertIn('subject:"sound effects"', q)
+        self.assertIn("mediatype:audio", q)
+        self.assertIn("licenseurl:*publicdomain*", q)  # CC0 + PDM, nothing else
+        self.assertNotIn("*by*", q)
+
+    def test_sfx_never_calls_openverse(self):
+        """Openverse's sfx catalogue is Freesound, which `policy` denies: never ask it."""
+        asked = []
+
+        def openverse(vibe, limit, *, refresh=False):
+            asked.append(vibe)
+            raise AssertionError("openverse must not be queried for sfx")
+
+        http, calls = stub_http({"archive.org/advancedsearch": fixture("ia_sfx_whoosh.json")})
+        M.http_get = http
+        old = M.SEARCHERS["openverse"]
+        M.SEARCHERS["openverse"] = openverse
+        self.addCleanup(lambda: M.SEARCHERS.__setitem__("openverse", old))
+        out = M.search("whoosh", kind="sfx")
+        self.assertEqual(asked, [])
+        self.assertEqual(out["sources"], ["ia:2"])
+        self.assertFalse([u for u in calls if "api.openverse.org" in u])
+
+    def test_sfx_rejects_everything_that_is_not_cc0_or_pdm(self):
+        http, _ = stub_http({"archive.org/advancedsearch": fixture("ia_sfx_whoosh.json")})
+        M.http_get = http
+        out = M.search("whoosh", kind="sfx", limit=3)
+        self.assertEqual([c["title"] for c in out["results"]], ["Whoosh 01 (foley)"])
+        self.assertEqual(out["results"][0]["verdict"], "allow")
+        self.assertEqual(out["skipped"].get("cc_by_4.0_needs_credit"), 1)
+        # ...and the surviving candidate is indexed as sfx, so `fetch` uses it as a clip
+        self.assertEqual(M.resolve_candidate(out["results"][0]["id"])["kind"], "sfx")
+
+    def test_sfx_with_a_music_only_source_says_so_and_searches_nothing(self):
+        http, calls = stub_http({})
+        M.http_get = http
+        out = M.search("whoosh", kind="sfx", source="openverse")
+        self.assertEqual(out["count"], 0)
+        self.assertEqual(out["sources"], ["openverse:not_used_for_sfx"])
+        self.assertEqual(calls, [])
 
     def test_search_caches_on_disk(self):
         http, calls = stub_http({"archive.org/advancedsearch": fixture("ia_calm_ambient.json")})
@@ -476,15 +528,14 @@ class OriginVerifyTests(unittest.TestCase):
         self.assertFalse(got["ok"])
         self.assertIn("year conflict", got["detail"])
 
-    def test_ccmixter_api_record_licenses_the_file(self):
-        payload = [{"upload_id": 61841, "license_name": "CC0 (CC Zero)",
-                    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/"}]
-        http, calls = stub_http({"ccmixter.org/api/query": payload})
+    def test_a_stale_ccmixter_candidate_has_no_origin_check(self):
+        """ccMixter is gone: an old index entry cannot be re-verified, so it is refused offline."""
+        http, calls = stub_http({})
         M.http_get = http
-        got = M.verify_at_origin(M._cand(source="ccmixter", ccm_id=61841, license_id="cc0"))
-        self.assertTrue(got["ok"])
-        self.assertEqual(got["license_id"], "cc0")
-        self.assertIn("ids=61841", calls[0])
+        got = M.verify_at_origin(M._cand(source="ccmixter", license_id="cc0"))
+        self.assertFalse(got["ok"])
+        self.assertIn("no origin check available", got["detail"])
+        self.assertEqual(calls, [])
 
     def test_openverse_record_reroute_to_freesound_is_caught(self):
         record = {"id": "ov-1", "license": "cc0", "license_version": "1.0",
@@ -610,24 +661,60 @@ class FetchTests(unittest.TestCase):
             self.assertIn(key, out)
         self.assertEqual(side["content_id_dispute"], M.CONTENT_ID_DISPUTE)
 
-    def test_ccmixter_download_sends_a_referer(self):
-        payload = [{"upload_id": 61841, "license_name": "CC0 (CC Zero)",
-                    "license_url": "http://creativecommons.org/publicdomain/zero/1.0/"}]
-        http, _ = stub_http({"ccmixter.org/api/query": payload})
+    def test_sfx_fetch_stages_a_clip_from_zero_capped_by_duration(self):
+        # `--duration` is a maximum for an sfx: 10 s by default, and the clip is used from 0.
+        http, _ = stub_http({"archive.org/metadata/whoosh-cc0-01": ia_item(
+            "whoosh-cc0-01", "https://creativecommons.org/publicdomain/zero/1.0/")})
         M.http_get = http
         seen = {}
 
-        def fake(url, *, timeout=90, referer=None, chunk=1 << 20):
-            seen["referer"] = referer
-            yield b"ID3ccm"
+        def fake_probe(path):
+            return 6.0, "mp3"
 
-        M.http_stream = fake
-        self.index(M._cand(id="ccm-61841", source="ccmixter", ccm_id=61841, license_id="cc0",
-                           source_url="https://ccmixter.org/files/Hugh_Jass/61841",
-                           file_url="https://ccmixter.org/content/Hugh_Jass/x.mp3"))
-        out = M.fetch("ccm-61841", duration=20, stage_dir=self.stage)
+        M.probe = fake_probe
+        M.analyze = lambda path, **kw: seen.update(kw) or make_analysis()
+        M.http_stream = stub_stream([b"ID3whoosh"])
+        self.index(self.ia_cand("whoosh-cc0-01", license_id="cc0", kind="sfx"))
+        out = M.fetch("ia-whoosh-cc0-01")  # no --duration: SFX_MAX_S applies
         self.assertNotIn("error", out)
-        self.assertEqual(seen["referer"], "https://ccmixter.org/files/Hugh_Jass/61841")
+        self.assertEqual(out["start_s"], 0.0)  # a clip, not a bed window
+        self.assertEqual(out["clip_s"], 6.0)  # the file is shorter than the 10 s cap
+        self.assertEqual(seen["start"], 0.0)
+        self.assertEqual(seen["duration"], 6.0)
+        self.assertEqual(out["path_in_container"], "/sfx/ia-whoosh-cc0-01.mp3")
+        self.assertEqual(out["kind"], "sfx")
+        sfx_stage = Path(self.tmp.name) / "storyboard-video" / "sfx"  # XDG, not the music dir
+        self.assertTrue((sfx_stage / "ia-whoosh-cc0-01.mp3").is_file())
+        self.assertIn("/sfx", out["mount_hint"])  # the XDG stage is not the mounted dir
+
+    def test_sfx_clip_is_capped_at_the_default_ten_seconds(self):
+        http, _ = stub_http({"archive.org/metadata/whoosh-long": ia_item(
+            "whoosh-long", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        M.probe = lambda path: (180.0, "mp3")  # an sfx library file can be a whole minute
+        seen = {}
+        M.analyze = lambda path, **kw: seen.update(kw) or make_analysis()
+        M.http_stream = stub_stream([b"ID3long"])
+        self.index(self.ia_cand("whoosh-long", license_id="cc0", kind="sfx"))
+        out = M.fetch("ia-whoosh-long")
+        self.assertNotIn("error", out)
+        self.assertEqual((out["start_s"], out["clip_s"]), (0.0, M.SFX_MAX_S))
+        self.assertEqual(seen["duration"], M.SFX_MAX_S)
+
+    def test_sfx_gate_ignores_the_bed_spectral_limits(self):
+        """A whoosh is broadband noise: the music bed's noise/rumble gates must not apply."""
+        broadband = make_analysis(centroid=6200.0, rolloff=15000.0)
+        self.assertEqual(M.gate(broadband), "noise_dominated")
+        self.assertIsNone(M.gate(broadband, kind="sfx"))
+
+    def test_music_fetch_still_needs_a_duration(self):
+        http, calls = stub_http({"archive.org/metadata/item-nodur": ia_item(
+            "item-nodur", "https://creativecommons.org/publicdomain/zero/1.0/")})
+        M.http_get = http
+        self.index(self.ia_cand("item-nodur", license_id="cc0"))
+        out = M.fetch("ia-item-nodur", stage_dir=self.stage)
+        self.assertEqual(out["error"], "duration_required")
+        self.assertEqual(calls, [])  # refused before any network
 
     def test_short_track_rejected(self):
         http, _ = stub_http({"archive.org/metadata/item-short": ia_item(
@@ -713,7 +800,7 @@ class FetchTests(unittest.TestCase):
 
     def test_no_mount_hint_when_staging_into_the_mounted_dir(self):
         old = M.mounted_stage
-        M.mounted_stage = lambda: self.stage
+        M.mounted_stage = lambda kind="music": self.stage
         self.addCleanup(lambda: setattr(M, "mounted_stage", old))
         self.assertNotIn("mount_hint", self.fetched_ok(self.stage))
 
@@ -907,17 +994,28 @@ class MiscTests(unittest.TestCase):
         self.assertEqual(M.parse_license("", url="http://creativecommons.org/licenses/by-nc-nd/4.0/")[0], "by-nc-nd")
         self.assertEqual(M.parse_license("")[0], "other")
 
-    def test_only_the_three_sources_remain(self):
-        self.assertEqual(M.SOURCES, ("openverse", "ia", "ccmixter"))
-        self.assertEqual(sorted(M.SEARCHERS), ["ccmixter", "ia", "openverse"])
+    def test_ccmixter_is_gone(self):
+        self.assertEqual(M.SOURCES, ("openverse", "ia"))
+        self.assertEqual(sorted(M.SEARCHERS), ["ia", "openverse"])
+        self.assertEqual(sorted(M.SFX_SEARCHERS), ["ia"])
+        self.assertFalse([n for n in dir(M) if "ccm" in n.lower()])
         self.assertFalse([n for n in dir(M) if "commons" in n.lower()])
+        choices = M.build_parser()._subparsers._group_actions[0].choices["search"]._actions
+        source = [a for a in choices if a.dest == "source"][0]
+        self.assertEqual(list(source.choices), ["openverse", "ia"])
+        with self.assertRaises(SystemExit):  # --source ccmixter is no longer accepted
+            M.build_parser().parse_args(["search", "--vibe", "x", "--source", "ccmixter"])
+        self.assertFalse((FIXTURES / "ccmixter_ambient.json").exists())
 
     def test_cli_parses_both_commands(self):
         parser = M.build_parser()
         args = parser.parse_args(["search", "--vibe", "calm ambient", "--min-s", "30", "--limit", "3"])
         self.assertEqual((args.vibe, args.min_s, args.limit), ("calm ambient", 30.0, 3))
+        self.assertEqual(args.kind, "music")  # the default kind keeps today's behaviour
+        self.assertEqual(parser.parse_args(["search", "--vibe", "whoosh", "--kind", "sfx"]).kind, "sfx")
         args = parser.parse_args(["fetch", "ia-foo", "--duration", "30"])
         self.assertEqual((args.target, args.duration, args.stage_dir), ("ia-foo", 30.0, None))
+        self.assertIsNone(parser.parse_args(["fetch", "ia-foo"]).duration)  # sfx has a default
 
 
 if __name__ == "__main__":

@@ -1,16 +1,21 @@
-"""The mix: a staged music bed + narration, ducked, normalised to -16 LUFS, encoded AAC 192k.
+"""The mix: a staged music bed + narration, ducked, normalised to -14 LUFS, encoded AAC 192k.
 
 The bed is a track the music-search skill staged under /music (spec.music.path) and it is looped/trimmed
 to the picture, faded in and out; under a voice-over it is compressed by `sidechaincompress` keyed on the
 narration (a plain gain when nothing is spoken). The mix then goes through a two-pass `loudnorm` (measure,
-then correct the whole mix by the measured offset) so the delivery sits at -16 LUFS integrated with true
-peaks under the ceiling. `verify` re-measures the MP4 and reports the numbers, because the AAC encoder is
-the last thing that touches the audio. The credit block for the published description is written next to
-the render (`/work/CREDITS.txt` and `out/<resolved_hash>/CREDITS.txt`).
+then correct the whole mix by the measured offset) so the delivery sits at DEFAULT_TARGET_I (-14 LUFS, the
+web/hero bar; `spec.audio.target_lufs` may pick another point in TARGET_RANGE) with true peaks under the
+ceiling. `verify` re-measures the MP4 and reports the numbers, because the AAC encoder is the last thing
+that touches the audio. The credit block for the published description is written next to the render
+(`/work/CREDITS.txt` and `out/<resolved_hash>/CREDITS.txt`).
 """
 from __future__ import annotations
 
+import array
 import json
+import math
+import statistics
+import wave
 import re
 import subprocess
 from pathlib import Path
@@ -18,11 +23,23 @@ from pathlib import Path
 from . import config
 from .safety import safe_path
 
-TARGET_I = -16.0  # EBU R128 integrated loudness of the delivery
-TARGET_TP = -2.0  # dBTP the normaliser aims at: 0.5 dB under the verify ceiling, for AAC overshoot
+DEFAULT_TARGET_I = -14.0  # EBU R128 integrated loudness of the delivery: the web/hero bar
+TARGET_I = DEFAULT_TARGET_I  # kept as an alias: importers (and old tests) read the module constant
+TARGET_RANGE = (-24.0, -12.0)  # spec.audio.target_lufs may move the target, but not out of this band
+TARGET_TP = -1.5  # dBTP the normaliser aims at: 0.5 dB under the verify ceiling, for AAC overshoot
 TARGET_LRA = 11.0
-I_TOL = 1.5  # verify: how far the measured integrated loudness may sit from TARGET_I
-TP_LIMIT = -1.5  # verify: true peak ceiling (dBTP)
+I_TOL = 1.5  # verify: how far the measured integrated loudness may sit from the target
+# verify: true peak ceiling (dBTP) of the *encoded* file. Measured: the -1.5 dBTP the normaliser aims
+# at comes out of AAC 192k at -1.3 dBTP on a voice+bed mix (and -1.0 on a plosive-heavy one), so the
+# -1.5 ceiling this used to be would fail a correct render. The overshoot is the encoder's, not the mix's.
+TP_LIMIT = -1.0
+# How deep the look-ahead limiter in norm_chain may go before loudnorm's own dynamic mode is the lesser
+# evil: past this the limiter is chewing the body of the speech, not clipping the transients.
+LIMIT_FLOOR_DB = -12.0
+# ...and how much peak the limiter may shave off. Measured: shaving 1.2 dB (crest 13.4) keeps the pass
+# linear on target; shaving 5 dB (a bursty crest-19.5 mix) made it deliver -19 LUFS, worse than loudnorm's
+# dynamic mode (-14.6). Past this the dynamic mode is the lesser evil.
+MAX_SHAVE_DB = 3.0
 MAX_SILENCE_S = 3.0  # verify: longest silence tolerated under a voice-over
 SILENCE_DB = -45.0
 FADE_IN_S, FADE_OUT_S = 1.5, 2.5
@@ -61,9 +78,21 @@ def duck_chain(duck_db: float) -> str:
 
 
 def mix_graph(total: float, voice: bool, has_bed: bool, volume_db: float = 0.0,
-              duck_db: float = 12.0, start_s: float = 0.0) -> str:
+              duck_db: float = 12.0, start_s: float = 0.0, sfx: bool = False) -> str:
     """Filter graph for the mix, ending on [out]. Input 0 is the bed (when `has_bed`), input 1 the
-    narration (when `voice`). The voice is only the sidechain *key*: it never gets compressed itself."""
+    narration (when `voice`). The voice is only the sidechain *key*: it never gets compressed itself.
+    With `sfx`, the last input is the effects track, added *after* the duck: it is neither ducked nor a
+    key for the duck, or the bed would pump at every click. It needs a bed or a voice to sit on."""
+    g = _mix_graph(total, voice, has_bed, volume_db, duck_db, start_s)
+    if not sfx:
+        return g
+    i = int(voice) + int(has_bed)
+    return (g.replace("[out]", "[pre]") + f";[{i}:a]aresample={SR},aformat=channel_layouts=stereo[fx];"
+            f"[pre][fx]amix=inputs=2:normalize=0:duration=first:dropout_transition=0,"
+            f"atrim=0:{total:.3f},asetpts=N/SR/TB[out]")
+
+
+def _mix_graph(total: float, voice: bool, has_bed: bool, volume_db: float, duck_db: float, start_s: float) -> str:
     v = f"aresample={SR},aformat=channel_layouts=stereo,apad"
     tail = f"apad,atrim=0:{total:.3f},asetpts=N/SR/TB[out]"
     if has_bed and voice:
@@ -76,7 +105,7 @@ def mix_graph(total: float, voice: bool, has_bed: bool, volume_db: float = 0.0,
     return f"[0:a]{v},{tail}"
 
 
-def build(spec: dict, narration: Path | None, total: float, out: Path) -> Path | None:
+def build(spec: dict, narration: Path | None, total: float, out: Path, sfx: Path | None = None) -> Path | None:
     """Write the un-normalised mix to `out` (48 kHz stereo PCM). None when there is nothing to mix."""
     b = bed(spec)
     if not narration and not b:
@@ -87,15 +116,61 @@ def build(spec: dict, narration: Path | None, total: float, out: Path) -> Path |
         cmd += ["-stream_loop", "-1", "-i", str(b[0])]  # a 3 min track, a 30 s video: loop it
     if narration:
         cmd += ["-i", str(narration)]
+    if sfx:
+        cmd += ["-i", str(sfx)]
     cmd += ["-filter_complex",
             mix_graph(total, bool(narration), bool(b),
                       float((b[1] if b else {}).get("volume_db", 0.0)),
                       float((b[1] if b else {}).get("duck", 12.0)),
-                      float((b[1] if b else {}).get("start_s") or 0.0)),
+                      float((b[1] if b else {}).get("start_s") or 0.0), bool(sfx)),
             "-map", "[out]", "-t", f"{total:.3f}", "-ar", str(SR), "-ac", "2",
             "-c:a", "pcm_s16le", str(out)]
     subprocess.run(cmd, check=True)
     return out
+
+
+DUCK_MARGIN_MIN_DB = 8.0  # the voice should sit at least this far above the bed while it speaks
+WIN_S = 0.1
+
+
+def duck_margin_db(spec: dict, narration: Path | None, total: float) -> float | None:
+    """How far the voice sits above the *ducked* bed while it speaks (median over 100 ms windows where the
+    voice is audible), measured on the two stems before normalisation -- both scale together, so the gap
+    is what the listener gets. None without a bed and a voice."""
+    b = bed(spec)
+    if not (b and narration):
+        return None
+    m, d = b[1], narration.parent
+    g = (f"[0:a]{bed_chain(total, float(m.get('volume_db', 0.0)), float(m.get('start_s') or 0.0))}[bed];"
+         f"[1:a]aresample={SR},aformat=channel_layouts=stereo,apad,asplit=2[voice][key];"
+         f"[bed][key]{duck_chain(float(m.get('duck', 12.0)))}[duck];"
+         # shortcut: 0.5/0.5 downmix reads a wide, uncorrelated stereo bed up to ~3 dB low; upgrade if a bed shows it
+         f"[duck]atrim=0:{total:.3f},aresample=8000,pan=mono|c0=0.5*c0+0.5*c1[b];"
+         f"[voice]atrim=0:{total:.3f},aresample=8000,pan=mono|c0=0.5*c0+0.5*c1[v]")
+    pb, pv = d / "stem-bed.wav", d / "stem-voice.wav"
+    r = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", "-1", "-i", str(b[0]), "-i", str(narration),
+                        "-filter_complex", g, "-map", "[b]", "-t", f"{total:.3f}", "-c:a", "pcm_s16le", str(pb),
+                        "-map", "[v]", "-t", f"{total:.3f}", "-c:a", "pcm_s16le", str(pv)], capture_output=True)
+    if r.returncode:
+        return None
+    try:
+        gaps = _stem_gaps(pb, pv)
+    finally:
+        pb.unlink(missing_ok=True)
+        pv.unlink(missing_ok=True)
+    return round(statistics.median(gaps), 1) if gaps else None
+
+
+def _stem_gaps(pb: Path, pv: Path) -> list[float]:
+    def db(path):
+        with wave.open(str(path), "rb") as w:
+            x = array.array("h")
+            x.frombytes(w.readframes(w.getnframes()))
+            n = int(w.getframerate() * WIN_S)
+        return [20 * math.log10(max(1e-5, math.sqrt(sum(v * v for v in x[i:i + n]) / n) / 32768))
+                for i in range(0, len(x) - n + 1, n)]
+    b, v = db(pb), db(pv)
+    return [vv - bb for vv, bb in zip(v, b) if vv > -40.0]
 
 
 def _num(s: str) -> float | None:
@@ -138,19 +213,77 @@ def parse_loudnorm_json(err: str) -> dict:
     return out
 
 
-def measure_loudnorm(path: str) -> dict:
+def target_lufs(spec: dict) -> float:
+    """The delivery loudness target this spec asks for: `spec.audio.target_lufs`, else DEFAULT_TARGET_I.
+    Raises ValueError outside TARGET_RANGE (-24..-12): a target the loudnorm pass cannot honour is a spec
+    bug, and silently delivering the default would hide it."""
+    au = spec.get("audio")
+    if au is None:
+        return DEFAULT_TARGET_I
+    if not isinstance(au, dict):
+        raise ValueError(f"spec.audio {au!r} is not an object; use audio = {{target_lufs: -14}}")
+    v = au.get("target_lufs")
+    if v is None:
+        return DEFAULT_TARGET_I
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        raise ValueError(f"spec.audio.target_lufs {v!r} is not a number "
+                         f"({TARGET_RANGE[0]:g}..{TARGET_RANGE[1]:g} LUFS)")
+    return _target(v)
+
+
+def _target(target_i: float | None) -> float:
+    """Coerce/validate an explicit target (None keeps the default); the single rule every entry point uses."""
+    t = DEFAULT_TARGET_I if target_i is None else float(target_i)
+    lo, hi = TARGET_RANGE
+    if not lo <= t <= hi:  # also rejects NaN
+        raise ValueError(f"target_lufs {t:g} is outside {lo:g}..{hi:g} LUFS")
+    return t
+
+
+def measure_loudnorm(path: str, target_i: float | None = None) -> dict:
     r = subprocess.run(["ffmpeg", "-nostats", "-hide_banner", "-i", str(path), "-af",
-                        f"loudnorm=I={TARGET_I}:TP={TARGET_TP}:LRA={TARGET_LRA}:print_format=json",
+                        f"loudnorm=I={_target(target_i):.1f}:TP={TARGET_TP}:LRA={TARGET_LRA}:print_format=json",
                         "-f", "null", "-"], capture_output=True, text=True)
     return parse_loudnorm_json(r.stderr)
 
 
-def norm_chain(ln: dict) -> str:
-    """Second loudnorm pass: correct the whole mix by the measured offset (linear), not by squashing it."""
-    chain = f"loudnorm=I={TARGET_I}:TP={TARGET_TP}:LRA={TARGET_LRA}"
+def limiter_db(ln: dict, target_i: float | None = None) -> float | None:
+    """How hard a look-ahead limiter has to hit (dB, negative) for the second loudnorm pass to stay
+    linear, or None when it already fits or would have to squash the mix past LIMIT_FLOOR_DB.
+
+    `loudnorm linear=true` only stays linear if the gain the mix needs (target - measured I) raised onto
+    the measured true peak still lands under TP; otherwise it silently switches to dynamic mode, which
+    pumps. Measured on ffmpeg 8.1 with a voice+bed mix: crest factor (TP - I) 13.4 dB stays linear at
+    -16 (-15.74 LUFS / -2.35 dBTP) and goes dynamic at -14 (-14.06 / -1.50, LRA 8.4 -> 8.1), i.e. the
+    linear window is crest <= 14.5 dB at -16 and <= 12.5 dB at -14. Clamping the peaks at TP - gain keeps
+    the gain, and with it the dynamics, where the mix left them."""
+    ti = _target(target_i)
+    if not ln:
+        return None
+    gain = ti - ln["input_i"]
+    if ln["input_tp"] + gain <= TARGET_TP:  # linear already fits: never touch the audio
+        return None
+    if ln["input_tp"] + gain - TARGET_TP > MAX_SHAVE_DB:
+        return None
+    lim = TARGET_TP - gain  # peaks clamped here land exactly on TARGET_TP once the gain is applied
+    return round(lim, 2) if lim >= LIMIT_FLOOR_DB else None
+
+
+def norm_chain(ln: dict, target_i: float | None = None) -> str:
+    """Second loudnorm pass: correct the whole mix by the measured offset (linear), not by squashing it.
+
+    When the mix's peaks would not survive that gain (see limiter_db) an `alimiter` goes in front and the
+    pass is told the peak it will actually see after limiting, so loudnorm keeps `linear=true` instead of
+    quietly switching to its dynamic mode. `level=false`: the limiter must not add makeup gain of its own."""
+    ti = _target(target_i)
+    chain = f"loudnorm=I={ti:.1f}:TP={TARGET_TP}:LRA={TARGET_LRA}"
     if ln:
-        chain += (f":measured_I={ln['input_i']}:measured_TP={ln['input_tp']}:measured_LRA={ln['input_lra']}"
-                  f":measured_thresh={ln['input_thresh']}:offset={ln['target_offset']}:linear=true")
+        lim = limiter_db(ln, ti)
+        peak = min(ln["input_tp"], lim) if lim is not None else ln["input_tp"]
+        pre = f"alimiter=limit={10 ** (lim / 20):.4f}:level=false," if lim is not None else ""
+        chain = (f"{pre}{chain}:measured_I={ln['input_i']}:measured_TP={peak}"
+                 f":measured_LRA={ln['input_lra']}:measured_thresh={ln['input_thresh']}"
+                 f":offset={ln['target_offset']}:linear=true")
     return f"{chain},aresample={SR}"
 
 
@@ -161,42 +294,57 @@ def mux_cmd(mp4: Path, wav: Path, total: float, chain: str) -> list[str]:
             "-b:a", BITRATE, "-ar", str(SR), "-t", f"{total:.3f}", "-movflags", "+faststart"]
 
 
-def mux(mp4: Path, spec: dict, narration: Path | None, total: float) -> dict | None:
-    """Mix + two-pass loudnorm + mux into `mp4` in place. None when the spec has no audio at all."""
+def mux(mp4: Path, spec: dict, narration: Path | None, total: float,
+        target_i: float | None = None, wav: Path | None = None, sfx: Path | None = None) -> dict | None:
+    """Mix + two-pass loudnorm + mux into `mp4` in place. None when the spec has no audio at all. The
+    target is `target_i` when given, else what the spec asks for (`spec.audio.target_lufs`)."""
+    ti = target_lufs(spec) if target_i is None else _target(target_i)
     b = bed(spec)
-    wav = build(spec, narration, total, mp4.parent / "mix.wav")
+    wav = build(spec, narration, total, wav or mp4.parent / "mix.wav", sfx)
     if not wav:
         return None
-    ln = measure_loudnorm(str(wav))
+    ln = measure_loudnorm(str(wav), ti)
     tmp = mp4.with_name(mp4.stem + ".mux.mp4")
-    subprocess.run([*mux_cmd(mp4, wav, total, norm_chain(ln)), str(tmp)], check=True)
+    subprocess.run([*mux_cmd(mp4, wav, total, norm_chain(ln, ti)), str(tmp)], check=True)
     tmp.replace(mp4)
     return {"mix": str(wav), "voice": bool(narration), "music": (b[1].get("path") if b else None),
             "license": (b[1].get("license") if b else None), "start_s": (b[1].get("start_s") if b else None),
             "volume_db": (b[1].get("volume_db") if b else None),
-            "ducked": bool(narration and b), "target_lufs": TARGET_I, "loudnorm": ln or None}
+            "ducked": bool(narration and b), "target_lufs": ti, "loudnorm": ln or None,
+            "sfx": bool(sfx), "duck_margin_db": duck_margin_db(spec, narration, total)}
 
 
-def credits_text(spec: dict) -> str | None:
+def credits_text(spec: dict, target_i: float | None = None) -> str | None:
     """The credit block for the published description: title, creator, licence + link, source and the
-    attribution the skill returned (mandatory for CC BY). None when the spec has no track."""
+    attribution the skill returned (mandatory for CC BY). None when the spec has no track.
+
+    `target_i` is opt-in: when given, the block also states the loudness the mix was mastered to. It is
+    not filled in by default because CREDITS.txt is written before verify measures the delivery, and a
+    credit that claims a level the render did not reach would be a lie in the published description."""
     m = spec.get("music")
+    ti = _target(target_i) if target_i is not None else None  # validated before the no-track shortcut
+    from . import sfx as _sfx
+    fx = _sfx.credits(spec) if isinstance(spec.get("scenes"), list) else []
     if not isinstance(m, dict) or not m.get("path"):
-        return None
+        return "\n".join(["Sound effect credits", *fx]) + "\n" if fx else None
     who = " by ".join(str(x) for x in (m.get("title"), m.get("creator")) if x)
     head = " · ".join(str(x) for x in (who, m.get("license"), m.get("license_url"), m.get("source_url")) if x)
     lines = ["Music credits", f"- {head}" if head else "- (unnamed track)"]
     if str(m.get("attribution") or "").strip():
         lines.append("  " + str(m["attribution"]).strip().replace("\n", "\n  "))
+    if fx:
+        lines += ["Sound effect credits", *fx]
+    if ti is not None:
+        lines.append(f"- Audio mastered to {ti:.0f} LUFS integrated")
     return "\n".join(lines) + "\n"
 
 
-def write_credits(spec: dict, out: Path | None = None) -> str | None:
+def write_credits(spec: dict, out: Path | None = None, target_i: float | None = None) -> str | None:
     """Write CREDITS.txt for this render, both in /work (what the skill and the user read) and next to
     the video (`out`), because a later render — even a silent one — unlinks /work/CREDITS.txt and an
     older receipt must still point at its own credit. Unlinked first, so a previous video's credit
     never survives into this one. Returns the /work path, or None when there is nothing to credit."""
-    text = credits_text(spec)
+    text = credits_text(spec, target_i)
     paths = [config.WORK / "CREDITS.txt"] + ([out / "CREDITS.txt"] if out else [])
     for p in paths:
         p.unlink(missing_ok=True)
@@ -228,16 +376,19 @@ def silences(path: str, total: float, min_s: float = 1.0) -> list[dict]:
     return parse_silences(r.stderr, total)
 
 
-def loudness_findings(m: dict | None, voiced: bool, sil: list[dict]) -> list[dict]:
-    """The delivery bar: -16 LUFS +-1.5 LU, true peak under -1.5 dBTP, no dead air under a voice-over."""
+def loudness_findings(m: dict | None, voiced: bool, sil: list[dict],
+                      target_i: float | None = None) -> list[dict]:
+    """The delivery bar: the spec's target (default -14) +-1.5 LU, true peak under TP_LIMIT dBTP, no dead
+    air under a voice-over."""
+    ti = _target(target_i)
     f: list[dict] = []
     if not m or m.get("integrated_lufs") is None:
         return [{"severity": "error", "code": "no_loudness",
                  "message": "could not measure EBU R128 loudness of the audio stream"}]
     i = m["integrated_lufs"]
-    if abs(i - TARGET_I) > I_TOL:
+    if abs(i - ti) > I_TOL:
         f.append({"severity": "error", "code": "loudness",
-                  "message": f"{i:.1f} LUFS is more than {I_TOL} LU from {TARGET_I:.0f} LUFS"})
+                  "message": f"{i:.1f} LUFS is more than {I_TOL} LU from {ti:.0f} LUFS"})
     tp = m.get("true_peak_db")
     if tp is not None and tp > TP_LIMIT:
         f.append({"severity": "error", "code": "true_peak",
@@ -251,8 +402,9 @@ def loudness_findings(m: dict | None, voiced: bool, sil: list[dict]) -> list[dic
     return f
 
 
-def check(path: str, total: float, voiced: bool) -> dict:
-    """Measure a rendered MP4's audio the way verify reports it."""
+def check(path: str, total: float, voiced: bool, target_i: float | None = None) -> dict:
+    """Measure a rendered MP4's audio the way verify reports it, against `target_i` (default -14)."""
+    ti = _target(target_i)
     m = measure_r128(path)
     sil = silences(path, total) if voiced else []
-    return {"loudness": m, "silences": sil, "findings": loudness_findings(m, voiced, sil)}
+    return {"loudness": m, "silences": sil, "findings": loudness_findings(m, voiced, sil, ti)}

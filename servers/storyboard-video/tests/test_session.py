@@ -237,3 +237,95 @@ def test_guard_turns_an_oserror_into_a_finding():
 
     out = asyncio.run(server._guard(boom))
     assert out["status"] == "error" and out["message"].startswith("OSError")
+
+
+@pytest.mark.skipif(not shutil.which("ffprobe"), reason="ffprobe is needed to probe a corrupt file")
+def test_verify_reports_a_corrupt_file_instead_of_crashing(tmp_path, monkeypatch):
+    """ffprobe exits non-zero on a corrupt file: that CalledProcessError is a finding, not a traceback."""
+    import asyncio
+
+    from storyboard_video_mcp import server
+
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    h = S.persist(S.normalize({"scenes": [{"id": "a", "type": "title", "title": "Hi"}]}))
+    bad = tmp_path / "broken.mp4"
+    bad.write_bytes(b"not an mp4 at all")
+    out = asyncio.run(server.verify(str(bad), h))
+    assert out["status"] == "error" and out["message"].startswith("CalledProcessError: Command '['ffprobe'")
+
+
+def _delivered_spec(tmp_path, monkeypatch, files):
+    """A work dir with one persisted spec and its out/<resolved_hash>/ holding `files`."""
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    spec = S.normalize({"scenes": [{"id": "a", "type": "title", "title": "Hi"}]})
+    out = tmp_path / "out" / S.resolved_hash(spec)
+    out.mkdir(parents=True)
+    for name, data in files.items():
+        (out / name).write_bytes(data)
+    return S.persist(spec), out
+
+
+@pytest.mark.parametrize("quality", ["draft", "animatic", "Delivery", ""])
+def test_deliver_tool_ships_only_the_delivery_render(tmp_path, monkeypatch, quality):
+    """quality='draft' is the half-size preview: publishing it would ship a file nobody verified."""
+    import asyncio
+
+    from storyboard_video_mcp import server
+
+    h, _ = _delivered_spec(tmp_path, monkeypatch, {"delivery.mp4": b"MP4", "delivery.srt": b"1\nHi\n"})
+    res = asyncio.run(server.deliver(h, "mint", "16:9", 1, "2026-03-01", quality=quality))
+    assert res["status"] == "error" and [f["code"] for f in res["findings"]] == ["quality_not_delivery"]
+    assert not (tmp_path / "deliveries").exists()
+
+
+@pytest.mark.parametrize("files,missing", [
+    ({"draft.mp4": b"D", "draft.srt": b"1\n00:00:00,000 --> 00:00:01,000\nHi\n\n"}, "delivery.mp4"),
+    ({"delivery.mp4": b"M", "draft.srt": b"1\n00:00:00,000 --> 00:00:01,000\nHi\n\n"}, "delivery.srt"),
+])
+def test_deliver_tool_needs_the_delivery_render_and_its_srt(tmp_path, monkeypatch, files, missing):
+    """A draft-only dir has a draft.srt, so delivery_check alone returned [] and shipped the preview."""
+    import asyncio
+
+    from storyboard_video_mcp import server
+
+    h, _ = _delivered_spec(tmp_path, monkeypatch, files)
+    res = asyncio.run(server.deliver(h, "mint", "16:9", 1, "2026-03-01"))
+    assert res["status"] == "error" and missing in " ".join(f["message"] for f in res["findings"])
+    assert not (tmp_path / "deliveries").exists()
+
+
+def test_deliver_tool_publishes_the_render_and_refuses_the_same_name_twice(tmp_path, monkeypatch):
+    import asyncio
+
+    from storyboard_video_mcp import server
+
+    h, _ = _delivered_spec(tmp_path, monkeypatch, {"delivery.mp4": b"MP4", "delivery.srt": b"1\nHi\n"})
+    ok = asyncio.run(server.deliver(h, "mint", "16:9", 1, "2026-03-01"))
+    d = tmp_path / "deliveries"
+    assert ok["status"] == "ok" and (d / "mint_v01_16x9_2026-03-01.mp4").read_bytes() == b"MP4"
+    assert (d / "mint_v01_16x9_2026-03-01.srt").is_file()
+    again = asyncio.run(server.deliver(h, "mint", "16:9", 1, "2026-03-01"))
+    assert again["status"] == "error" and [f["code"] for f in again["findings"]] == ["delivery_exists"]
+    assert "bump version" in again["findings"][0]["fix"]
+
+
+def test_cutdown_reports_an_unwritable_work_dir_instead_of_crashing(tmp_path, monkeypatch):
+    """S.persist ran after the try, so a read-only /work escaped as a traceback instead of an error dict."""
+    from storyboard_video_mcp import cutdown as CD, server
+
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    spec = S.normalize({"lang": "pt-BR", "fps": 30, "transition_s": 0.5,
+                        "direction": {"scenes": {"h": {"role": "hook"}, "x": {"role": "value"},
+                                                 "v": {"role": "proof"}, "r": {"role": "result"},
+                                                 "c": {"role": "cta"}}},
+                        "scenes": [{"id": "h", "type": "title", "title": "Hi", "duration_s": 3},
+                                   {"id": "x", "type": "bullets", "heading": "H", "items": ["a"], "duration_s": 8},
+                                   {"id": "v", "type": "bullets", "heading": "H", "items": ["b"], "duration_s": 4},
+                                   {"id": "r", "type": "bullets", "heading": "H", "items": ["c"], "duration_s": 3},
+                                   {"id": "c", "type": "title", "title": "Go", "duration_s": 4}]})
+    h = S.persist(spec)
+    cut = S.spec_hash(CD.cutdown(S.load(h), 16)["spec"])
+    assert cut != h  # the cut is a spec of its own, so S.persist writes a new file
+    (tmp_path / "specs" / f"{cut}.json").mkdir()  # that path is not writable: /work is read-only here
+    res = server.cutdown(h, 16)
+    assert res["status"] == "error" and res["message"].startswith("IsADirectoryError")

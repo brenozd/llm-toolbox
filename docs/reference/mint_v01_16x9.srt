@@ -1,0 +1,27 @@
+1
+00:00:00,000 --> 00:00:03,135
+Seu programa em C vaza memória, e ninguém avisa.
+
+2
+00:00:03,533 --> 00:00:10,726
+Um malloc sem free passa em silêncio. O programa roda normal, e o vazamento só aparece em produção, quando já custa caro.
+
+3
+00:00:11,133 --> 00:00:20,258
+O mint roda o seu programa do jeito que ele está, e ao sair diz quantos bytes vazaram. Aqui, cento e vinte e oito bytes, na hora, sem recompilar nada.
+
+4
+00:00:20,667 --> 00:00:28,803
+O loader grava a biblioteca num memfd, aponta o LD_PRELOAD para ele e executa o seu programa. Nenhum arquivo so fica no disco.
+
+5
+00:00:29,200 --> 00:00:34,911
+Ele intercepta malloc, calloc, realloc, free e memalign, e imprime o resumo no stderr.
+
+6
+00:00:35,300 --> 00:00:43,755
+Adicione o free que faltava, e compile de novo, e o resumo vira OK: nenhum vazamento detectado. É o mesmo programa, só com uma linha a mais.
+
+7
+00:00:44,300 --> 00:00:49,030
+Compile com CMake e rode o mint_loader. Código aberto, licença MIT.

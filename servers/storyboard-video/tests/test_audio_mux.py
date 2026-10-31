@@ -159,7 +159,7 @@ def test_verify_reads_the_voice_out_of_the_render_receipt(work, monkeypatch):
     monkeypatch.setattr(R, "_probe_audio", lambda v: {"codec": "aac", "channels": 2, "sample_rate": 48000,
                                                       "duration_s": 2.0})
     monkeypatch.setattr(R, "_var", lambda v, t: 10.0)
-    monkeypatch.setattr(R.A, "check", lambda *a, **k: {"loudness": {"integrated_lufs": -16.1, "lra_lu": 2.0,
+    monkeypatch.setattr(R.A, "check", lambda *a, **k: {"loudness": {"integrated_lufs": -14.1, "lra_lu": 2.0,
                                                                    "true_peak_db": -2.0},
                                                       "silences": [], "findings": []})
     recp = work / "out" / "delivery.receipt.json"
@@ -168,7 +168,7 @@ def test_verify_reads_the_voice_out_of_the_render_receipt(work, monkeypatch):
     assert v["status"] == "error" and [f["code"] for f in v["findings"]] == ["no_voice"]
     recp.write_text(json.dumps({"quality": "delivery", "mix": {"voice": True}}))
     v = R.verify(str(mp4), h)
-    assert v["status"] == "ok" and v["findings"] == [] and v["loudness"]["integrated_lufs"] == -16.1
+    assert v["status"] == "ok" and v["findings"] == [] and v["loudness"]["integrated_lufs"] == -14.1
 
 
 def test_verify_does_not_warn_about_the_bed_it_mixed(work, monkeypatch):
@@ -183,7 +183,7 @@ def test_verify_does_not_warn_about_the_bed_it_mixed(work, monkeypatch):
     monkeypatch.setattr(R, "_probe_audio", lambda v: {"codec": "aac", "channels": 2, "sample_rate": 48000,
                                                       "duration_s": 2.0})
     monkeypatch.setattr(R, "_var", lambda v, t: 10.0)
-    monkeypatch.setattr(R.A, "check", lambda *a, **k: {"loudness": {"integrated_lufs": -16.1, "lra_lu": 2.0,
+    monkeypatch.setattr(R.A, "check", lambda *a, **k: {"loudness": {"integrated_lufs": -14.1, "lra_lu": 2.0,
                                                                    "true_peak_db": -2.0},
                                                       "silences": [], "findings": []})
     recp = work / "out" / "delivery.receipt.json"

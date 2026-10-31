@@ -78,6 +78,7 @@ def test_repo_is_read_only_state_is_a_volume_music_is_read_only():
         assert mode not in ("ro", "readonly"), f"{name}: the work volume must be writable"
         assert not src.startswith(("/", "${", ".")), f"{name}: /work is a named volume, got {src!r}"
         assert mounts["/music"] == ("${HOME}/.cache/storyboard-video/music", "ro"), name
+        assert mounts["/sfx"] == ("${HOME}/.cache/storyboard-video/sfx", "ro"), name
 
 
 def test_both_entries_are_hardened():

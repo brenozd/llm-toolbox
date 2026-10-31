@@ -95,6 +95,14 @@ def test_credits_block_carries_the_licence_and_the_attribution():
     assert A.credits_text(mk()) is None
     cc0 = A.credits_text(mk(music={"path": "/music/t.mp3", "license": "CC0 1.0", "title": "T"}))
     assert "CC0 1.0" in cc0  # a credit block is written even when none is required
+    # the loudness line is opt-in: CREDITS.txt is written before verify measures the delivery, so the
+    # block only states the target when whoever writes it knows it
+    assert "LUFS" not in text
+    assert "- Audio mastered to -14 LUFS integrated" in A.credits_text(mk(music={"path": "/music/t.mp3", **BY}), -14)
+    assert "- Audio mastered to -16 LUFS integrated" in A.credits_text(
+        mk(music={"path": "/music/t.mp3", **BY}), -16.0)
+    with pytest.raises(ValueError):
+        A.credits_text(mk(music={"path": "/music/t.mp3", **BY}), -30)
 
 
 def test_write_credits_never_leaves_a_stale_block(work):

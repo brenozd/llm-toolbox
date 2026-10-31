@@ -1,0 +1,8 @@
+{"responseHeader": {"status": 0, "QTime": 21},
+ "response": {"numFound": 2, "start": 0, "docs": [
+   {"identifier": "whoosh-cc0-01", "title": "Whoosh 01 (foley)", "creator": "FieldKit",
+    "licenseurl": "http://creativecommons.org/publicdomain/zero/1.0/",
+    "subject": ["sound effects", "whoosh", "foley"], "year": "2019"},
+   {"identifier": "whoosh-by-02", "title": "Whoosh 02", "creator": "Somebody Else",
+    "licenseurl": "https://creativecommons.org/licenses/by/4.0/",
+    "subject": ["sound effects", "whoosh"], "year": "2020"}]}}

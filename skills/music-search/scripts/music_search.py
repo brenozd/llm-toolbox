@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
-"""music-search: find, license-gate, verify, trim and stage a music bed for storyboard-video.
+"""music-search: find, license-gate, verify, trim and stage a music bed or a sound effect for
+storyboard-video.
 
 python3 stdlib only, plus the host's ffmpeg/ffprobe.
 
-  music_search.py search --vibe "calm ambient" [--source openverse|ia|ccmixter]
+  music_search.py search --vibe "calm ambient" [--source openverse|ia] [--kind music|sfx]
                         [--min-s N] [--limit N] [--refresh]
-  music_search.py fetch <candidate-id> --duration S [--stage-dir DIR]
+  music_search.py fetch <candidate-id> [--duration S] [--stage-dir DIR]
 
 The exec container mounts $HOME/.cache/storyboard-video/music read-only at /music, so there is no
 copy step: `fetch` writes <stage>/<id>.<ext> + <stage>/<id>.json and prints the spec.music
 JSON with path_in_container=/music/<file> (`mount_hint` when the stage is another directory).
+A sound effect (`--kind sfx`) stages under .../storyboard-video/sfx and reports
+path_in_container=/sfx/<file>: plugin.json has to mount that host directory at /sfx too.
 
 `search` indexes every cleared candidate on disk; `fetch` takes only such an id and re-reads
-the source's own structured record (archive.org /metadata, ccMixter query, Openverse audio
-record) before it downloads a byte - a bare file URL carries no license, and an HTML landing
-page is not structured evidence. Licenses: see `policy` and skills/music-search/SKILL.md."""
+the source's own structured record (archive.org /metadata, Openverse audio record) before it
+downloads a byte - a bare file URL carries no license, and an HTML landing page is not
+structured evidence. Licenses: see `policy` and skills/music-search/SKILL.md."""
 
 import argparse
 import hashlib
@@ -36,8 +39,12 @@ UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/126.0.0.0 Safari/537.36")  # Openverse answers plain curl with 504s
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = shutil.which("ffprobe") or "ffprobe"
-SOURCES = ("openverse", "ia", "ccmixter")
+SOURCES = ("openverse", "ia")
+KINDS = ("music", "sfx")
 OK_VERDICTS = ("allow", "attribution")
+SFX_OK_VERDICTS = ("allow",)  # an effect is CC0/PDM: there is no credit slot per whoosh
+SFX_MAX_S = 10.0  # `--duration` for an sfx fetch is the *max* clip length (a cut, not a bed)
+SFX_MIN_S = 0.3  # anything shorter is a click, not an effect
 PD_RECORDING_YEARS = 95  # 17 U.S.C. 1401: first publication + 95y (1923-1946 ran the transition)
 START_PAD_S = 2.0  # the window keeps 1 s of head and 1 s of tail: refuse anything shorter
 START_OFFSET_S = 3.0  # fixed lead-in, past the encoder's own attack and any fade-in
@@ -135,14 +142,15 @@ def cache_root():
     base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
     return Path(base) / "storyboard-video"
 
-def default_stage():
-    """`$XDG_CACHE_HOME/storyboard-video/music`; `fetch` prints a `mount_hint` when `/music` cannot
-    see it: a silent miss costs a render, a hint costs one flag."""
-    return cache_root() / "music"
+def default_stage(kind="music"):
+    """`$XDG_CACHE_HOME/storyboard-video/<kind>`; `fetch` prints a `mount_hint` when `/<kind>`
+    cannot see it: a silent miss costs a render, a hint costs one flag."""
+    return cache_root() / kind
 
-def mounted_stage():
-    """The host path `.claude-plugin/plugin.json` mounts read-only at /music (not XDG-driven)."""
-    return Path.home() / ".cache" / "storyboard-video" / "music"
+def mounted_stage(kind="music"):
+    """The host path `.claude-plugin/plugin.json` mounts read-only at `/<kind>` (not XDG-driven).
+    music and sfx are both mounted there."""
+    return Path.home() / ".cache" / "storyboard-video" / kind
 
 def cached(key, producer, *, refresh=False, ttl=86400):
     """On-disk cache: the Openverse anon quota is 20/min and 200/day."""
@@ -270,7 +278,7 @@ def policy(cand, *, today=None):
 
 def content_id_assessment(cand, lic, year, cutoff):
     """-> (level, reasons). A bare level cannot be argued with; the reasons are the brief."""
-    if lic in ("cc0", "pdm") and cand.get("source") in ("ia", "ccmixter"):
+    if lic in ("cc0", "pdm") and cand.get("source") == "ia":
         return "low", ["cc0_or_pdm_from_rights_holder"]
     if lic == "pd" or (year and int(year) < cutoff):
         # the remaster of a PD-era disc asserts a new phonogram right: the classic claim
@@ -310,6 +318,7 @@ def vibe_score(cand, tags):
     return len(mood & tags) + sum(1 for w in tags if w in title)
 
 CAND_DEFAULTS = {"id": "", "source": "", "provider": "", "host": "", "title": "", "creator": "",
+                 "kind": "music",  # music bed (default) or one sound effect
                  "license_id": "other",  # a claim only: `policy` recomputes the verdict
                  "license_version": "", "license_url": "", "source_url": "", "file_url": "",
                  "duration_s": None, "mood": [], "published_year": None, "reupload": False,
@@ -350,16 +359,25 @@ def search_openverse(vibe, limit, *, refresh=False):
             reupload=_reupload(r.get("title")), ov_id=r.get("id") or ""))  # re-read by fetch
     return out
 
-def search_ia(vibe, limit, *, refresh=False):
-    # licenseurl is uploader-set, so it is only a claim: fetch re-verifies at /metadata/.
-    # A slash wildcard (`*licenses/by*`) makes archive.org's ES answer BACKEND_ERROR; `*by*` does not.
-    words = " OR ".join(w for w in re.findall(r"[a-z0-9]+", vibe.lower()) if len(w) > 2) or vibe
-    params = [("q", f"({words}) AND mediatype:audio AND "
-                    "(licenseurl:*publicdomain* OR licenseurl:*by*)"),
+def _ia_words(vibe):
+    return " OR ".join(w for w in re.findall(r"[a-z0-9]+", vibe.lower()) if len(w) > 2) or vibe
+
+def ia_query(vibe, *, sfx=False):
+    """-> archive.org advancedsearch q. licenseurl is uploader-set, so it is only a claim: fetch
+    re-verifies at /metadata/. A slash wildcard (`*licenses/by*`) makes archive.org's ES answer
+    BACKEND_ERROR; `*by*`/`*publicdomain*` do not."""
+    words = f"({_ia_words(vibe)})"
+    lic = "licenseurl:*publicdomain*" if sfx else "(licenseurl:*publicdomain* OR licenseurl:*by*)"
+    subject = ' AND subject:"sound effects"' if sfx else ""  # IA's own sfx shelf
+    return f"{words} AND mediatype:audio{subject} AND {lic}"
+
+def search_ia(vibe, limit, *, refresh=False, sfx=False):
+    params = [("q", ia_query(vibe, sfx=sfx)),
               ("rows", str(min(50, max(limit * 3, 10)))), ("output", "json")]
     params += [("fl[]", f) for f in ("identifier", "title", "creator", "licenseurl", "subject", "year")]
     url = "https://archive.org/advancedsearch.php?" + urllib.parse.urlencode(params)
-    data = cached(f"ia-{words}-{limit}", lambda: get_json(url), refresh=refresh)
+    data = cached(f"ia-{'sfx-' if sfx else ''}{_ia_words(vibe)}-{limit}",
+                  lambda: get_json(url), refresh=refresh)
     out = []
     for d in ((data.get("response") or {}).get("docs")) or []:
         lic, ver = parse_license(d.get("licenseurl"))
@@ -368,7 +386,8 @@ def search_ia(vibe, limit, *, refresh=False):
         subject = re.split(r"[;,]", subject) if isinstance(subject, str) else subject
         year = _year(d.get("year") or d.get("date"))
         out.append(_cand(
-            id="ia-" + slug(ident, 50), source="ia", provider="archive.org", host="archive.org",
+            id=("ia-sfx-" if sfx else "ia-") + slug(ident, 50), source="ia", provider="archive.org", host="archive.org",
+            kind="sfx" if sfx else "music",
             title=str(d.get("title") or ident), creator=_first(d.get("creator")),
             license_id=lic, license_version=ver, ia_id=ident, published_year=year,
             license_url=d.get("licenseurl") or license_url_for(lic, ver),
@@ -381,47 +400,26 @@ def search_ia(vibe, limit, *, refresh=False):
             mood=sorted({str(s).strip().lower() for s in subject if str(s).strip()})))
     return out
 
-def search_ccmixter(vibe, limit, *, refresh=False):
-    out = []
-    for code in ("zero", "by"):
-        params = {"datasource": "uploads", "lic": code, "search": vibe, "f": "json",
-                  "limit": str(limit)}
-        url = "https://ccmixter.org/api/query?" + urllib.parse.urlencode(params)
-        data = cached(f"ccmixter-{code}-{vibe}", lambda: get_json(url), refresh=refresh)
-        if isinstance(data, dict):
-            data = data.get("records") or data.get("results") or []
-        out += [_ccm_cand(item) for item in data]
-    return out
+def search_ia_sfx(vibe, limit, *, refresh=False):
+    return search_ia(vibe, limit, refresh=refresh, sfx=True)
 
-def _ccm_cand(item):
-    audio = [f for f in item.get("files") or []
-             if str((f.get("file_format_info") or {}).get("media-type", "")).startswith("audio")]
-    best = sorted(audio, key=lambda f: (str(f.get("file_nicname")) != "mp3",
-                                        int(f.get("file_rawsize") or 0)))[:1]
-    lic, ver = parse_license(item.get("license_name"), url=item.get("license_url"))
-    fmt = (best[0].get("file_format_info") or {}) if best else {}
-    return _cand(
-        id="ccm-" + slug(item.get("upload_id")), source="ccmixter", provider="ccmixter.org",
-        host="ccmixter.org", title=item.get("upload_name") or "",
-        creator=item.get("user_real_name") or item.get("user_name") or "",
-        license_id=lic, license_version=ver, ccm_id=item.get("upload_id"),
-        license_url=item.get("license_url") or license_url_for(lic, ver),
-        source_url=item.get("file_page_url") or "",
-        file_url=(best[0].get("download_url") or "") if best else "", duration_s=_clock_to_s(fmt.get("ps")),
-        bpm=(item.get("upload_extra") or {}).get("bpm") or 0,
-        mood=sorted({t.strip().lower() for t in str(item.get("upload_tags") or "").split(",") if t.strip()}),
-        reupload=_reupload(item.get("upload_name"), item.get("upload_tags")))
+SEARCHERS = {"openverse": search_openverse, "ia": search_ia}
+# Internet Archive only: Openverse's sfx catalogue is Freesound, and `policy` denies Freesound.
+SFX_SEARCHERS = {"ia": search_ia_sfx}
 
-SEARCHERS = {"openverse": search_openverse, "ia": search_ia, "ccmixter": search_ccmixter}
-
-def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None):
+def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None, kind="music"):
     """Rank candidates by tag overlap, then drop what the policy denies. No fallback track: an
     empty pool is a valid answer and the mix stays silent."""
+    sfx = kind == "sfx"
+    searchers, ok = (SFX_SEARCHERS, SFX_OK_VERDICTS) if sfx else (SEARCHERS, OK_VERDICTS)
     tags = vibe_tags(vibe)
     notes, raw = [], []
-    for name in ([source] if source else SOURCES):
+    for name in ([source] if source else tuple(searchers)):
+        if name not in searchers:  # --source openverse --kind sfx: must not silently drop the ask
+            notes.append(f"{name}:not_used_for_{kind}")
+            continue
         try:
-            got = SEARCHERS[name](vibe, limit, refresh=refresh)
+            got = searchers[name](vibe, limit, refresh=refresh)
             notes.append(f"{name}:{len(got)}")
             raw += got
         except Exception as exc:  # noqa: BLE001 - a dead source is not a dead search
@@ -432,7 +430,7 @@ def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None):
     kept, skipped = [], {}
     for cand in raw:
         cand.update(policy(cand, today=today))
-        if cand["verdict"] not in OK_VERDICTS:
+        if cand["verdict"] not in ok:
             why = cand["verdict_reason"].split("_cutoff")[0]
             skipped[why] = skipped.get(why, 0) + 1
             continue
@@ -453,13 +451,13 @@ def search(vibe, *, source=None, min_s=0, limit=5, refresh=False, today=None):
             unique.append(cand)
     results = unique[:limit]
     remember(results)
-    payload = {"vibe": vibe, "tags": sorted(tags), "count": len(results), "results": results,
-               "sources": notes, "skipped": skipped}
+    payload = {"vibe": vibe, "kind": kind, "tags": sorted(tags), "count": len(results),
+               "results": results, "sources": notes, "skipped": skipped}
     if not results:
         why = ", ".join(f"{k}x{v}" for k, v in sorted(skipped.items())) or "no candidates"
         payload["reason"] = (
-            f"no allow/attribution track for {vibe!r} ({'; '.join(notes)}; skipped {why}) - "
-            "keep the mix silent: there is no fallback track.")
+            f"no allow/attribution {'sfx' if sfx else 'track'} for {vibe!r} ({'; '.join(notes)}; "
+            f"skipped {why}) - keep the mix silent: there is no fallback track.")
     return payload
 
 # ---- candidate index
@@ -509,15 +507,6 @@ def verify_at_origin(cand):
             if out.get("ok") and year:
                 out.update(published_year=year, published_year_source="metadata")
             return out
-        if source == "ccmixter":
-            params = urllib.parse.urlencode({"datasource": "uploads", "ids": cand.get("ccm_id"),
-                                             "f": "json"})
-            data = get_json(f"https://ccmixter.org/api/query?{params}")
-            item = (data[0] if isinstance(data, list) and data else data) or {}
-            raw = item.get("license_url") or item.get("license_name") or ""
-            lic, ver = parse_license(item.get("license_name"), url=item.get("license_url"))
-            return _verified(raw, lic, ver, item.get("license_url") or "",
-                             f'ccmixter api license_url="{raw}"', cand)
         if source == "openverse":
             if not cand.get("ov_id"):
                 return {"ok": False, "detail": "no openverse record id to re-read"}
@@ -610,13 +599,15 @@ def _median(values):
     mid = len(vals) // 2
     return vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2
 
-def gate(analysis):
+def gate(analysis, *, kind="music"):
     """Reject what must never become a bed; None means pass."""
     frames = analysis.get("frames") or []
     if not frames:
         return "no_audio"
     if analysis.get("lufs", -120.0) <= -60.0:
         return "digital_silence"
+    if kind == "sfx":
+        return None  # a whoosh *is* broadband noise: the bed's spectral/LRA gates do not apply
     if analysis.get("lra", 0.0) > MAX_LRA:
         return "lra_too_high"
     centroid = _median(f["centroid"] for f in frames)
@@ -644,11 +635,9 @@ class DownloadError(RuntimeError):
         super().__init__(reason)
         self.code, self.detail = code, detail
 
-def http_stream(url, *, timeout=READ_TIMEOUT_S, referer=None, chunk=1 << 20):
+def http_stream(url, *, timeout=READ_TIMEOUT_S, chunk=1 << 20):
     """Single network door for downloads: yield the body in chunks, never buffer it all."""
     headers = {"User-Agent": UA, "Accept": "*/*"}
-    if referer:
-        headers["Referer"] = referer
     req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         while True:
@@ -657,7 +646,7 @@ def http_stream(url, *, timeout=READ_TIMEOUT_S, referer=None, chunk=1 << 20):
                 return
             yield block
 
-def download(url, dest, *, referer=None, max_bytes=250 * 1024 * 1024,
+def download(url, dest, *, max_bytes=250 * 1024 * 1024,
              deadline_s=DOWNLOAD_DEADLINE_S):
     """Stream to disk, hashing as we go: a 145 MB archive file never sits in memory.
     deadline_s is a *total* wall budget, not a per-read socket timeout: at IA's ~1 MB/s the
@@ -666,8 +655,7 @@ def download(url, dest, *, referer=None, max_bytes=250 * 1024 * 1024,
     block past the caller's 60 s on its own (the loop re-checks the budget after every block)."""
     digest, size, started = hashlib.sha256(), 0, _monotonic()
     with Path(dest).open("wb") as fh:
-        for block in http_stream(url, referer=referer,
-                                 timeout=max(1.0, min(READ_TIMEOUT_S, deadline_s))):
+        for block in http_stream(url, timeout=max(1.0, min(READ_TIMEOUT_S, deadline_s))):
             size += len(block)
             if size > max_bytes:
                 raise DownloadError("download_too_large", f"stream passed {max_bytes >> 20} MB: {url}",
@@ -706,16 +694,28 @@ def _denied(cand):
     return {"error": "license_denied", "id": cand["id"], "verdict": cand["verdict"],
             "reason": cand["verdict_reason"], "license_evidence": cand.get("license_evidence", "")}
 
-def fetch(target, *, duration, stage_dir=None, today=None):
-    """Verify at the source record, then download, probe, gate the picked window and stage."""
-    stage = Path(stage_dir).expanduser() if stage_dir else default_stage()
+def fetch(target, *, duration=None, stage_dir=None, today=None):
+    """Verify at the source record, then download, probe, gate the picked window and stage.
+    `duration` is the video length for a music bed and the *max* clip length for an sfx
+    (default SFX_MAX_S), which is used from 0 and never re-centred."""
     cand = resolve_candidate(target)
     if not cand.get("id"):
         return {"error": "unknown_candidate",
                 "reason": f"{target} is not in the candidate index: run `search`, then use its id"}
+    kind = cand.get("kind") or "music"
+    sfx = kind == "sfx"
+    if not duration:
+        if not sfx:
+            return {"error": "duration_required", "id": cand["id"],
+                    "reason": "fetch --duration S is required for a music bed (an sfx defaults "
+                              f"to {SFX_MAX_S:g} s)"}
+        duration = SFX_MAX_S
+    ok = SFX_OK_VERDICTS if sfx else OK_VERDICTS  # an effect gets no credit block
+    stage = Path(stage_dir).expanduser() if stage_dir else default_stage(kind)
+    mounted = mounted_stage(kind)
     # Refuse on what the aggregator proves (Freesound/NC/ND/SA/reupload), then on the origin record.
     cand.update(policy(cand, today=today))
-    if cand["verdict"] not in OK_VERDICTS and cand["verdict_reason"] in FATAL_REASONS:
+    if cand["verdict"] not in ok and cand["verdict_reason"] in FATAL_REASONS:
         return _denied(cand)
     origin = verify_at_origin(cand)
     if not origin["ok"]:
@@ -724,7 +724,7 @@ def fetch(target, *, duration, stage_dir=None, today=None):
     cand.update({k: v for k, v in origin.items() if k != "ok"})
     cand["origin_verified"] = True
     cand.update(policy(cand, today=today))
-    if cand["verdict"] not in OK_VERDICTS:
+    if cand["verdict"] not in ok:
         return _denied(cand)
     file_url, size_bytes, other_formats = resolve_file_url(cand)
     if not file_url:
@@ -741,26 +741,32 @@ def fetch(target, *, duration, stage_dir=None, today=None):
     try:
         raw = tmp / "track.bin"
         try:
-            _, sha = download(file_url, raw, deadline_s=DOWNLOAD_DEADLINE_S,
-                              referer=cand.get("source_url") if cand.get("source") == "ccmixter" else None)
+            _, sha = download(file_url, raw, deadline_s=DOWNLOAD_DEADLINE_S)
         except DownloadError as exc:  # the cap and the wall clock are results, not crashes
             return {"id": cand["id"], **exc.detail, "error": exc.code, "reason": str(exc)}
         except Exception as exc:  # noqa: BLE001 - a dead file is a result, not a crash
             return {"error": "download_failed", "id": cand["id"], "reason": str(exc)}
         try:  # ffprobe/ffmpeg trouble is a result too, never a traceback
             total, ext = probe(raw)
-            if total < duration + START_PAD_S:
-                return {"error": "track_too_short", "id": cand["id"],
-                        "reason": f"{total:.1f}s < {duration:g}s + {START_PAD_S:g}s (1 s head + 1 s tail)"}
-            start = pick_start(total, duration)
-            analysis = analyze(raw, start=start, duration=duration)  # the picked window only
+            if sfx:  # a clip is used whole from 0, capped at --duration (no bed window)
+                if total < SFX_MIN_S:
+                    return {"error": "track_too_short", "id": cand["id"],
+                            "reason": f"{total:.2f}s clip is shorter than {SFX_MIN_S:g}s"}
+                start, window = 0.0, round(min(duration, total), 3)
+            else:
+                if total < duration + START_PAD_S:
+                    return {"error": "track_too_short", "id": cand["id"],
+                            "reason": f"{total:.1f}s < {duration:g}s + {START_PAD_S:g}s (1 s head + 1 s tail)"}
+                start, window = pick_start(total, duration), duration
+            analysis = analyze(raw, start=start, duration=window)  # the picked window only
         except Exception as exc:  # noqa: BLE001
             return {"error": "analysis_failed", "id": cand["id"],
                     "reason": f"{type(exc).__name__}: {exc}"}
-        bad = gate(analysis)
+        bad = gate(analysis, kind=kind)
         if bad:
             return {"error": "gate_failed", "id": cand["id"], "reason": bad}
-        dest, sidecar = stage / f"{cand['id']}.{ext}", stage / f"{cand['id']}.json"
+        name = slug(cand["id"], 80)  # the index is a file on disk: never join its id into a path as-is
+        dest, sidecar = stage / f"{name}.{ext}", stage / f"{name}.json"
         shutil.move(str(raw), dest)
         record = {
             "id": cand["id"], "title": cand.get("title", ""), "creator": cand.get("creator", ""),
@@ -769,6 +775,7 @@ def fetch(target, *, duration, stage_dir=None, today=None):
             "file_url": file_url, "retrieved_at": _now(), "sha256": sha,
             "attribution_required": cand["attribution_required"],
             "attribution_text": attribution_block(cand),  # rebuilt: the aggregator's credit is stale
+            "kind": kind, "clip_s": round(window, 3),
             "verdict": cand["verdict"], "verdict_reason": cand["verdict_reason"],
             "license_evidence": cand.get("license_evidence", ""), "start_s": start,
             "content_id_risk": cand["content_id_risk"], "jurisdiction_note": cand["jurisdiction_note"],
@@ -777,21 +784,21 @@ def fetch(target, *, duration, stage_dir=None, today=None):
             "recording_is_original_transfer": cand["recording_is_original_transfer"],
             "duration_s": round(total, 3), "mood": cand.get("mood") or [],
             "bpm": cand.get("bpm") or 0, "staged_file": str(dest), "stage_dir": str(stage),
-            "path_in_container": f"/music/{dest.name}"}
+            "path_in_container": f"/{kind}/{dest.name}"}
         sidecar.write_text(json.dumps(record, indent=2) + "\n")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     payload = {k: record[k] for k in (
-        "path_in_container", "start_s", "title", "creator", "license", "license_url",
-        "source_url", "id", "duration_s", "verdict", "content_id_risk", "content_id_reasons",
-        "sha256")}
+        "path_in_container", "start_s", "clip_s", "kind", "title", "creator", "license",
+        "license_url", "source_url", "id", "duration_s", "verdict", "content_id_risk",
+        "content_id_reasons", "sha256")}
     payload["attribution"] = record["attribution_text"]
     payload["content_id_dispute"] = CONTENT_ID_DISPUTE
     payload["sidecar"] = str(sidecar)
-    if stage.resolve() != mounted_stage().resolve():
+    if stage.resolve() != mounted.resolve():
         payload["mount_hint"] = (
-            f"staged in {stage}, but /music only sees {mounted_stage()} - pass "
-            f'--stage-dir "{mounted_stage()}" or the render fails with music_path_missing')
+            f"staged in {stage}, but /{kind} only sees {mounted} - pass "
+            f'--stage-dir "{mounted}" or the render fails with ' + ('sfx_path_missing' if sfx else 'music_path_missing'))
     return payload
 
 # ---- misc
@@ -805,15 +812,6 @@ def _ms_to_s(value):
     except (TypeError, ValueError):
         return None
     return round(ms / 1000.0, 1) if ms > 0 else None
-
-def _clock_to_s(value):
-    parts = str(value or "").split(":")
-    if not parts or not parts[-1].strip().isdigit():
-        return None
-    total = 0
-    for part in parts:
-        total = total * 60 + int(part)
-    return float(total)
 
 def _year(value):
     m = re.search(r"(1[89]\d\d|20\d\d)", str(value or ""))
@@ -833,20 +831,24 @@ def build_parser():
     s = sub.add_parser("search", help="find license-cleared candidates for a vibe")
     s.add_argument("--vibe", required=True, help='e.g. "calm ambient", "tech", "epic"')
     s.add_argument("--source", choices=SOURCES, help="one source only (default: all)")
+    s.add_argument("--kind", choices=KINDS, default="music",
+                   help="music bed (default) or a sound effect (Internet Archive only)")
     s.add_argument("--min-s", type=float, default=0, help="minimum duration in seconds")
     s.add_argument("--limit", type=int, default=5)
     s.add_argument("--refresh", action="store_true", help="ignore the on-disk cache")
-    f = sub.add_parser("fetch", help="verify, download, gate and stage one track")
+    f = sub.add_parser("fetch", help="verify, download, gate and stage one track or sfx")
     f.add_argument("target", help="candidate id from a prior `search`")
-    f.add_argument("--duration", type=float, required=True, help="seconds needed (video length)")
-    f.add_argument("--stage-dir", help="default: $XDG_CACHE_HOME/storyboard-video/music (mounted at /music)")
+    f.add_argument("--duration", type=float,
+                   help=f"music: video length (required); sfx: max clip length (default {SFX_MAX_S:g} s)")
+    f.add_argument("--stage-dir",
+                   help="default: $XDG_CACHE_HOME/storyboard-video/<kind> (music is mounted at /music)")
     return parser
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
     if args.cmd == "search":
         payload = search(args.vibe, source=args.source, min_s=args.min_s,
-                         limit=args.limit, refresh=args.refresh)
+                         limit=args.limit, refresh=args.refresh, kind=args.kind)
     else:
         payload = fetch(args.target, duration=args.duration, stage_dir=args.stage_dir)
     print(json.dumps(payload, indent=2))

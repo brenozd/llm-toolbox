@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, svg-generator, storyboard-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.0.91",
+  "version": "1.1.1",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -94,6 +94,8 @@
         "storyboard-video-work:/work",
         "-v",
         "${HOME}/.cache/storyboard-video/music:/music:ro",
+        "-v",
+        "${HOME}/.cache/storyboard-video/sfx:/sfx:ro",
         "harbor.bzd.gg/bzd/storyboard-video-mcp:latest"
       ]
     },
@@ -126,6 +128,8 @@
         "storyboard-video-work:/work",
         "-v",
         "${HOME}/.cache/storyboard-video/music:/music:ro",
+        "-v",
+        "${HOME}/.cache/storyboard-video/sfx:/sfx:ro",
         "harbor.bzd.gg/bzd/storyboard-video-mcp:latest"
       ]
     }

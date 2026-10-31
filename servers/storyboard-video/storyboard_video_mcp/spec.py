@@ -8,7 +8,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import config
+from . import audio as _audio
+from . import config, cues as _cues
 from .safety import safe_path
 from .scan import contrast
 
@@ -16,6 +17,9 @@ TYPES = {"title", "bullets", "terminal", "image", "code"}
 ASPECTS = {"16:9": (1920, 1080), "9:16": (1080, 1920)}
 STAT = re.compile(r"\b\d[\d.,]*\s*(%|x|×|ms|k|M|\+)", re.I)
 LANGS = {"pt-BR", "en"}
+BEAT = re.compile(r"\s*\[beat\]\s*", re.I)  # a script marker for a breath: a pause in the audio, never a spoken word
+PAUSE_MAX_S = 2.0  # scene.pause_after_s
+LEAD_MAX_S = 0.4  # scene.audio_lead_s (J/L-cut)
 AUDIO_TAIL = 0.4  # silence after the spoken line: the scene never cuts on the last syllable
 MAX_WPS = 3.2  # words per second a TTS voice comfortably fits in a scene
 MIN_HOLD_S = 4.0  # the last line of a recorded terminal must stay on screen this long
@@ -25,13 +29,33 @@ TTS_SYMBOL = re.compile(r"(?<!\w)(?:--[A-Za-z][\w-]*|[A-Za-z0-9_]+[/:=][A-Za-z0-
 ZOOM_RANGE = (1.0, 4.0)  # scene.zoom: 1 = the whole capture, more = crop in
 THEME = {"bg": "#0f1115", "fg": "#f2f4f8", "accent": "#4cc2ff", "muted": "#8b93a1"}
 # The director's vocabulary (spec.direction). Small on purpose: every value here has a reader.
+# `role` is the arc beat: implication (the cost of the problem) and result (the proof, measured) were
+# missing, so a problem scene had nowhere to land and every sales beat was called "value".
+# `arc` is the template the beats follow; an unknown one only warns (a hand-written arc still renders).
 DIRECTION_ENUMS = {"purpose": {"booth-loop", "feature-demo", "sales-video", "other"},
                    "motion": {"still", "subtle", "lively"},
                    "audio": {"voice", "music", "silent"},
-                   "role": {"hook", "problem", "reveal", "value", "proof", "cta"},
+                   "role": {"hook", "problem", "implication", "reveal", "value", "proof", "result", "cta"},
+                   "arc": {"ad", "hero", "walkthrough", "booth-loop"},
                    "align": {"left", "center"}}
 HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 WORDY = 18  # on-screen words per element before it is a paragraph; direction.pacing can lower it
+CALLOUT_WORDS = 8  # a caption/bullet is a label, not a sentence: past this it stops being read (guides, not a study)
+HOLD_MAX_S = 5.0  # a silent beat longer than this is dead air, unless the plan says it is a reveal
+READ_WPS = 3.2  # words per second a viewer reads on screen: the pace a TTS voice fits (MAX_WPS), so a scene that passes `wps` is not flagged here
+MONOTONE_TOL = 0.15  # three scenes of the same type within +-15% of each other read as a metronome
+# Opening greetings, per spec.lang. A language without a list is not judged (never guess a language):
+# the lint only looks at the first words of narration/title/heading/subtitle/caption, never at terminal
+# lines or code, so "Hello world" printed by a demo does not fire.
+GREETINGS = {
+    "pt-BR": ("olá", "ola", "oi", "oie", "e aí", "e ai", "eai", "bem-vindo", "bem-vindos",
+              "bem-vinda", "bem-vindas", "boas-vindas", "bom dia", "boa tarde", "boa noite",
+              "fala pessoal", "fala galera"),
+    "en": ("hello", "hi", "hey", "hiya", "howdy", "greetings", "welcome", "good morning",
+           "good afternoon", "good evening", "what's up"),
+}
+_WORD = re.compile(r"[^\W\d_]+(?:[-'][^\W\d_]+)*")  # a word keeps its hyphen/apostrophe: "Hi-fi" is not "hi"
+GREETING_WORDS = {lang: tuple(tuple(_WORD.findall(g.lower())) for g in gs) for lang, gs in GREETINGS.items()}
 CONTRAST = {"fg": 4.5, "accent": 3.0}  # WCAG AA on body text / on a graphic accent
 BOOTH_CONTRAST = 7.0  # a booth loop is read across a hall, from a screen nobody calibrated
 DIRECTION_FIX = ('spec.direction = {"purpose": "feature-demo", "palette": {"bg": "#0f1115", "fg": "#f2f4f8", '
@@ -121,12 +145,17 @@ def audio_digest(spec: dict) -> str:
     return hashlib.sha256(json.dumps(keys, sort_keys=True).encode()).hexdigest()[:12] if keys else ""
 
 
-def resolved_hash(spec: dict) -> str:
+def resolved_hash(spec: dict, stage: str = "") -> str:
     """spec_hash *plus* its narration *plus* the engine identity: new speech, a new TTS model or a
     template change (RENDER_VERSION) gives a new id, so stills and renders made for the old
-    voice-over/template are never reused (either one changes the picture)."""
+    voice-over/template are never reused (either one changes the picture).
+
+    `stage` separates a rough cut from the delivery (`stage="animatic"`): same spec, same voice, a
+    different id, so an animatic MP4 and its receipt can never be mistaken for the final video. The
+    default adds nothing to the string: the hash differs from a pre-AUDIO_VERSION one, but not from itself."""
+    tag = f":{stage}" if stage else ""
     return hashlib.sha256(f"{spec_hash(spec)}:{audio_digest(spec)}:{config.RENDER_VERSION}:"
-                          f"{config.model_id()}".encode()).hexdigest()[:12]
+                          f"{config.AUDIO_VERSION}:{config.model_id()}{tag}".encode()).hexdigest()[:12]
 
 
 def timeline(spec: dict) -> dict:
@@ -139,8 +168,9 @@ def timeline(spec: dict) -> dict:
     audio = {sid: float(v.get("duration_s") or 0) for sid, v in (audio_manifest(spec).get("scenes") or {}).items()}
     t = round(spec["transition_s"] * fps)
     n = len(spec["scenes"])
-    durs = [round(max(sc["duration_s"], audio.get(sc["id"], 0) + AUDIO_TAIL + (t / fps if i < n - 1 else 0.0)
-                      if audio.get(sc["id"]) else 0) * fps) for i, sc in enumerate(spec["scenes"])]
+    durs = [round(max(sc["duration_s"], audio.get(sc["id"], 0) + AUDIO_TAIL + _num(sc, "pause_after_s")
+                      + (t / fps if i < n - 1 else 0.0) if audio.get(sc["id"]) else 0) * fps)
+            for i, sc in enumerate(spec["scenes"])]
     t = max(0, min(t, min(durs) // 2 - 1)) if durs else 0
     out, start = [], 0
     for i, d in enumerate(durs):
@@ -155,8 +185,18 @@ def _texts(sc: dict) -> list[str]:
     return [p for p in parts if isinstance(p, str)]
 
 
+def spoken_text(text: str) -> str:
+    """The narration as it is read on screen and counted: `[beat]` markers removed."""
+    return BEAT.sub(" ", text).strip()
+
+
+def _num(sc: dict, key: str) -> float:
+    v = sc.get(key)
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0 else 0.0
+
+
 def _narration(sc: dict) -> str:
-    return sc["narration"] if isinstance(sc.get("narration"), str) else ""
+    return spoken_text(sc["narration"]) if isinstance(sc.get("narration"), str) else ""
 
 
 def _spoken_tokens(text: str, sc: dict) -> list[str]:
@@ -311,6 +351,128 @@ def _lint_focus_zoom(sc: dict, sid, add) -> None:
         add("error", "bad_zoom", sid, f"zoom {z!r}", f"use a number in {lo}..{hi} (1 = the whole capture)")
 
 
+def _lint_pauses(sc: dict, sid, add) -> None:
+    for key, hi in (("pause_after_s", PAUSE_MAX_S), ("audio_lead_s", LEAD_MAX_S)):
+        v = sc.get(key)
+        if v is not None and (isinstance(v, bool) or not isinstance(v, (int, float)) or not (0 <= v <= hi)):
+            add("error", "bad_pause", sid, f"{key} {v!r}", f"use a number of seconds in 0..{hi:g}")
+    # A pause is measured from the line: with no narration the scene has no speech to breathe around, so
+    # the number is dead weight (it only ever applies to a line, and there is none to apply it to).
+    unused = [k for k in ("pause_after_s", "audio_lead_s") if _num(sc, k) > 0]
+    if unused and not _narration(sc):
+        add("warn", "pause_ignored", sid, f"{' and '.join(unused)} set but the scene has no narration",
+            "write scene.narration (the pause hangs off the end of the line) or drop the pause")
+
+
+def _lint_beat_edge(sc: dict, sid, add) -> None:
+    """tts.synthesize splits the line on [beat] and drops the empty parts, so a marker at the very start
+    or end synthesises nothing: the breath the writer asked for is silently lost."""
+    text = sc.get("narration") if isinstance(sc.get("narration"), str) else ""
+    if not text.strip():
+        return
+    head = BEAT.match(text) is not None
+    if head or re.search(r"\[beat\]\s*$", text, re.I):
+        add("warn", "beat_at_edge", sid,
+            f"the narration {'opens' if head else 'ends'} with a [beat] and the pause is dropped",
+            "a [beat] needs a word on both sides: use scene.audio_lead_s (before the line) or "
+            "scene.pause_after_s (after it) for a pause at the edge")
+
+
+def _lint_sfx(sc: dict, sid, add, dur=None, unmatched=()) -> None:
+    """`dur` is the scene's timeline duration (the voice stretches the scene) when the timeline is
+    readable; the authored duration_s is the fallback. `unmatched` are the cue indices cue_unmatched
+    already reported: the effect sitting on one of them is a consequence, not a second finding."""
+    from . import sfx as _sfx
+    ev = sc.get("sfx")
+    if ev is None:
+        return
+    if not isinstance(ev, list):
+        add("error", "bad_sfx", sid, "sfx is not a list", 'use [{"at": 1.2, "kind": "tick", "gain_db": -14}]')
+        return
+    dur = dur if isinstance(dur, (int, float)) and not isinstance(dur, bool) and dur > 0 else sc.get("duration_s")
+    cs = sc.get("cues") if isinstance(sc.get("cues"), list) else []
+    for e in ev:
+        at = e.get("at") if isinstance(e, dict) else None
+        n = _sfx.cue_index(at)
+        at_ok = (isinstance(at, (int, float)) and not isinstance(at, bool) and 0 <= at < 3600) or n is not None
+        has_path = isinstance(e, dict) and e.get("path") is not None
+        if not (isinstance(e, dict) and at_ok and (has_path or e.get("kind") in _sfx.KINDS)):
+            add("error", "bad_sfx", sid, f"bad sfx entry {e!r}",
+                f"kind in {list(_sfx.KINDS)} or a staged path, at = seconds from scene start or \"cue:N\"")
+            continue
+        g = e.get("gain_db")
+        if g is not None and not (isinstance(g, (int, float)) and not isinstance(g, bool) and -40 <= g <= 0):
+            add("error", "bad_sfx", sid, f"gain_db {g!r}", "gain_db is a number in -40..0 (default -14)")
+        if n is not None:
+            if n >= len(cs) or not isinstance(cs[n], dict):
+                add("error", "bad_sfx", sid, f"at {at!r} but the scene has {len(cs)} cues", "point at an index of scene.cues")
+            elif n not in unmatched:
+                add("warn", "sfx_cue_unmatched", sid, f"{at}: its phrase is not said exactly once", "this effect will not play; fix the cue phrase")
+        elif isinstance(dur, (int, float)) and not isinstance(dur, bool) and at >= dur:
+            add("warn", "sfx_past_scene", sid, f"at {at:g}s is past the scene's {dur:.1f}s end",
+                "keep at below the scene's end (a voiced scene stretches to its line): an effect at/after "
+                "the end is dropped, not played")
+        if has_path:
+            if _sfx.library_file(e) is None:
+                add("error", "sfx_path_missing", sid, f"sfx path {e.get('path')!r} is not a file under /sfx",
+                    "stage it with music-search --kind sfx and use its /sfx/<id> path")
+            if _sfx.verdict(e.get("license")) != "allow":
+                add("error", "sfx_license_incompatible", sid, f"sfx licence {e.get('license')!r}",
+                    "library effects must be CC0 / public domain; copy the licence music-search reported")
+    if isinstance(dur, (int, float)) and not isinstance(dur, bool) and dur > 0 and len(ev) > max(1, dur / _sfx.DENSITY_S):
+        add("warn", "sfx_density", sid, f"{len(ev)} effects in {dur:g}s", "one effect per 2 s at most; silence is also a choice")
+
+
+def _lint_sfx_stem(spec: dict, add) -> None:
+    """scene.sfx needs a mix to sit on: audio.build returns None with no voice and no bed, so the effects
+    (and the work of placing them) would render silent."""
+    au = spec.get("audio")
+    scenes = [sc for sc in spec["scenes"] if isinstance(sc, dict)]
+    if not any(sc.get("sfx") for sc in scenes) or (isinstance(au, dict) and au.get("sfx") is False):
+        return
+    if any(_narration(sc) for sc in scenes) or _audio.bed(spec):
+        return
+    add("warn", "sfx_without_audio", None,
+        "scene.sfx are set but nothing would play them: no scene narrates and there is no music bed",
+        "write the narration, stage a track in spec.music (music-search), or set audio.sfx = false to drop the effects")
+
+
+def _lint_cues(sc: dict, sid, add) -> set[int]:
+    """scene.cues = [{"on": "phrase said once", "item": 0, "lead_ms": 120}]: the bullet (or terminal
+    line) `item` appears when the voice reaches `on`. A phrase that is missing or said twice cannot be
+    placed, so that item keeps its fixed delay. Returns the cue indices cue_unmatched reported, so the
+    sfx lint does not repeat the same finding for an effect aimed at one of them."""
+    cs = sc.get("cues")
+    if cs is None:
+        return set()
+    ty = sc.get("type")
+    if not isinstance(cs, list):
+        add("error", "bad_cue", sid, f"cues {cs!r}", 'cues = [{"on": "phrase", "item": 0}]')
+        return set()
+    n = len(sc.get("items") or []) if ty == "bullets" else len(sc.get("lines") or []) if ty == "terminal" else 0
+    if cs and ty not in ("bullets", "terminal"):
+        add("warn", "cue_target", sid, f"cues only move bullets and terminal lines, not a {ty} scene",
+            "drop the cues or use a bullets scene")
+    spoken = [{"w": w} for w in _narration(sc).split()]
+    unmatched = set()
+    for i, c in enumerate(cs):
+        ok = isinstance(c, dict) and isinstance(c.get("on"), str) and c["on"].strip() \
+            and isinstance(c.get("item"), int) and not isinstance(c["item"], bool) and c["item"] >= 0
+        lead = c.get("lead_ms", 0) if isinstance(c, dict) else 0
+        if not ok or isinstance(lead, bool) or not isinstance(lead, (int, float)) or not (-500 <= lead <= 1000):
+            add("error", "bad_cue", sid, f"cues[{i}] {c!r}",
+                'use {"on": "phrase", "item": 0, "lead_ms": 120} with lead_ms in -500..1000')
+            continue
+        if ty in ("bullets", "terminal") and c["item"] >= n:
+            add("error", "bad_cue", sid, f"cues[{i}].item {c['item']} but the scene has {n} items", "use an index that exists")
+        hits = len(_cues.find(spoken, c["on"]))
+        if hits != 1:
+            unmatched.add(i)
+            add("warn", "cue_unmatched", sid, f"cues[{i}].on {c['on']!r} is " + ("not in the narration" if not hits else f"said {hits} times"),
+                "quote a phrase the narration says exactly once (a longer one if it repeats)")
+    return unmatched
+
+
 def _hold_gap(sc: dict) -> float | None:
     """Seconds between the end of typing in the recorded take and the end of the scene, or None when
     the capture did not record when typing stopped (an older take)."""
@@ -384,6 +546,26 @@ def _lint_direction(spec: dict, add) -> dict:
     for key, what in (("research", "[{url, take}]"), ("must_avoid", '["thanks for watching"]')):
         if d.get(key) is not None and not isinstance(d[key], list):
             add("error", "bad_direction", None, f"direction.{key} is not a list", f"{key} = {what}")
+    br = d.get("brief")
+    if br is not None:  # the interview answers; a number or a nested object is a brief nobody wrote
+        if not isinstance(br, dict):
+            add("error", "bad_direction", None, f"direction.brief {br!r} is not an object",
+                'brief = {"audience": "…", "pain": "…", "promise": "…", "cta": "…", "placement": "ad"}')
+        else:
+            bad = sorted(k for k, v in br.items()
+                         if not isinstance(v, str) and not (isinstance(v, list) and all(isinstance(x, str) for x in v)))
+            if bad:
+                add("error", "bad_direction", None, f"direction.brief values are not text: {bad}",
+                    "every brief field is a sentence from the interview (or a list of them), never a number/object")
+    arc = d.get("arc")
+    if arc is not None:
+        if not isinstance(arc, str):  # a list or a number is a type error: nobody meant that
+            add("error", "bad_direction", None, f"direction.arc {arc!r} is not a string",
+                f"use one of {sorted(DIRECTION_ENUMS['arc'])}, or leave arc out")
+        elif arc.strip() and arc not in DIRECTION_ENUMS["arc"]:
+            # A template we do not know still renders; the arc lints read the roles, not the label.
+            add("warn", "arc_unknown", None, f"direction.arc {arc!r} is not a known template",
+                f"use one of {sorted(DIRECTION_ENUMS['arc'])}, or leave arc out and keep the roles")
     pl = plan(spec)
     for sid, p in pl.items():
         if not isinstance(p, dict):
@@ -395,6 +577,100 @@ def _lint_direction(spec: dict, add) -> dict:
                 add("error", "bad_direction", sid, f"{key} {p.get(key)!r}",
                     f"use one of {sorted(DIRECTION_ENUMS[key])}")
     return {"plan": pl, "max_words": max_words}
+
+
+def _durations(spec: dict) -> dict:
+    """Seconds each scene actually stays on screen (the voice is the clock), or {} when the timeline
+    cannot be read: a lint must never explode over a hand-written spec."""
+    try:
+        return {x["id"]: x["dur"] / spec["fps"] for x in timeline(spec)["scenes"]}
+    except (KeyError, TypeError, ValueError, IndexError, ZeroDivisionError, OverflowError):
+        return {}
+
+
+def _greeting(text: str, lang: str) -> str | None:
+    """The greeting a line opens with (in the first words), or None. A language with no greeting list
+    is skipped instead of guessed, and only the opening counts: "the problem? olá" is not a greeting."""
+    words = [w.lower() for w in _WORD.findall(text)][:4]
+    for g in GREETING_WORDS.get(lang, ()):
+        if g and words[:len(g)] == list(g):
+            return " ".join(g)
+    return None
+
+
+def _lint_narrative(spec: dict, d: dict, plan_: dict, add) -> None:
+    """Narrative and density lints: the arc has the beats its story needs, the hook is the opening and
+    keeps its promise, and nothing stays on screen longer (or is read faster) than a viewer can take.
+
+    Every one is a `warn` with a `fix`: a lint points at the problem, the editor decides the words, and
+    no warn ever blocks a render. They only run when a direction exists (and the arc/hook ones need
+    direction.scenes with roles), so a spec with no direction keeps exactly the findings it had."""
+    order = [sc.get("id") for sc in spec["scenes"]]
+    roles = {sid: p.get("role") for sid, p in plan_.items() if isinstance(p, dict) and sid in order}
+    durs = _durations(spec)
+    hooks = [i for i, sid in enumerate(order) if roles.get(sid) == "hook"]
+    if roles:  # the plan names beats: only then is there an arc to judge
+        need = ["hook", "cta"] + (["problem"] if d.get("purpose") in ("sales-video", "feature-demo") else [])
+        missing = [r for r in need if r not in set(roles.values())]
+        if missing:
+            add("warn", "arc_missing_beat", None, f"the arc has no {' or '.join(missing)} beat",
+                f"add a scene whose plan role is '{missing[0]}' (the arc is {sorted(set(roles.values()))}): "
+                "a 'hook' opens, a 'cta' closes, and a sales/demo arc owes the viewer a 'problem'")
+        if hooks and hooks[0] != 0:
+            add("warn", "hook_not_first", order[hooks[0]],
+                f"the hook is scene {hooks[0] + 1} of {len(order)}, not the first",
+                "move the hook scene to the top: the first seconds decide whether anyone watches the rest")
+        if hooks:
+            after = {roles.get(sid) for sid in order[hooks[0] + 1:]}
+            if not after & {"proof", "value", "result", "reveal"}:
+                add("warn", "hook_promise_unkept", order[hooks[0]],
+                    "the hook promises something and no later scene proves or delivers it",
+                    "add a 'proof' (evidence on screen), 'result' (the measured outcome), 'reveal' or 'value' scene "
+                    "after the hook, or promise something the video does show")
+    lang = spec.get("lang") if isinstance(spec.get("lang"), str) else ""
+    first = spec["scenes"][0]
+    for field in ("narration", "title", "heading", "subtitle", "caption"):
+        v = _narration(first) if field == "narration" else first.get(field)
+        if not isinstance(v, str) or not v.strip():
+            continue
+        g = _greeting(v, lang)
+        if g:  # the first frame spends its few seconds on the brand instead of on the viewer's problem
+            add("warn", "hook_brand_first", first.get("id"), f"the video opens with a greeting ('{g}')",
+                "cut the greeting and open with the hook (the pain in one sentence); the brand belongs in the cta")
+            break
+    for sc in spec["scenes"]:
+        sid, ty = sc.get("id"), sc.get("type")
+        dur = durs.get(sid) or float(sc.get("duration_s") or 0)
+        narr = _narration(sc).strip()
+        # A terminal take has its own rule (MIN_HOLD_S) and a clip moves on its own; a still with nobody
+        # talking is what dies on screen, unless the plan calls it a reveal and holds it on purpose.
+        if not narr and ty != "terminal" and not sc.get("video") and roles.get(sid) != "reveal" \
+                and dur > HOLD_MAX_S:
+            add("warn", "hold_too_long", sid, f"{dur:.1f}s with nothing said and no reveal beat",
+                f"cut the scene to <= {HOLD_MAX_S:g}s, write the line, or plan role 'reveal' if the hold is the point")
+        callouts = [("caption", sc.get("caption"))]
+        callouts += [(f"items[{i}]", x) for i, x in enumerate(sc.get("items") or [])]
+        for where, text in callouts:
+            if isinstance(text, str) and len(text.split()) > CALLOUT_WORDS:
+                add("warn", "callout_too_long", sid,
+                    f"{where} has {len(text.split())} words (a callout is read at a glance, limit "
+                    f"{CALLOUT_WORDS}): '{text[:40]}'",
+                    f"cut {where} to <= {CALLOUT_WORDS} words and move the rest to the narration or a second scene")
+        words = sum(len(t.split()) for t in _texts(sc))
+        if words and dur > 0 and words / dur > READ_WPS:
+            add("warn", "silent_unreadable", sid,
+                f"{words} words on screen for {dur:.1f}s ({words / dur:.1f}/s): nobody reads it in time",
+                f"cut it to ~{int(dur * READ_WPS)} words, or hold the scene longer (the voice sets the clock)")
+    run, prev = 1, None  # three scenes of one type at one duration is a metronome, not pacing
+    for sc in spec["scenes"]:
+        sid, ty = sc.get("id"), sc.get("type")
+        dur = durs.get(sid) or float(sc.get("duration_s") or 0)
+        run = run + 1 if prev and ty == prev[0] and abs(dur - prev[1]) <= MONOTONE_TOL * max(dur, prev[1]) else 1
+        prev = (ty, dur)
+        if run == 3:
+            add("warn", "monotone_pace", sid, f"three {ty} scenes in a row of ~{dur:.1f}s each",
+                "break the metronome: change the scene type, or move a duration by more than 15%")
+            run = 1
 
 
 def lint(spec: dict) -> list[dict]:
@@ -419,6 +695,10 @@ def lint(spec: dict) -> list[dict]:
     if not lang and any(_narration(sc) for sc in spec["scenes"] if isinstance(sc, dict)):
         add("error", "missing_lang", None, "narration without spec.lang", "set lang to pt-BR or en")
     say = spec.get("say") if isinstance(spec.get("say"), dict) else {}
+    try:
+        _audio.target_lufs(spec)
+    except ValueError as e:
+        add("error", "bad_audio", None, str(e), 'audio = {"target_lufs": -14} (range -24..-12)')
     if spec.get("music") is not None:
         f += _lint_music(spec.get("music"), add)
     if spec.get("motion") not in DIRECTION_ENUMS["motion"]:
@@ -434,6 +714,7 @@ def lint(spec: dict) -> list[dict]:
                 add("error", "bad_theme", None, f"theme.{k} {v!r}", 'use #rrggbb for every theme colour')
     dl = _lint_direction(spec, add)
     d_plan, max_words = dl["plan"], dl["max_words"]
+    durs = _durations(spec)  # the scene on screen as long as its voice needs, not as long as the spec says
     seen = set()
     for sc in spec["scenes"]:
         sid = sc.get("id")
@@ -473,6 +754,10 @@ def lint(spec: dict) -> list[dict]:
                     "re-run the capture; check the command really printed something")
         if ty == "image":
             _lint_focus_zoom(sc, sid, add)
+        unmatched = _lint_cues(sc, sid, add)
+        _lint_pauses(sc, sid, add)
+        _lint_beat_edge(sc, sid, add)
+        _lint_sfx(sc, sid, add, durs.get(sid), unmatched)
         if ty == "code" and len((sc.get("code") or "").splitlines()) > 18:
             add("error", "too_many_lines", sid, "code longer than 18 lines", "extract fewer lines")
         for t in _texts(sc):
@@ -481,7 +766,6 @@ def lint(spec: dict) -> list[dict]:
         if ty == "terminal" and (sc.get("video") or sc.get("capture_id")):
             end = _hold_gap(sc)
             if end is not None:
-                durs = {x["id"]: x["dur"] / spec["fps"] for x in timeline(spec)["scenes"]}
                 dur = durs.get(sid, float(sc["duration_s"]))
                 if dur < end + MIN_HOLD_S - 1e-6:
                     add("warn", "short_hold", sid,
@@ -523,6 +807,7 @@ def lint(spec: dict) -> list[dict]:
                 if tok not in say:  # tts.pronounce matches the key exactly, so the lint must too
                     add("warn", "say_missing", sid, f"'{tok}' will be read by the TTS engine",
                         f"add spec.say['{tok}'] = '<how to say it>' (e.g. 'L D preload'), spelled exactly as the token")
+    _lint_sfx_stem(spec, add)
     # Plan vs spec. Only a direction that names scenes is checked against the timeline, and a gap in the
     # plan is a warning: 4b cuts and reframe() clones change the scenes, the director catches up after.
     if d_plan:
@@ -544,6 +829,8 @@ def lint(spec: dict) -> list[dict]:
                 add("warn", "scene_unused", sid, f"direction.scenes[{sid!r}] has no scene in the spec",
                     "drop it from the plan, or add the scene the director planned")
     d = spec.get("direction") if isinstance(spec.get("direction"), dict) else {}
+    if d:  # the narrative lints below need a direction block to judge: without one the spec keeps the findings it always had
+        _lint_narrative(spec, d, d_plan, add)
     for phrase in d.get("must_avoid") or []:
         if not isinstance(phrase, str) or not phrase.strip():
             continue

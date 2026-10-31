@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
+import subprocess
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from . import capture as C, config, render as R, scan as SC, spec as S, tts as T
+from . import capture as C, config, cutdown as CD, delivery as D, render as R, scan as SC, spec as S, tts as T
 
 mcp = FastMCP("storyboard-video")
 
@@ -15,8 +16,10 @@ async def _guard(fn, *a, **k):
     # Playwright's sync API refuses to run inside the server's event loop: use a worker thread.
     try:
         return await asyncio.to_thread(fn, *a, **k)
-    except (PermissionError, FileNotFoundError, RuntimeError, KeyError, ValueError, OSError) as e:
-        # OSError: a broken pipe/kill from Xvfb or ffmpeg is a finding like the rest, not a traceback
+    except (PermissionError, FileNotFoundError, RuntimeError, KeyError, ValueError, OSError,
+            subprocess.SubprocessError) as e:
+        # OSError: a broken pipe/kill from Xvfb or ffmpeg is a finding like the rest, not a traceback;
+        # SubprocessError: ffprobe/ffmpeg exits non-zero on a corrupt file (CalledProcessError)
         return {"status": "error", "message": f"{type(e).__name__}: {e}"}
 
 
@@ -134,9 +137,21 @@ def reframe(spec_hash: str, aspect: str = "9:16") -> object:
 
 
 @mcp.tool()
-async def narrate(spec_hash: str) -> object:
-    """Offline voice-over (Kokoro-82M): synthesize each scene.narration into one WAV under /work/audio/<spec_hash>/ and write manifest.json with the measured durations. Cached on text+voice+speed+lang, so re-running only synthesizes changed lines. A scene then lasts max(duration_s, audio+0.4s) and the resolved spec_hash changes, so re-run stills before a delivery render. Needs spec.lang (pt-BR|en); spell identifiers with spec.say."""
-    return await _guard(T.narrate, spec_hash)
+async def narrate(spec_hash: str, scratch: bool = False) -> object:
+    """Offline voice-over (Kokoro-82M): synthesize each scene.narration into one WAV under /work/audio/<spec_hash>/ and write manifest.json with the measured durations. Cached on text+voice+speed+lang, so re-running only synthesizes changed lines. A scene then lasts max(duration_s, audio+0.4s) and the resolved spec_hash changes, so re-run stills before a delivery render. Needs spec.lang (pt-BR|en); spell identifiers with spec.say. `scratch=true` is the animatic pass: same engine, same cache, same WAVs, the manifest is only labelled (`"scratch": true`) and the final resolved_hash does not change."""
+    return await _guard(T.narrate, spec_hash, scratch)
+
+
+@mcp.tool()
+async def animatic(spec_hash: str) -> object:
+    """Rough cut for judging rhythm before any capture: every scene becomes a card with its visual placeholder ("[captura: sessao de terminal: X — 6.0s]") and its own line's audio, 360p, 15 fps, an ANIMATIC watermark and no music. Same render path as the delivery, no capture needed. Runs in the background like `render`: returns job_id, poll render_status (a 3-minute script takes over a minute). The receipt writes /work/animatic/<id>_ANIMATIC.mp4 (outside out/<resolved_hash>/, so it is never mistaken for the final video) and carries the path plus `pace_map` per scene {id, dur_s, words, wps, lead_s, tail_s, type} -- read its `caveat`: a synth is more regular than a human, so judge structure here and recompute with the final voice."""
+    return await _guard(lambda: {"status": "ok", "job_id": R.start(spec_hash, "animatic")})
+
+
+@mcp.tool()
+async def shot_list(spec_hash: str) -> object:
+    """The captures this AV script still needs, scene by scene and in playback order, each with the time the voice left for it (`hold_s` after the line ends, `silent_s` = lead+tail of the whole scene) and the `file:line` evidence the shot has to prove. Feed each row to capture_web / capture_terminal_session / capture_gui / extract_code so a capture records what the script needs, not what fits."""
+    return await _guard(R.shot_list, spec_hash)
 
 
 @mcp.tool()
@@ -174,8 +189,59 @@ def render_status(job_id: str) -> object:
 
 @mcp.tool()
 async def verify(video: str, spec_hash: str) -> object:
-    """Check the rendered MP4 against the spec: size (1080x1920 for a 9:16 delivery), fps, duration (+-1 frame), non-blank frames at 5/50/95%, the credit block (`credits_missing` when a track needs a credit and neither /work/CREDITS.txt nor out/<resolved_hash>/CREDITS.txt carries it), and the audio: the stream must be as long as the picture (+-0.1 s), EBU R128 integrated within 1.5 LU of -16 LUFS, true peak <= -1.5 dBTP, and no silence longer than 3 s in a narrated video. Returns the measured numbers as `loudness` {integrated_lufs, lra_lu, true_peak_db}, `silences` and the track's `music_license`; `audio` is null when silent, `narrated` tells which bar applied. Errors when the file is missing."""
+    """Check the rendered MP4 against the spec: size (1080x1920 for a 9:16 delivery), fps, duration (+-1 frame), non-blank frames at 5/50/95%, the credit block (`credits_missing` when a track needs a credit and neither /work/CREDITS.txt nor out/<resolved_hash>/CREDITS.txt carries it), and the audio: the stream must be as long as the picture (+-0.1 s), EBU R128 integrated within 1.5 LU of the target (-14 LUFS default), true peak <= -1.0 dBTP, and no silence longer than 3 s in a narrated video. Returns the measured numbers as `loudness` {integrated_lufs, lra_lu, true_peak_db}, `silences` and the track's `music_license`; `audio` is null when silent, `narrated` tells which bar applied. Errors when the file is missing."""
     return await _guard(R.verify, video, spec_hash)
+
+
+@mcp.tool()
+def cutdown(spec_hash: str, target_s: float) -> object:
+    """Cut the spec down to target_s (e.g. 30 or 15 for an ad) by removing whole scenes by arc role (implication, extra value, problem, tail); hook, proof, result and cta are never removed and the voice is never sped up. Needs direction.scenes roles. Returns the new spec_hash, `removed` [{scene, reason}] and its lint, or an error with code and min_s (cutdown_infeasible, hook_promise_unkept, cutdown_needs_roles)."""
+    try:
+        res = CD.cutdown(S.load(spec_hash), float(target_s))
+        h = S.persist(res["spec"])  # inside the guard: an unwritable /work is an error dict, not a traceback
+    except CD.CutdownError as e:
+        return {"status": "error", "code": e.code, "min_s": e.min_s, "message": str(e)}
+    except (FileNotFoundError, ValueError, OSError) as e:
+        return {"status": "error", "message": f"{type(e).__name__}: {e}"}
+    return {"status": "ok", "spec_hash": h, "from": spec_hash, "removed": res["removed"],
+            "duration_s": res["duration_s"], "duration_basis": res.get("duration_basis"), "findings": res["lint"]}
+
+
+@mcp.tool()
+async def deliver(spec_hash: str, project: str, aspect: str, version: int, date: str, quality: str = "delivery") -> object:
+    """Ship a finished render as deliveries/<project>_vNN_<16x9|9x16>_<date>.mp4 in the work dir, with its .srt and CREDITS.txt beside it: older deliveries of the same project and aspect move to deliveries/archive/, deliveries/CURRENT points at the new one. Only the quality='delivery' render is publishable, and the delivery check (SRT, CREDITS.txt, licences) runs first; errors block it."""
+    def go():
+        if quality != "delivery":
+            return {"status": "error", "findings": [{
+                "severity": "error", "code": "quality_not_delivery",
+                "message": f"deliver publishes out/<hash>/delivery.mp4, not the {quality!r} render",
+                "fix": "render with quality='delivery' (and verify it), then deliver again"}]}
+        spec = S.load(spec_hash)
+        out = config.WORK / "out" / S.resolved_hash(spec)
+        found = D.delivery_check(spec, out)
+        missing = [p.name for p in (out / "delivery.mp4", out / "delivery.srt") if not p.is_file()]
+        if missing:  # a draft-only dir has a draft.srt: the check alone would pass and ship a preview
+            found.insert(0, {"severity": "error", "code": "render_missing",
+                             "message": f"no {', '.join(missing)} in {out}",
+                             "fix": "render with quality='delivery' for this spec_hash, then deliver again"})
+        if any(f["severity"] == "error" for f in found):
+            return {"status": "error", "findings": found}
+        try:
+            return {"status": "ok", "findings": found,
+                    **D.deliver(project, aspect, version, date, out / f"{quality}.mp4")}
+        except D.DeliveryError as e:
+            return {"status": "error", "findings": [{"severity": "error", "code": e.code,
+                                                      "message": str(e), "fix": e.fix}]}
+    return await _guard(go)
+
+
+@mcp.tool()
+def round_log(n: int, question: str, notes: list[dict] | None = None, decision: str = "", hash_before: str = "", hash_after: str = "") -> object:
+    """Record one review round as /work/rounds/<n>.md: the question, notes [{timecode, severity must|pref, text}], the decision and the spec_hash before/after."""
+    try:
+        return {"status": "ok", "path": D.round_log(config.WORK, n, question, notes, decision, hash_before, hash_after)}
+    except (ValueError, OSError, PermissionError) as e:
+        return {"status": "error", "message": f"{type(e).__name__}: {e}"}
 
 
 def main() -> None:

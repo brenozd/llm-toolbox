@@ -385,3 +385,189 @@ def test_tone_and_palette_source_are_type_checked():
     assert "bad_direction" in codes(mk(direction={"tone": {"a": 1}}))
     assert "bad_direction" in codes(mk(direction={"palette_source": 1}))
     assert "bad_direction" not in codes(mk(direction={"tone": "calm technical", "palette_source": "derived"}))
+
+
+# --- Phase 1: the arc beats (role) and the narrative/density lints, all `warn` ---------------------
+
+NEW_CODES = {"arc_missing_beat", "arc_unknown", "hook_not_first", "hook_brand_first",
+             "hook_promise_unkept", "hold_too_long", "callout_too_long", "silent_unreadable",
+             "monotone_pace"}
+
+
+def got(s, code):
+    return [(f["code"], f["severity"], f["scene"]) for f in S.lint(s) if f["code"] == code]
+
+
+def arc(*roles, purpose="other", lang="en"):
+    """A spec whose plan names one role per scene (s1, s2, ...), one title scene each."""
+    ids = [f"s{i + 1}" for i in range(len(roles))]
+    return S.normalize({"lang": lang,
+                        "direction": {"purpose": purpose, "arc": "hero",
+                                      "scenes": {sid: {"role": r} for sid, r in zip(ids, roles)}},
+                        "scenes": [{"id": sid, "type": "title", "title": f"beat {sid}", "duration_s": 3}
+                                   for sid in ids]})
+
+
+def test_the_role_enum_is_the_whole_arc():
+    assert S.DIRECTION_ENUMS["role"] == {"hook", "problem", "implication", "reveal", "value", "proof",
+                                        "result", "cta"}
+    for role in ("implication", "result"):  # the two beats this phase added
+        assert "bad_direction" not in codes(mk(direction={"scenes": {"a": {"role": role}}})), role
+    err = [f for f in S.lint(mk(direction={"scenes": {"a": {"role": "foo"}}})) if f["code"] == "bad_direction"]
+    assert err and "implication" in err[0]["fix"] and "result" in err[0]["fix"]  # the enum lists itself
+
+
+def test_brief_is_an_object_of_text():
+    brief = {"audience": "devs debugging leaks", "pain": "leaks show up in prod", "promise": "find it in 30 s",
+             "cta": "install mint", "placement": "ad", "evidence": ["README.md:3"]}
+    assert "bad_direction" not in codes(mk(direction={"brief": brief}))
+    for bad in ("devs", 3, ["devs"], {"audience": 3}, {"pain": {"x": 1}}, {"cta": True},
+                {"audience": ["devs", 2]}):
+        assert "bad_direction" in codes(mk(direction={"brief": bad})), bad
+
+
+def test_arc_is_a_known_template_a_warning_when_unknown_and_an_error_when_not_a_string():
+    for good in S.DIRECTION_ENUMS["arc"]:
+        assert "bad_direction" not in codes(mk(direction={"arc": good})), good
+        assert "arc_unknown" not in codes(mk(direction={"arc": good})), good
+    assert got(mk(direction={"arc": "tiktok"}), "arc_unknown") == [("arc_unknown", "warn", None)]
+    assert "tiktok" not in S.DIRECTION_ENUMS["arc"]
+    for bad in (3, ["ad"], {"arc": "ad"}, True):  # a type error is an error, like every other enum
+        assert "bad_direction" in codes(mk(direction={"arc": bad})), bad
+    assert "arc_unknown" not in codes(mk(direction={"arc": "  "}))  # blank is not a claim
+
+
+def test_arc_missing_beat_needs_a_hook_and_a_cta():
+    assert "arc_missing_beat" in codes(arc("hook", "problem", "value"))
+    assert "arc_missing_beat" not in codes(arc("hook", "problem", "value", "cta"))
+    assert "arc_missing_beat" in codes(arc("problem", "value", "cta"))  # no hook at all
+    # a sales video and a feature demo owe the viewer the problem beat; a booth loop does not
+    assert "arc_missing_beat" in codes(arc("hook", "value", "cta", purpose="sales-video"))
+    assert "arc_missing_beat" not in codes(arc("hook", "problem", "value", "cta", purpose="feature-demo"))
+    # a direction with no scenes has no roles to read: the arc lints stay out of it
+    assert "arc_missing_beat" not in codes(mk(direction={"purpose": "sales-video"}))
+
+
+def test_hook_not_first_warns_when_the_arc_opens_somewhere_else():
+    assert got(arc("hook", "value", "cta"), "hook_not_first") == []
+    assert got(arc("problem", "hook", "cta"), "hook_not_first") == [("hook_not_first", "warn", "s2")]
+
+
+def test_hook_brand_first_is_a_greeting_in_the_opening_line():
+    hook = {"scenes": {"a": {"role": "hook"}}}
+
+    def opening(title=None, lang="en", **sc):
+        return mk(direction=hook, lang=lang, scenes=[{"id": "a", "type": "title", "duration_s": 3,
+                                                      **({"title": title} if title else {}), **sc}])
+
+    assert got(opening("Olá, pessoal!", lang="pt-BR"), "hook_brand_first") == [("hook_brand_first", "warn", "a")]
+    assert got(opening("Bem-vindo ao Mint", lang="pt-BR"), "hook_brand_first") == [("hook_brand_first", "warn", "a")]
+    assert got(opening("Hi", lang="en"), "hook_brand_first") == [("hook_brand_first", "warn", "a")]
+    # the brand after the problem is not a greeting: the opening is still the pain
+    assert got(opening("Mint: find the leak in 30 s", lang="en"), "hook_brand_first") == []
+    assert got(opening("O leak? Olá não resolve", lang="pt-BR"), "hook_brand_first") == []  # not the opening
+    # "Hello world" printed by the demo is code, not a greeting, and a lang with no list is not judged
+    term = mk(direction=hook, lang="en", scenes=[{"id": "a", "type": "terminal", "duration_s": 4,
+                                                  "lines": ["$ hello world", "$ leak fixed"]}])
+    assert got(term, "hook_brand_first") == []
+    assert got(opening("Olá, pessoal!"), "hook_brand_first") == []  # no lang: no list, no guess
+
+
+def test_hold_too_long_is_dead_air_unless_the_plan_says_reveal():
+    hold = lambda role, dur, **sc: mk(direction={"scenes": {"a": {"role": role}}},
+                                      scenes=[{"id": "a", "type": "title", "title": "quiet", "duration_s": dur, **sc}])
+    assert got(hold("value", 6), "hold_too_long") == [("hold_too_long", "warn", "a")]
+    assert got(hold("value", 4), "hold_too_long") == []
+    assert got(hold("reveal", 6), "hold_too_long") == []  # a deliberate reveal hold
+    assert got(hold("value", 6, narration="one short line"), "hold_too_long") == []
+    term = mk(direction={"scenes": {"a": {"role": "value"}}},
+              scenes=[{"id": "a", "type": "terminal", "lines": ["$ ok"], "duration_s": 6}])
+    assert got(term, "hold_too_long") == []  # a terminal take is judged by MIN_HOLD_S
+
+
+def test_callout_too_long_counts_captions_and_each_bullet():
+    d = {"scenes": {"a": {"role": "value"}}}
+    long = "one two three four five six seven eight nine"
+    s = mk(direction=d, scenes=[{"id": "a", "type": "title", "title": "ok", "caption": long, "duration_s": 4}])
+    assert got(s, "callout_too_long") == [("callout_too_long", "warn", "a")]
+    s = mk(direction=d, scenes=[{"id": "a", "type": "bullets", "heading": "H", "items": [long], "duration_s": 4}])
+    assert got(s, "callout_too_long") == [("callout_too_long", "warn", "a")]
+    ok = "one two three four five six seven eight"  # exactly the limit: still a label
+    s = mk(direction=d, scenes=[{"id": "a", "type": "title", "title": "ok", "caption": ok, "duration_s": 4}])
+    assert got(s, "callout_too_long") == []
+
+
+def test_monotone_pace_is_three_scenes_of_one_type_at_one_duration():
+    d = {"scenes": {"s": {"role": "value"}}}
+
+    def three(durs, types=("title", "title", "title")):
+        return mk(direction=d, scenes=[{"id": c, "type": t, "title": f"t{c}", "heading": "H", "items": ["x"],
+                                        "duration_s": dur} for c, t, dur in zip("abc", types, durs)])
+
+    assert got(three((3, 3, 3)), "monotone_pace") == [("monotone_pace", "warn", "c")]
+    assert got(three((3, 4, 5)), "monotone_pace") == []  # +-15% apart: the beat changes
+    assert got(three((3, 3, 3), ("title", "title", "bullets")), "monotone_pace") == []
+    assert got(three((3, 3)), "monotone_pace") == []  # two is not yet a metronome
+
+
+def test_silent_unreadable_when_the_screen_text_outruns_the_clock():
+    ten = "one two three four five six seven eight nine ten"
+    fast = mk(direction={"scenes": {"a": {"role": "value"}}},
+              scenes=[{"id": "a", "type": "title", "title": ten, "duration_s": 2}])
+    assert got(fast, "silent_unreadable") == [("silent_unreadable", "warn", "a")]
+    slow = mk(direction={"scenes": {"a": {"role": "value"}}},
+              scenes=[{"id": "a", "type": "title", "title": ten, "duration_s": 6}])
+    assert got(slow, "silent_unreadable") == []
+
+
+def test_hook_promise_unkept_needs_a_proof_or_value_after_the_hook():
+    assert got(arc("hook", "problem", "value", "cta"), "hook_promise_unkept") == []
+    assert got(arc("hook", "problem", "proof", "cta"), "hook_promise_unkept") == []
+    assert got(arc("hook", "problem", "cta"), "hook_promise_unkept") == [("hook_promise_unkept", "warn", "s1")]
+    assert got(arc("proof", "hook", "cta"), "hook_promise_unkept") == [("hook_promise_unkept", "warn", "s2")]
+
+
+def test_every_new_finding_carries_an_actionable_fix():
+    findings = [f for f in S.lint(arc("hook", "problem")) if f["code"] in NEW_CODES]
+    assert findings and all(f["severity"] == "warn" for f in findings)
+    assert all(isinstance(f["fix"], str) and len(f["fix"].split()) >= 3 for f in findings)
+
+
+def test_a_legacy_spec_without_direction_gains_no_new_findings():
+    """The promise of the phase: every new lint is a `warn`, and a spec with no direction at all gains
+    *zero* findings. These scenes would trip the greeting, the callout, the hold, the metronome and the
+    reading speed -- if the new lints were not gated on spec.direction."""
+    s = mk(scenes=[
+        {"id": "a", "type": "title", "title": "Olá, pessoal!", "duration_s": 3},
+        {"id": "b", "type": "bullets", "heading": "What it does", "duration_s": 3,
+         "items": ["one two three four five six seven eight nine"]},
+        {"id": "c", "type": "title", "title": "one two three four five six seven eight nine ten", "duration_s": 2},
+        {"id": "d", "type": "title", "title": "quiet hold", "duration_s": 6}])
+    assert [(f["code"], f["severity"]) for f in S.lint(s)] == [("no_direction", "warn")]
+    assert not ({f["code"] for f in S.lint(s)} & NEW_CODES)
+
+
+def test_bad_audio_target_is_a_lint_error_not_a_render_crash():
+    base = {"aspect": "16:9", "fps": 30, "scenes": [{"id": "a", "type": "title", "title": "x"}]}
+    bad = [f["code"] for f in S.lint(S.normalize({**base, "audio": {"target_lufs": -5}}))]
+    ok = [f["code"] for f in S.lint(S.normalize({**base, "audio": {"target_lufs": -16}}))]
+    assert "bad_audio" in bad and "bad_audio" not in ok
+
+
+def test_resolved_hash_carries_the_audio_version(monkeypatch):
+    sp = {"aspect": "16:9", "fps": 30, "scenes": [{"id": "a", "type": "title", "title": "x"}]}
+    a = S.resolved_hash(sp)
+    monkeypatch.setattr(S.config, "AUDIO_VERSION", "999")
+    assert S.resolved_hash(sp) != a
+
+
+def test_greeting_lint_ignores_imperatives_and_compounds_and_result_keeps_the_promise():
+    def codes(first, roles, lang="en"):
+        sc = [{"id": f"s{i}", "type": "title", "title": first if i == 0 else "x", "duration_s": 3} for i in range(len(roles))]
+        d = {"purpose": "other", "scenes": {f"s{i}": {"role": r} for i, r in enumerate(roles)}}
+        return [f["code"] for f in S.lint(S.normalize({"aspect": "16:9", "fps": 30, "lang": lang, "scenes": sc, "direction": d}))]
+    assert "hook_brand_first" not in codes("Hi-fi audio in the browser", ["hook", "cta"])
+    assert "hook_brand_first" in codes("Hi everyone", ["hook", "cta"])
+    assert "hook_brand_first" not in codes("Salve o arquivo antes de fechar", ["hook", "cta"], "pt-BR")
+    assert "hook_promise_unkept" not in codes("Ship in 1 s", ["hook", "result", "cta"])
+    assert "hook_promise_unkept" in codes("Ship in 1 s", ["hook", "cta"])
