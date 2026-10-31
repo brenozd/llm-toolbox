@@ -92,10 +92,9 @@ def test_both_entries_are_hardened():
         assert [a for a in args if a in ESCAPES] == [], name
 
 
-def test_tmp_is_tmpfs_with_exec_so_narration_can_dlopen():
-    """espeak-ng's loader `dlopen`s a lib it unpacks under TMPDIR; a `noexec` /tmp kills `narrate`
-    (reproduced in the image). The shipped /run/espeak alternative was rejected -- one token
-    `:rw,exec` on the existing tmpfs instead, /work is already exec so noexec /tmp bought little."""
+def test_tmp_is_tmpfs_with_exec():
+    """The previous engine (espeak-ng) `dlopen`ed a lib it unpacked under TMPDIR, so /tmp stays exec. Pocket TTS
+    only writes a temp WAV there; whether `noexec` would now be safe was NOT tested, so the flag is kept."""
     for name in ENTRIES:
         args = _args(name)
         assert "/tmp:rw,exec" in _flag(args, "--tmpfs"), name

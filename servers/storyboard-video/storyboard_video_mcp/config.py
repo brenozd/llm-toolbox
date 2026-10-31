@@ -19,17 +19,23 @@ MUSIC_DUCK_DB = (0.0, 40.0)
 # spec.resolved_hash, so old stills/receipts cannot be reused for a frame built by another template.
 RENDER_VERSION = "5"
 AUDIO_VERSION = "2"  # bump when the mix chain changes (v2: -14 LUFS default + limiter): old cached mixes must not be reused
-# TTS model identity (name + size, not a 300 MB hash) is part of the narration cache key: a re-baked
-# model must not be served the WAVs the previous one synthesized.
-MODEL = Path(os.environ.get("STORYBOARD_KOKORO_MODEL", "/opt/kokoro/kokoro-v1.0.fp16.onnx"))
+# Pocket TTS binary (baked into the image). Its name + size is part of the narration cache key: a re-baked
+# engine must not be served the WAVs the previous one synthesized. TTS_HOME is the HF cache with the baked weights.
+MODEL = Path(os.environ.get("STORYBOARD_TTS_BIN", "/opt/pocket-tts/pocket-tts"))
+TTS_HOME = os.environ.get("STORYBOARD_TTS_HOME", "/opt/hf")
 
 
 def model_id() -> str:
-    """Stable identity of the baked TTS model, cheap enough to hash on every call."""
+    """Stable identity of the baked TTS binary, cheap enough to hash on every call."""
     try:
         return f"{MODEL.name}:{MODEL.stat().st_size}"
     except OSError:
         return f"{MODEL.name}:absent"
+
+
+def tts_env() -> dict[str, str]:
+    """Offline by construction: the weights come from the image, a missing one must fail, not download."""
+    return {**os.environ, "HF_HOME": TTS_HOME, "HF_HUB_OFFLINE": "1"}
 
 
 def chromium() -> str | None:

@@ -1,5 +1,7 @@
 # storyboard-video: plano de implementação (fases 0–5) com verificação adversarial
 
+> **Nota (2026-10-31):** o motor de voz deixou de ser o Kokoro e passou a ser o Pocket TTS (Kyutai, binário Rust, sem Python). As menções a Kokoro abaixo descrevem o estado quando o plano foi escrito; veja `servers/storyboard-video/README.md` para o estado atual.
+
 Companheiro de `storyboard-video-pro-pipeline.md` (pesquisa e desenho). Este documento é o plano executável.
 Data: 2026-10-30. Marcação: **[C]** confirmado no código · **[?]** hipótese a verificar num spike antes de codar.
 

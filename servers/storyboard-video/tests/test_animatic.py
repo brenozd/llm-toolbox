@@ -11,7 +11,7 @@ What this file defends:
 - `shot_list` says what to capture and how long the voice leaves for it.
 
 Synthetic WAVs are written directly into `/work/audio/<spec_hash>/manifest.json`, so the pacing tests need
-neither Kokoro nor ffmpeg. The end-to-end render skips on a host without chromium/ffmpeg.
+neither Pocket TTS nor ffmpeg. The end-to-end render skips on a host without chromium/ffmpeg.
 """
 
 import array
@@ -29,13 +29,13 @@ from storyboard_video_mcp import config, render, server, spec as S, tts
 
 
 class FakeEngine:
-    """Stand-in for Kokoro: 0.05 s of audio per character (deterministic, no model)."""
+    """Stand-in for Pocket TTS: 0.05 s of audio per character (deterministic, no model)."""
 
     def __init__(self):
         self.calls = []
 
-    def create(self, text, voice=None, lang=None, speed=1.0):
-        self.calls.append({"text": text, "voice": voice, "lang": lang, "speed": speed})
+    def create(self, text, voice=None, lang=None):
+        self.calls.append({"text": text, "voice": voice, "lang": lang})
         return [0.0] * int(24000 * 0.05 * len(text)), 24000
 
 
@@ -233,7 +233,7 @@ def test_a_rough_cut_renders_at_360p15_with_its_pace_map(work, monkeypatch):
     tmp, _ = work
 
     class ToneEngine:  # a real tone: loudnorm has nothing to measure on digital silence
-        def create(self, text, voice=None, lang=None, speed=1.0):
+        def create(self, text, voice=None, lang=None):
             n = int(24000 * 0.05 * len(text))
             return [0.1 * math.sin(2 * math.pi * 220 * i / 24000) for i in range(n)], 24000
 

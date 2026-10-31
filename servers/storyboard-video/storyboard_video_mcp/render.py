@@ -880,9 +880,12 @@ def credits_finding(spec: dict, video: str | Path | None = None) -> dict | None:
     licence condition (CC BY), so a delivery that cannot show it is not shippable. The file written
     next to the video is checked first (a later render unlinks /work/CREDITS.txt), then /work."""
     m = spec.get("music")
-    if not isinstance(m, dict) or not str(m.get("attribution") or "").strip():
+    if isinstance(m, dict) and str(m.get("attribution") or "").strip():
+        key = str(m.get("title") or m.get("attribution")).strip()[:40]
+    elif TTS.voices.credits(spec):  # a CC BY voice: the credit names it
+        key = "Voice credits"
+    else:
         return None
-    key = str(m.get("title") or m.get("attribution")).strip()[:40]
     paths = ([Path(video).parent / "CREDITS.txt"] if video else []) + [config.WORK / "CREDITS.txt"]
     for p in paths:
         try:

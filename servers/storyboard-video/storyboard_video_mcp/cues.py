@@ -1,8 +1,8 @@
 """Narration cues: when is each word said, so a bullet can appear as the voice reaches it.
 
-Kokoro gives no timestamps, so this *estimates* them: the real pauses in the WAV pin the phrase
+Pocket TTS gives no timestamps, so this *estimates* them: the real pauses in the WAV pin the phrase
 boundaries, and inside a phrase the syllables share the time. Measured against faster-whisper on two
-Kokoro sentences the start of a word is off by ~100-200 ms (median 97-146, p95 201-383): good enough
+Kokoro sentences (the previous engine; NOT re-measured on Pocket TTS) the start of a word is off by ~100-200 ms (median 97-146, p95 201-383): good enough
 to land a reveal on the right phrase, not to promise word-exact sync. `align` is always "estimated".
 """
 from __future__ import annotations

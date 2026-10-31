@@ -25,19 +25,30 @@ RUN pip install --no-cache-dir . \
  && playwright install --only-shell --with-deps chromium \
  && rm -rf /var/lib/apt/lists/*
 
-# Offline narration: Kokoro-82M (Apache-2.0 weights, MIT wrapper) + the 54-voice pack, baked in at
-# build time and sha256-checked, so the container never reaches the network. espeak-ng (bundled by
-# espeakng-loader) does the G2P for both en and pt-BR, which is why misaki/torch is not installed.
-ENV KOKORO_DIR=/opt/kokoro
-RUN pip install --no-cache-dir kokoro-onnx==0.6.1 onnxruntime==1.31.1 \
- && mkdir -p $KOKORO_DIR && cd $KOKORO_DIR \
- && curl -fsSL -O https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.fp16.onnx \
- && curl -fsSL -O https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin \
- && echo "f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96  kokoro-v1.0.fp16.onnx" | sha256sum -c - \
- && echo "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d  voices-v1.0.bin" | sha256sum -c -
+# Offline narration: Pocket TTS (Kyutai), a standalone CPU-only Rust binary (no Python, no torch, no G2P
+# library). The binary is sha256-checked per arch; the weights of both languages and of every catalogue
+# voice (voices.py) are pulled into /opt/hf once, at build time, by synthesizing a word with each: the
+# container then runs with HF_HUB_OFFLINE=1 and never reaches the network. Needs a CPU with AVX2 (x86_64).
+ARG TARGETARCH
+ARG POCKET_TTS=v4.0.1
+# the asset name carries the crate version, not the release tag; the sha256 below pins both
+ARG POCKET_TTS_CRATE=3.3.0
+ENV STORYBOARD_TTS_BIN=/opt/pocket-tts/pocket-tts STORYBOARD_TTS_HOME=/opt/hf
+RUN case "$TARGETARCH" in \
+      amd64) T=x86_64-unknown-linux-gnu; SUM=9abff0aa138a804e44052952d8c3bdaae247fb267ca8f4b83fe178897d1a0559 ;; \
+      arm64) T=aarch64-unknown-linux-gnu; SUM=2b9a727bffd86ea6d73370d675cbd91a7db118f11b7f5a60343c2d5da12b187a ;; \
+      *) echo "unsupported arch: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && F=pocket-tts-$POCKET_TTS_CRATE-$T.tar.gz \
+ && curl -fsSL -O https://github.com/kyutai-labs/pocket-tts/releases/download/$POCKET_TTS/$F \
+ && echo "$SUM  $F" | sha256sum -c - \
+ && mkdir -p /opt/pocket-tts && tar xzf $F -C /opt/pocket-tts --strip-components=1 && rm $F \
+ && for L in english portuguese; do \
+      for V in $(python -c "from storyboard_video_mcp import voices; print(*voices.names('en' if '$L' == 'english' else 'pt-BR'))"); do \
+        HF_HOME=/opt/hf /opt/pocket-tts/pocket-tts generate -q --language $L --voice $V --text "Ok." --output-path /tmp/warm.wav || exit 1; \
+      done; \
+    done; rm -f /tmp/warm.wav
 
-ENV STORYBOARD_WORK=/work STORYBOARD_REPO=/repo \
-    STORYBOARD_KOKORO_MODEL=$KOKORO_DIR/kokoro-v1.0.fp16.onnx \
-    STORYBOARD_KOKORO_VOICES=$KOKORO_DIR/voices-v1.0.bin
+ENV STORYBOARD_WORK=/work STORYBOARD_REPO=/repo
 VOLUME ["/work"]
 ENTRYPOINT ["storyboard-video-mcp"]

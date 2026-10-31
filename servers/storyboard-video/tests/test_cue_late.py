@@ -3,7 +3,7 @@
 `cue_delays` (and the phrase alignment behind it) is tested in test_cues.py; the contract here is the
 warn-only finding `shot_list` carries: a reveal with less than CUE_MIN_VISIBLE_S on screen is a flash,
 a reveal at/after the scene's end is never seen, and a spec without cues never grows a new warning.
-The reveal times are stubbed so the test needs neither Kokoro nor a WAV."""
+The reveal times are stubbed so the test needs neither Pocket TTS nor a WAV."""
 
 import pytest
 

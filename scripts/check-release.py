@@ -265,7 +265,7 @@ def self_test() -> int:
           "index has no linux/amd64 entry")
 
     real = dockerfile_env(DOCKERFILE.read_text())
-    check("real Dockerfile KOKORO", real.get("STORYBOARD_KOKORO_MODEL"), "/opt/kokoro/kokoro-v1.0.fp16.onnx")
+    check("real Dockerfile TTS", real.get("STORYBOARD_TTS_BIN"), "/opt/pocket-tts/pocket-tts")
     check("real Dockerfile playwright", real.get("PLAYWRIGHT_BROWSERS_PATH"), "/ms-playwright")
     check("real Dockerfile no stale ENV", "STORYBOARD_CHROMIUM" in real, False)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # storyboard-e2e.sh -- the whole shipped path, unattended (U5): read `.claude-plugin/plugin.json`, expand
 # `${PWD}`/`${HOME}` the way Claude Code's launcher does, run that entry's verbatim `docker run` argv and
-# drive the MCP server over stdio. Nothing is mocked: real container, real image, real ffmpeg/Kokoro.
+# drive the MCP server over stdio. Nothing is mocked: real container, real image, real ffmpeg/Pocket TTS.
 #
 #     scripts/storyboard-e2e.sh                          # the `storyboard-video` entry
 #     STORYBOARD_E2E_ENTRY=storyboard-video-exec scripts/...  # the air-gapped entry (same code path)

@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 from . import audio as _audio
-from . import config, cues as _cues
+from . import config, cues as _cues, voices as _voices
 from .safety import safe_path
 from .scan import contrast
 
@@ -140,7 +140,7 @@ def audio_manifest(spec: dict) -> dict:
 
 
 def audio_digest(spec: dict) -> str:
-    """Digest of the WAVs the spec currently resolves against (the cache keys are text+voice+speed+lang)."""
+    """Digest of the WAVs the spec currently resolves against (the cache keys are text+voice+lang)."""
     keys = {sid: v.get("key") for sid, v in (audio_manifest(spec).get("scenes") or {}).items()}
     return hashlib.sha256(json.dumps(keys, sort_keys=True).encode()).hexdigest()[:12] if keys else ""
 
@@ -692,6 +692,14 @@ def lint(spec: dict) -> list[dict]:
     if "say" in spec and not isinstance(spec["say"], dict):
         add("error", "bad_say", None, "say must be a {written: spoken} object",
             'spec.say = {"LD_PRELOAD": "el di preload"}')
+    for where, o in [(None, spec)] + [(sc.get("id"), sc) for sc in spec["scenes"] if isinstance(sc, dict)]:
+        if o.get("voice") is not None and not (isinstance(o["voice"], str)
+                                               and o["voice"] in _voices.names(lang if lang in _voices.LANG_TAG else None)):
+            add("error", "bad_voice", where, f"voice {o['voice']!r} is not a Pocket TTS catalogue voice for lang {lang!r}",
+                f"use one of {_voices.names(lang if lang in _voices.LANG_TAG else None)} (suggest_voices ranks them)")
+        if "speed" in o:
+            add("error", "speed_unsupported", where, "speed is not supported: Pocket TTS has no speed control",
+                "remove it; the voice sets the pace (suggest_voices pace=slow|normal|fast)")
     if not lang and any(_narration(sc) for sc in spec["scenes"] if isinstance(sc, dict)):
         add("error", "missing_lang", None, "narration without spec.lang", "set lang to pt-BR or en")
     say = spec.get("say") if isinstance(spec.get("say"), dict) else {}

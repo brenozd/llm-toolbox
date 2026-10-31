@@ -1,6 +1,6 @@
 """Fase 3: cues (a bullet appears when the voice reaches its phrase).
 
-Word timings are *estimated* (Kokoro has no timestamps), so the contract tested here is the part that
+Word timings are *estimated* (Pocket TTS has no timestamps), so the contract tested here is the part that
 must hold: the phrase boundary follows the real pause in the WAV, a phrase said twice or not at all is
 refused instead of guessed, and a spec without cues builds the page it always built.
 """
@@ -82,7 +82,7 @@ def narrated(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "REPO", tmp_path)
 
     class Eng:  # 1 s of tone per word, 0.5 s of silence after every sentence
-        def create(self, text, voice=None, lang=None, speed=1.0):
+        def create(self, text, voice=None, lang=None):
             out = []
             for w in text.split():
                 out += [0.3] * int(SR * 0.6) + ([0.0] * int(SR * 0.5) if w[-1] in ".!?" else [])

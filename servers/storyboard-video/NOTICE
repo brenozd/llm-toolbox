@@ -1,19 +1,14 @@
 storyboard-video-mcp bundles third-party speech-synthesis artifacts. Attribution:
 
-Kokoro-82M (model weights) - Apache-2.0 - https://huggingface.co/hexgrad/Kokoro-82M
-  The model card lists training data added after v0.19 under Creative Commons Attribution:
-  - Koniwa `tnc` (<1 h), CC BY 3.0 - https://www.koniwa.jp/
-  - SIWIS (<11 h), CC BY 4.0 - https://www.unige.ch/cui/siwis/
-  Those datasets are used under CC BY; this NOTICE carries the attribution they require.
+Pocket TTS (binary, v4.0.1 / crate 3.3.0) - https://github.com/kyutai-labs/pocket-tts
+  Kyutai, MIT (the release tarball ships its LICENSE). sha256-verified at image build time.
+  Model weights: https://huggingface.co/kyutai/pocket-tts-without-voice-cloning (licence: see the model card;
+  not independently verified here - check it before a commercial release)
 
-kokoro-onnx (MIT) - https://github.com/thewh1teagle/kokoro-onnx
-  Bundled model files (kokoro-v1.0.fp16.onnx, voices-v1.0.bin) come from its
-  `model-files-v1.1` release and are sha256-verified at image build time.
-
-espeak-ng 1.52.0 (libespeak-ng.so.1.52.0, GPL-3.0-or-later) - https://github.com/espeak-ng/espeak-ng
-  Used unmodified as the grapheme-to-phoneme engine, through the `espeakng-loader` 0.2.4 wheel
-  (which ships the prebuilt library and its voice data); the version above is the one pinned by
-  that wheel and is checked at release time with `strings libespeak-ng.so.1 | grep 1.52`.
-  Source for that exact version: https://github.com/espeak-ng/espeak-ng/releases/tag/1.52.0
-
-onnxruntime (MIT) - https://github.com/microsoft/onnxruntime
+Voice embeddings come from https://huggingface.co/kyutai/tts-voices (licence per voice there):
+  CC0: marius, javert (voice-donations); bill_boerst, caro_davy, peter_yearsley, stuart_bell (voice-zero, LibriVox)
+  CC BY 4.0 (attribution required; no changes to the licence terms): alba (Alba MacKenna);
+    anna, azelma, charles, eponine, eve, fantine, george, jane, mary, michael, paul, vera
+    (VCTK, Voice Cloning Toolkit, https://datashare.ed.ac.uk/handle/10283/3443)
+  rafael (pt): published by Kyutai without a licence statement we could verify; used as the pt-BR default.
+  Left out on purpose: jean (EARS) and cosette (Expresso), both CC BY-NC 4.0 (non-commercial).

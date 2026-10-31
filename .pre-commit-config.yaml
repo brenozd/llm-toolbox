@@ -11,7 +11,7 @@ repos:
     rev: v2.4.1
     hooks:
     - id: codespell
-      args: [-L, "actualpy,meu,te,oficial,erro,fo,nd,handel,anull,anullsrc,fase,fases,comando,dito", -S, "docs/storyboard-video-*.md"]
+      args: [-L, "actualpy,meu,te,oficial,erro,fo,nd,handel,anull,anullsrc,fase,fases,comando,dito,expresso", -S, "docs/storyboard-video-*.md"]
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.2
     hooks:

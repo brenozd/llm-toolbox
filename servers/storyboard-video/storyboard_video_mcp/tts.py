@@ -1,39 +1,55 @@
-"""Offline narration: Kokoro-82M (Apache-2.0) through kokoro-onnx, one WAV per narrated scene.
+"""Offline narration: Pocket TTS (Kyutai, CPU-only Rust binary) -> one WAV per narrated scene.
 
-The model and voices are baked into the image (no runtime download). Synthesis is cached on
-text+voice+speed+lang, so re-running narrate only pays for the lines that actually changed.
+The binary and the voice/model weights are baked into the image (no runtime download). The voice sets
+pace and expressiveness (there is no speed knob): see voices.py. Synthesis is cached on
+text+voice+lang, so re-running narrate only pays for the lines that actually changed.
 """
 from __future__ import annotations
 
 import array
 import hashlib
 import json
-import os
 import random
 import re
+import subprocess
+import tempfile
 import wave
 from pathlib import Path
 
-from . import config, cues, spec as S
+from . import config, cues, spec as S, voices
 
-# spec.lang -> (kokoro lang code, default voice). Voices: pf_dora is the pt-BR female voice,
-# af_heart the top-graded English one; both ship in voices-v1.0.bin.
-LANGS = {"pt-BR": ("pt-br", "pf_dora"), "en": ("en-us", "af_heart")}
-MODEL = os.environ.get("STORYBOARD_KOKORO_MODEL", "/opt/kokoro/kokoro-v1.0.fp16.onnx")
-VOICES = os.environ.get("STORYBOARD_KOKORO_VOICES", "/opt/kokoro/voices-v1.0.bin")
+LANGS = voices.LANG_TAG
+TTS_TIMEOUT_S = 180  # one [beat] part; a cold model load is ~2 s, a long part a few seconds more
+
+
+class Engine:
+    """`pocket-tts generate` as a subprocess. Tests monkeypatch `_engine` with a fake of the same `create`."""
+
+    def create(self, text: str, voice: str, lang: str):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "o.wav"
+            r = subprocess.run([str(config.MODEL), "generate", "-q", "--language", lang, "--voice", voice,
+                                "--text", text, "--output-path", str(out)],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=TTS_TIMEOUT_S,
+                               env=config.tts_env())
+            if r.returncode or not out.is_file():
+                raise RuntimeError(f"pocket-tts failed (rc={r.returncode}): {(r.stderr or r.stdout).strip()[-400:]}")
+            with wave.open(str(out), "rb") as w:
+                if (w.getnchannels(), w.getsampwidth()) != (1, 2):
+                    raise RuntimeError(f"pocket-tts wrote {w.getnchannels()} ch / {8 * w.getsampwidth()} bit, expected mono 16 bit")
+                pcm = array.array("h", w.readframes(w.getnframes()))
+                return [x / 32768 for x in pcm], w.getframerate()
+
 
 _ENGINE = None
 
 
 def _engine():
-    """Load kokoro once per process; tests monkeypatch this with a fake engine."""
     global _ENGINE
     if _ENGINE is None:
-        for p in (MODEL, VOICES):
-            if not Path(p).is_file():
-                raise FileNotFoundError(f"TTS model missing: {p} (baked into the image at build time)")
-        from kokoro_onnx import Kokoro
-        _ENGINE = Kokoro(MODEL, VOICES)
+        if not Path(config.MODEL).is_file():
+            raise FileNotFoundError(f"TTS binary missing: {config.MODEL} (baked into the image at build time)")
+        _ENGINE = Engine()
     return _ENGINE
 
 
@@ -48,10 +64,10 @@ def pronounce(text: str, say: dict | None) -> str:
     return text
 
 
-def cache_key(text: str, voice: str, speed: float, lang: str) -> str:
-    """text+voice+speed+lang *and* the model file identity: re-baking the model must invalidate the
+def cache_key(text: str, voice: str, lang: str) -> str:
+    """text+voice+lang *and* the binary identity: re-baking the engine must invalidate the
     WAVs the previous one synthesized (same text, different voice)."""
-    return hashlib.sha256(f"{text}\x00{voice}\x00{speed:.3f}\x00{lang}\x00{config.model_id()}".encode()).hexdigest()[:16]
+    return hashlib.sha256(f"{text}\x00{voice}\x00{lang}\x00{config.model_id()}".encode()).hexdigest()[:16]
 
 
 def _pcm(samples) -> bytes:
@@ -82,13 +98,13 @@ def room_tone(seconds: float, sr: int) -> bytes:
     return array.array("h", (rng.randint(-ROOM_PEAK, ROOM_PEAK) for _ in range(int(seconds * sr)))).tobytes()
 
 
-def synthesize(eng, text: str, voice: str, lang: str, speed: float) -> tuple[bytes, int]:
+def synthesize(eng, text: str, voice: str, lang: str) -> tuple[bytes, int]:
     """One scene line -> PCM. `[beat]` splits the line: each part is synthesized on its own and the parts
     are joined by BEAT_S of room tone (the TTS never sees the marker, so it cannot read it out)."""
     parts = [x for x in S.BEAT.split(text) if x.strip()]
     pcm, sr = [], 24000
     for i, part in enumerate(parts):
-        samples, sr = eng.create(part, voice=voice, lang=LANGS[lang][0], speed=speed)
+        samples, sr = eng.create(part, voice=voice, lang=LANGS[lang])
         if i:
             pcm.append(room_tone(BEAT_S, sr))
         pcm.append(_pcm(samples))
@@ -102,7 +118,10 @@ def wav_seconds(path: Path) -> float:
 
 
 def _voice_of(spec: dict, sc: dict) -> str:
-    return sc.get("voice") or spec.get("voice") or LANGS[spec["lang"]][1]
+    v = sc.get("voice") or spec.get("voice") or voices.DEFAULT[spec["lang"]]
+    if v not in voices.names(spec["lang"]):  # narrate never lints: an old spec (pf_dora) or a pt-only voice in en fails here
+        raise ValueError(f"voice {v!r} is not a catalogue voice for {spec['lang']}: use one of {voices.names(spec['lang'])}")
+    return v
 
 
 def words_of(narration: str, wav: Path, say: dict | None) -> list[dict]:
@@ -116,7 +135,7 @@ def narrate(h: str, scratch: bool = False) -> dict:
     """Synthesize every narrated scene of spec `h` into /work/audio/<h>/, one WAV per scene, and
     write manifest.json with the measured durations that spec.timeline() then uses.
 
-    `scratch=True` is the animatic pass: same Kokoro, same cache key, same WAVs -- the manifest is
+    `scratch=True` is the animatic pass: same engine, same cache key, same WAVs -- the manifest is
     only *labelled* (`"scratch": true`) so a reader can tell the pass it came from. The
     label is metadata, not part of the cache key or of `resolved_hash`: narrating scratch first and
     final second reuses the same lines (that is the point) and the final id does not move."""
@@ -131,16 +150,15 @@ def narrate(h: str, scratch: bool = False) -> dict:
     eng, made = None, 0
     for sc in scenes:
         voice = _voice_of(spec, sc)
-        speed = float(sc.get("speed") or spec.get("speed") or 1.0)
         text = pronounce(sc["narration"], spec.get("say"))
-        key = cache_key(text + (f"\x00beat{BEAT_S}" if S.BEAT.search(text) else ""), voice, speed, lang)
+        key = cache_key(text + (f"\x00beat{BEAT_S}" if S.BEAT.search(text) else ""), voice, lang)
         p = d / f"{sc['id']}-{key}.wav"  # scene id in the name: identical lines keep separate files
         if not p.exists():
             eng = eng or _engine()
-            _write_pcm(p, *synthesize(eng, text, voice, lang, speed))
+            _write_pcm(p, *synthesize(eng, text, voice, lang))
             made += 1
         man["scenes"][sc["id"]] = {"key": key, "path": str(p), "duration_s": round(wav_seconds(p), 3),
-                                   "voice": voice, "speed": speed, "lang": lang, "text": text,
+                                   "voice": voice, "lang": lang, "text": text,
                                    "words": words_of(sc["narration"], p, spec.get("say")), "align": "estimated"}
     man["synthesized"], man["cached"] = made, len(scenes) - made
     man["total_s"] = round(sum(x["duration_s"] for x in man["scenes"].values()), 3)

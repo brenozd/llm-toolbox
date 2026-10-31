@@ -7,7 +7,7 @@ import subprocess
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from . import capture as C, config, cutdown as CD, delivery as D, render as R, scan as SC, spec as S, tts as T
+from . import capture as C, config, cutdown as CD, delivery as D, render as R, scan as SC, spec as S, tts as T, voices as V
 
 mcp = FastMCP("storyboard-video")
 
@@ -137,8 +137,15 @@ def reframe(spec_hash: str, aspect: str = "9:16") -> object:
 
 
 @mcp.tool()
+async def suggest_voices(lang: str, pitch: str = "any", pace: str = "any", flow: str = "any",
+                         emotion: str = "any", n: int = 3) -> object:
+    """Rank the Pocket TTS voices for a user's answers (ask them first, then set spec.voice to a pick). pitch=low|high, pace=slow|normal|fast, flow=smooth|breathy (breathy = more pauses), emotion=calm|neutral|expressive; 'any' = no opinion. lang=pt-BR|en. Returns the top n with measured pace/pause/intonation, license (CC-BY-4.0 needs attribution) and a caveat: naturalness is NOT measured, so audition with narrate(scratch=true)."""
+    return await _guard(lambda: V.suggest(lang, n, pitch=pitch, pace=pace, flow=flow, emotion=emotion))
+
+
+@mcp.tool()
 async def narrate(spec_hash: str, scratch: bool = False) -> object:
-    """Offline voice-over (Kokoro-82M): synthesize each scene.narration into one WAV under /work/audio/<spec_hash>/ and write manifest.json with the measured durations. Cached on text+voice+speed+lang, so re-running only synthesizes changed lines. A scene then lasts max(duration_s, audio+0.4s) and the resolved spec_hash changes, so re-run stills before a delivery render. Needs spec.lang (pt-BR|en); spell identifiers with spec.say. `scratch=true` is the animatic pass: same engine, same cache, same WAVs, the manifest is only labelled (`"scratch": true`) and the final resolved_hash does not change."""
+    """Offline voice-over (Pocket TTS): synthesize each scene.narration into one WAV under /work/audio/<spec_hash>/ and write manifest.json with the measured durations. Cached on text+voice+lang, so re-running only synthesizes changed lines. A scene then lasts max(duration_s, audio+0.4s) and the resolved spec_hash changes, so re-run stills before a delivery render. Needs spec.lang (pt-BR|en); spell identifiers with spec.say. `scratch=true` is the animatic pass: same engine, same cache, same WAVs, the manifest is only labelled (`"scratch": true`) and the final resolved_hash does not change."""
     return await _guard(T.narrate, spec_hash, scratch)
 
 

@@ -20,7 +20,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from . import config
+from . import config, voices as _voices
 from .safety import safe_path
 
 DEFAULT_TARGET_I = -14.0  # EBU R128 integrated loudness of the delivery: the web/hero bar
@@ -325,8 +325,10 @@ def credits_text(spec: dict, target_i: float | None = None) -> str | None:
     ti = _target(target_i) if target_i is not None else None  # validated before the no-track shortcut
     from . import sfx as _sfx
     fx = _sfx.credits(spec) if isinstance(spec.get("scenes"), list) else []
+    vc = _voices.credits(spec)
     if not isinstance(m, dict) or not m.get("path"):
-        return "\n".join(["Sound effect credits", *fx]) + "\n" if fx else None
+        parts = (["Sound effect credits", *fx] if fx else []) + (["Voice credits", *vc] if vc else [])
+        return "\n".join(parts) + "\n" if parts else None
     who = " by ".join(str(x) for x in (m.get("title"), m.get("creator")) if x)
     head = " · ".join(str(x) for x in (who, m.get("license"), m.get("license_url"), m.get("source_url")) if x)
     lines = ["Music credits", f"- {head}" if head else "- (unnamed track)"]
@@ -334,6 +336,8 @@ def credits_text(spec: dict, target_i: float | None = None) -> str | None:
         lines.append("  " + str(m["attribution"]).strip().replace("\n", "\n  "))
     if fx:
         lines += ["Sound effect credits", *fx]
+    if vc:
+        lines += ["Voice credits", *vc]
     if ti is not None:
         lines.append(f"- Audio mastered to {ti:.0f} LUFS integrated")
     return "\n".join(lines) + "\n"

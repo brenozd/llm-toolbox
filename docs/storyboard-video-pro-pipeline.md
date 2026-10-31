@@ -1,5 +1,7 @@
 # storyboard-video: pipeline profissional (pesquisa + desenho de implementação)
 
+> **Nota (2026-10-31):** o motor de voz deixou de ser o Kokoro e passou a ser o Pocket TTS (Kyutai, binário Rust, sem Python). As menções a Kokoro abaixo descrevem o estado quando o plano foi escrito; veja `servers/storyboard-video/README.md` para o estado atual.
+
 Data: 2026-10-30. Escopo: o que falta para o vídeo sair em nível profissional. Base: pesquisa web (fontes no fim) + leitura de `skills/storyboard-video/SKILL.md`, `storyboard_video_mcp/{spec,render,audio}.py`.
 
 Legenda: **[F]** = vem de fonte citada; **[C]** = confirmado no código; **[K]** = conhecimento do ofício, sem fonte fetchada (validar antes de virar regra dura).
