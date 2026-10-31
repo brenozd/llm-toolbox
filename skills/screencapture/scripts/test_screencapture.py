@@ -124,6 +124,65 @@ def test_record_steps_validation():
             record.load_steps(bad)
 
 
+def test_record_hold_s_validation():
+    import record
+    import pytest
+    for good in ('0', '1', '1.5', '0.25'):
+        steps = record.load_steps('[{"type":"hold_s","s":%s}]' % good)
+        assert isinstance(steps[0]["s"], (int, float))
+    # 'seconds' is an alias, normalised to 's'
+    steps = record.load_steps('[{"type":"hold_s","seconds":2}]')
+    assert steps[0] == {"type": "hold_s", "s": 2}
+    for bad in ('[{"type":"hold_s"}]', '[{"type":"hold_s","s":"1"}]', '[{"type":"hold_s","s":null}]',
+                '[{"type":"hold_s","s":true}]', '[{"type":"hold_s","s":[1]}]',
+                '[{"type":"hold_s","s":1,"seconds":2}]', '[{"type":"hold_s","seconds":"2"}]'):
+        with pytest.raises(ValueError) as exc:
+            record.load_steps(bad)
+        assert "hold_s" in str(exc.value)
+
+
+def test_record_unknown_step_keys():
+    import record
+    import pytest
+    for bad in ('[{"type":"type","text":"ls","txt":"ls"}]', '[{"type":"key","key":"Return","x":1}]',
+                '[{"type":"hold_s","s":1,"hold":1}]', '[{"type":"wait_for","text":"ok","regx":true}]',
+                '[{"type":"goto","url":"x","delay_s":1}]', '[{"type":"scroll","dy":1,"dx":2}]'):
+        with pytest.raises(ValueError) as exc:
+            record.load_steps(bad)
+        assert "unknown key" in str(exc.value)
+    # the documented keys of every type still pass
+    record.load_steps(json.dumps([
+        {"type": "type", "text": "ls", "selector": "#q"}, {"type": "key", "key": "Return"},
+        {"type": "click", "x": 1, "y": 2, "button": 1}, {"type": "move", "selector": "#a"},
+        {"type": "scroll", "dy": 300}, {"type": "wait_for", "text": "ok", "timeout_s": 8, "regex": True},
+        {"type": "wait_for", "selector": "#done"}, {"type": "hold_s", "s": 0.5}, {"type": "goto", "url": "http://x"},
+    ]))
+
+
+def test_record_wait_for_regex():
+    import record
+    import pytest
+    # a bad pattern is rejected up front, not at record time
+    with pytest.raises(ValueError) as exc:
+        record.load_steps('[{"type":"wait_for","text":"[unclosed","regex":true}]')
+    assert "regex" in str(exc.value)
+    with pytest.raises(ValueError):
+        record.load_steps('[{"type":"wait_for","text":"ok","regex":"yes"}]')
+    assert record.load_steps('[{"type":"wait_for","text":"ok"}]')  # substring stays the default
+    # matching itself is pure: re.search on ANSI-stripped text vs. plain substring
+    dropped = record.strip_ansi("\x1b[32mok\x1b[0m done\r\n")
+    assert dropped == "ok done\n"
+    assert record.text_matcher("ok")(dropped)
+    shell = record.strip_ansi("$ echo hello\r\nhello\r\n$ ")  # typed command echoes back too
+    assert shell == "$ echo hello\nhello\n$ "
+    assert record.text_matcher("^hello", regex=True)("$ echo hello\nhello\n$ ")
+    assert not record.text_matcher("^hello", regex=True)("$ echo hello\n$")  # ^ anchors to a line start
+    assert not record.text_matcher("^hello")("$ echo hello\nhello\n$")  # substring: '^' is literal
+    assert record.text_matcher(r"hello$", regex=True)("$ echo hello\nhello\n$ ")
+    assert not record.text_matcher(r"hello$", regex=True)("$ echo hi\nhello world\n$")
+    assert record.text_matcher(r"\bok\b", regex=True)(dropped)
+
+
 def test_record_finalize_gif(tmp_path):
     import record
     import subprocess
@@ -167,3 +226,10 @@ class RecordPrivacy(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_list_and_clear_do_not_need_pillow(monkeypatch, capsys):
+    monkeypatch.setattr(shot, "Image", None)
+    assert shot.main(["--list"]) == 0
+    assert shot.main(["--selftest"]) == 2
+    assert "Pillow" in capsys.readouterr().err

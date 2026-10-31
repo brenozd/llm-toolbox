@@ -24,7 +24,21 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from PIL import Image
+try:  # a missing Pillow is reported by main() with an install hint, not as a traceback
+    from PIL import Image
+    PILLOW_ERROR = ""
+except ImportError as e:  # pragma: no cover - depends on the environment
+    Image = None
+    PILLOW_ERROR = str(e)
+
+PILLOW_HINT = ("Pillow is required for resize/format conversion, web capture and --selftest: "
+               "pip install Pillow (or: dnf install python3-pillow / apt install python3-pil)")
+
+
+def _require_pillow() -> None:
+    if Image is None:
+        raise RuntimeError(PILLOW_HINT)
+
 
 PRESETS = {"small": 1280, "tiny": 640}
 VIEWPORTS = {"mobile": (390, 844), "tablet": (768, 1024)}
@@ -346,6 +360,7 @@ def capture_dom(url: str, output: Path) -> None:
 # ---------------------------------------------------------------------------
 
 def resize_image(path: Path, width: int) -> None:
+    _require_pillow()
     with Image.open(path) as img:
         ratio = width / img.width
         new_size = (width, max(1, round(img.height * ratio)))
@@ -353,6 +368,7 @@ def resize_image(path: Path, width: int) -> None:
 
 
 def convert_to_jpeg(path: Path) -> Path:
+    _require_pillow()
     jpeg_path = path.with_suffix(".jpg")
     with Image.open(path) as img:
         img.convert("RGB").save(jpeg_path, "JPEG", quality=85)
@@ -576,6 +592,12 @@ def _record(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    needs_pillow = args.selftest or not (args.list or args.clear or args.clear_yes or args.record)
+    if needs_pillow and Image is None:  # list/clear/recording do not touch Pillow
+        print(f"screencapture: {PILLOW_HINT}", file=sys.stderr)
+        if PILLOW_ERROR:
+            print(f"  ({PILLOW_ERROR})", file=sys.stderr)
+        return 2
     if args.selftest:
         return _selftest()
     if args.list:
@@ -632,6 +654,7 @@ def _selftest() -> int:
     """Exercise the non-trivial pieces: Pillow resize/format, CDP capture, DOM capture."""
     import tempfile
 
+    _require_pillow()
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
 

@@ -4,6 +4,8 @@ The complaint this file defends against: on-screen text kept scaling up for the 
 card looked like it was still growing seconds after it entered. `subtle` settles in 0.8 s and holds;
 `lively` is the old behaviour; `still` never moves the frame."""
 
+import time
+
 import pytest
 
 from storyboard_video_mcp import config, render, spec as S
@@ -87,3 +89,36 @@ def test_stills_spot_check_a_moment_and_the_digest_proves_the_card_held(tmp_path
     assert not render.stills_done(h)  # a spot-check is not the review set
     render.stills(h)
     assert render.stills_done(h)
+
+
+def test_render_status_reports_elapsed_seconds_and_keeps_the_other_keys(monkeypatch):
+    """A background job used to report progress only: a render at 5% for two minutes looked identical to
+    a stuck one. `elapsed_s` says how long it has been running and freezes when it ends."""
+    jid = "t000elap"
+    monkeypatch.setitem(render.JOBS, jid, {"status": "running", "progress": 0.25,
+                                           "started_at": time.time() - 4.0})
+    st = render.status(jid)
+    assert st["status"] == "running" and st["progress"] == 0.25
+    assert 3.9 <= st["elapsed_s"] < 6.0, st["elapsed_s"]
+    render.JOBS[jid].update(status="done", finished_at=time.time())
+    frozen = render.status(jid)["elapsed_s"]
+    time.sleep(0.2)
+    assert render.status(jid)["elapsed_s"] == frozen, "a finished job must not keep counting"
+    assert render.status("nope") == {"status": "error", "message": "unknown job_id"}
+    assert render.status(jid) is not render.JOBS[jid]  # a snapshot: a caller cannot mutate the job
+
+
+def test_a_started_job_stamps_its_start_and_stops_the_clock(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "WORK", tmp_path)
+    monkeypatch.setattr(config, "REPO", tmp_path)
+    monkeypatch.setattr(render, "render_sync", lambda h, q, job: {"video": "x.mp4"})
+    jid = render.start(S.persist(mk()), "draft")
+    job = render.JOBS[jid]
+    assert isinstance(job["started_at"], float) and job["started_at"] > 0
+    for _ in range(100):  # a real thread: wait for it instead of assuming it ran
+        if job["status"] != "running":
+            break
+        time.sleep(0.05)
+    assert job["status"] == "done", job
+    st = render.status(jid)
+    assert st["result"] == {"video": "x.mp4"} and "finished_at" in st and st["elapsed_s"] >= 0

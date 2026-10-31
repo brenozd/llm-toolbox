@@ -312,11 +312,58 @@ def _focus_of(pg, selector: str, vp: dict) -> dict | None:
             "h": round(max(0.0, min(1.0 - y, box["height"] / h)), 4)}
 
 
+SHOT_PATH_PREFIXES = ("/work", "/repo", "/tmp")  # container paths a caller mistook for URL paths
+SHOT_PATH_EXTS = (".png", ".jpg", ".jpeg")  # an output image is never a page to navigate to
+SETTLE_MAX_MS = 10000
+WAIT_FOR_TIMEOUT_MS = 10000
+
+
+def _goto_path(s: dict):
+    """The page a shot navigates to before its screenshot: `goto_path` is the name, `path` is the old
+    spelling of the same field and stays accepted so existing callers keep working."""
+    v = s.get("goto_path") or s.get("path")
+    return v if v not in (None, "") else None
+
+
+def _goto_problem(gp) -> str | None:
+    """Why `gp` cannot be a page to open, or None. The field used to be called `path`, so callers passed
+    the PNG they wanted -- silently navigating to a file that does not exist. Reject those, and the
+    container paths a caller confuses with a URL path, with a message that names the real PNG field."""
+    if not isinstance(gp, str):
+        return f"goto_path must be a string URL path, got {type(gp).__name__}"
+    low = gp.strip().lower()
+    if low.endswith(SHOT_PATH_EXTS):
+        return (f"goto_path {gp!r} looks like an output image: goto_path is the URL path to navigate to "
+                f"(e.g. '/dashboard'); the tool picks the PNG and returns it as shots[].path")
+    for p in SHOT_PATH_PREFIXES:
+        if low == p or low.startswith(p + "/"):
+            return (f"goto_path {gp!r} is a container path, not a URL path: pass the page to open "
+                    f"(e.g. '/dashboard'); the tool picks the PNG and returns it as shots[].path")
+    return None
+
+
 def capture_web(url: str, shots: list[dict], viewport: dict | None = None, aspect: str = "16:9",
                 device_scale_factor: float | None = None) -> dict:
+    """Screenshot pages of a local web app.
+
+    url is the page opened first; each shot is {id, goto_path?, selector?, hide?, wait_for?, settle_ms?}:
+    `goto_path` is the *URL path* of the page the shot navigates to (e.g. '/dashboard'), never a file
+    (the old name `path` is still accepted as an alias); `wait_for` is a CSS selector waited for as
+    visible (10 s) -- a selector that never appears records `wait_missing` in the shot instead of
+    failing the call; `settle_ms` (0..10000) is extra time to let the page paint after navigating.
+    Pages are loaded with `load`, never `networkidle`: an SSE page never reaches it. The PNG the tool
+    writes is returned as shots[].path."""
     u = urlparse(url)
     if u.scheme not in ("http", "https") or u.hostname not in config.WEB_HOSTS:
         return {**BAD, "message": f"host not allowed ({u.hostname}); allowed: {sorted(config.WEB_HOSTS)}"}
+    if not isinstance(shots, list) or not shots:
+        return {**BAD, "message": "shots must be a non-empty list of objects, each with an 'id'"}
+    for i, s in enumerate(shots):
+        if not isinstance(s, dict):
+            return {**BAD, "message": f"shots[{i}] must be an object, got {type(s).__name__}"}
+        if not isinstance(s.get("id"), str) or not s["id"].strip():
+            return {**BAD, "message": f"shots[{i}]: 'id' must be a non-empty string (got {s.get('id')!r}); "
+                                   f"it names the shot and its PNG"}
     f = S.fmt(aspect)
     vp = viewport or dict(f["viewport"])
     dsf = device_scale_factor or f["device_scale_factor"]
@@ -340,23 +387,46 @@ def capture_web(url: str, shots: list[dict], viewport: dict | None = None, aspec
             return {**BAD, "capture_id": cid, "message": f"could not load {url}: {type(e).__name__}: {e}"}
         for s in shots:
             sid = s["id"]
-            for sel in s.get("hide", []):
-                pg.add_style_tag(content=f"{sel}{{filter:blur(14px)!important}}")
-            if s.get("path"):
+            gp = _goto_path(s)
+            problem = _goto_problem(gp) if gp is not None else None
+            if problem:
+                out.append({"id": sid, "path": None, "focus": None, "message": problem})
+                continue
+            settle = s.get("settle_ms")
+            if settle is not None and (isinstance(settle, bool) or not isinstance(settle, int)
+                                       or not 0 <= settle <= SETTLE_MAX_MS):
+                out.append({"id": sid, "path": None, "focus": None,
+                            "message": f"settle_ms must be an integer 0..{SETTLE_MAX_MS}, got {settle!r}"})
+                continue
+            if gp:
                 try:
-                    pg.goto(urlparse(url)._replace(path=s["path"]).geturl(), wait_until="load", timeout=20000)
+                    pg.goto(urlparse(url)._replace(path=gp).geturl(), wait_until="load", timeout=20000)
                 except Exception as e:  # one bad page must not lose the shots that already worked
-                    out.append({"id": sid, "path": None, "focus": None,
-                                "message": f"could not load {s['path']}: {type(e).__name__}: {e}"})
+                    out.append({"id": sid, "goto_path": gp, "path": None, "focus": None,
+                                "message": f"could not load {gp}: {type(e).__name__}: {e}"})
                     continue
+            for sel in s.get("hide", []):  # after the navigation: a new page drops earlier styles
+                pg.add_style_tag(content=f"{sel}{{filter:blur(14px)!important}}")
+            wait_missing = None
+            if s.get("wait_for"):
+                try:  # a page fed by SSE may never settle, so this is a bounded wait, not a gate
+                    pg.wait_for_selector(str(s["wait_for"]), state="visible", timeout=WAIT_FOR_TIMEOUT_MS)
+                except Exception:  # never appeared: a finding on the shot, the picture is still taken
+                    wait_missing = str(s["wait_for"])
+            if settle:  # after the navigation and the wait: time for the last paint to land
+                pg.wait_for_timeout(settle)
             # measured *before* the shot: _focus_of scrolls the element into view, so a box taken
             # afterwards described pixels the PNG does not have (silent wrong zoom)
             focus = _focus_of(pg, s["selector"], vp) if s.get("selector") else None
             path = d / f"{sid}.png"
             pg.screenshot(path=str(path))
             shot = {"id": sid, "path": str(path), "focus": focus}
+            if gp:
+                shot["goto_path"] = gp  # which page this PNG is of, in the field's own name
             if s.get("selector") and focus is None:
                 shot["selector_missing"] = s["selector"]  # rendered without a zoom, and the caller knows
+            if wait_missing:
+                shot["wait_missing"] = wait_missing  # the page painted late: a finding, not a lost take
             out.append(shot)
         br.close()
     return {"status": "ok", "capture_id": cid, "aspect": aspect, "viewport": vp, "shots": out}

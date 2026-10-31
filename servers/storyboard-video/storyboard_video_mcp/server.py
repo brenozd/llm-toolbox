@@ -78,7 +78,7 @@ async def extract_code(path: str, lines: str, repo: str | None = None) -> object
 @mcp.tool()
 async def capture_web(url: str, shots: list[dict], viewport: dict | None = None, aspect: str = "16:9",
                       device_scale_factor: float | None = None) -> object:
-    """Screenshot a running local web app (localhost/127.0.0.1/host.docker.internal only). shots=[{id, selector?, hide?:[css], path?}]. Returns PNG paths and a normalised `focus` box for zooming. viewport/device_scale_factor default to the aspect's capture geometry -- pass aspect='9:16' for a portrait video."""
+    """Screenshot a running local web app (localhost/127.0.0.1/host.docker.internal only). shots=[{id, goto_path?, selector?, hide?:[css], wait_for?, settle_ms?}]. `id` (required, non-empty string) names the shot and its PNG. `goto_path` is the URL path of the page the shot navigates to (e.g. '/dashboard'), NOT a file: an output image path (.png/.jpg/.jpeg) or a container path (/work, /repo, /tmp) is rejected per shot. `path` is the old ambiguous name for `goto_path` and still works. `wait_for` is a CSS selector waited for as visible (10 s; a selector that never appears records `wait_missing` on the shot and the PNG is still taken) and `settle_ms` (integer 0..10000) is extra time to let the page paint after navigating -- pages load on 'load', never 'networkidle' (an SSE page never reaches it). Returns each shot's PNG as `shots[].path` plus a normalised `focus` box for zooming. viewport/device_scale_factor default to the aspect's capture geometry -- pass aspect='9:16' for a portrait video."""
     return await _guard(C.capture_web, url, shots, viewport, aspect, device_scale_factor)
 
 
@@ -183,8 +183,8 @@ async def render(spec_hash: str, quality: str = "draft") -> object:
 
 @mcp.tool()
 def render_status(job_id: str) -> object:
-    """Progress (0..1), status running|done|error, and the result receipt when done."""
-    return R.JOBS.get(job_id) or {"status": "error", "message": "unknown job_id"}
+    """Progress (0..1), status running|done|error, elapsed_s since the job started, and the result receipt when done."""
+    return R.status(job_id)
 
 
 @mcp.tool()

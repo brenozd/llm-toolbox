@@ -770,7 +770,7 @@ JOBS: dict[str, dict] = {}
 def start(h: str, quality: str) -> str:
     S.load(h)  # fail fast if spec missing
     jid = uuid.uuid4().hex[:8]
-    job = JOBS[jid] = {"status": "running", "progress": 0.0}
+    job = JOBS[jid] = {"status": "running", "progress": 0.0, "started_at": time.time()}
 
     def run():
         try:
@@ -778,9 +778,22 @@ def start(h: str, quality: str) -> str:
             job["status"] = "done"
         except Exception as e:  # surfaced via render_status
             job["status"], job["error"] = "error", f"{type(e).__name__}: {e}"
+        finally:
+            job["finished_at"] = time.time()  # elapsed_s stops counting when the job stops
 
     threading.Thread(target=run, daemon=True).start()
     return jid
+
+
+def status(jid: str) -> dict:
+    """One job as render_status reports it: the job dict plus `elapsed_s`, the wall seconds since
+    `start` (still counting while it runs, frozen once it ends), so a caller can tell a slow render
+    from a stuck one instead of staring at progress alone."""
+    j = JOBS.get(jid)
+    if not j:
+        return {"status": "error", "message": "unknown job_id"}
+    end = j.get("finished_at") or time.time()
+    return {**j, "elapsed_s": round(max(0.0, end - j.get("started_at", end)), 2)}
 
 
 def _duration(j: dict) -> float:

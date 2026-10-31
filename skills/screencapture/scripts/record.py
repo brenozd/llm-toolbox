@@ -1,10 +1,13 @@
 """Scripted recordings: `term` (real xterm on a virtual X display), `gui` (any app on a virtual X display), `web` (Playwright) and `desktop`
 (the real screen, no input). Output by extension: .mp4, .webm or .gif.
 
-Steps are JSON, shared by term and web:
+Steps are JSON, shared by term and web (load_steps rejects an unknown "type" or any key not listed here):
   {"type":"type","text":"ls"}  {"type":"key","key":"Return"}  {"type":"click","x":10,"y":20,"button":1}
-  {"type":"move","x":10,"y":20}  {"type":"scroll","dy":300}  {"type":"wait_for","text":"ok","timeout_s":8}
-  {"type":"hold_s","s":1}   web only: {"type":"goto","url":...}, click/type/wait_for with "selector".
+  {"type":"move","x":10,"y":20}  {"type":"scroll","dy":300}
+  {"type":"wait_for","text":"ok","timeout_s":8}            substring match on the shell output (default)
+  {"type":"wait_for","text":"^ok\\b","regex":true}          term only: re.search (multiline) on the ANSI-stripped output
+  {"type":"hold_s","s":1}                                   pause; "seconds":1 is an alias for "s":1
+  web only: {"type":"goto","url":...}, click/type/wait_for with "selector".
 `key` is an xdotool keysym in term ("Return", "ctrl+c") and a Playwright key in web ("Enter", "Control+c").
 """
 
@@ -23,6 +26,17 @@ import time
 from pathlib import Path
 
 STEP_TYPES = {"type", "key", "click", "move", "scroll", "wait_for", "hold_s", "goto"}
+# Keys a step of each type may carry; anything else is a typo that would be silently ignored otherwise.
+STEP_KEYS = {
+    "type": {"type", "text", "selector"},
+    "key": {"type", "key"},
+    "click": {"type", "x", "y", "button", "selector"},
+    "move": {"type", "x", "y", "selector"},
+    "scroll": {"type", "dy"},
+    "wait_for": {"type", "text", "selector", "timeout_s", "regex"},
+    "hold_s": {"type", "s", "seconds"},
+    "goto": {"type", "url"},
+}
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07")
 FORMATS = {".mp4", ".webm", ".gif"}
 
@@ -86,6 +100,9 @@ def load_steps(arg: str) -> list[dict]:
         ty = s.get("type") if isinstance(s, dict) else None
         if ty not in STEP_TYPES:
             raise ValueError(f"step {i}: type must be one of {sorted(STEP_TYPES)}")
+        unknown = sorted(set(s) - STEP_KEYS[ty])
+        if unknown:
+            raise ValueError(f"step {i} ({ty}): unknown key(s) {unknown}: allowed are {sorted(STEP_KEYS[ty])}")
         if ty == "type" and not s.get("text"):
             raise ValueError(f"step {i} (type): needs 'text'")
         if ty == "key" and not s.get("key"):
@@ -96,15 +113,48 @@ def load_steps(arg: str) -> list[dict]:
             raise ValueError(f"step {i} ({ty}): needs x/y or selector")
         if ty == "wait_for" and not (s.get("text") or s.get("selector")):
             raise ValueError(f"step {i} (wait_for): needs text or selector")
+        if ty == "hold_s":
+            if "seconds" in s:  # friendlier alias, normalised to 's'
+                if "s" in s:
+                    raise ValueError(f"step {i} (hold_s): give either 's' or 'seconds', not both")
+                s["s"] = s.pop("seconds")
+            if "s" not in s:
+                raise ValueError(f"step {i} (hold_s): needs 's' (seconds, a number)")
+            v = s["s"]
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                raise ValueError(f"step {i} (hold_s): 's' must be a number of seconds, got {v!r}")
+        if ty == "wait_for" and s.get("regex"):
+            if not isinstance(s["regex"], bool):
+                raise ValueError(f"step {i} (wait_for): 'regex' must be true/false, got {s['regex']!r}")
+            try:
+                re.compile(s["text"])
+            except (re.error, TypeError) as e:
+                raise ValueError(f"step {i} (wait_for): bad regex {s.get('text')!r}: {e}") from None
     return steps
 
 
 def check_tools(*tools: str) -> None:
     missing = [t for t in tools if not shutil.which(t)]
     if missing:
-        hint = {"xdotool": "dnf install xdotool", "Xvfb": "dnf install xorg-x11-server-Xvfb",
-                "xterm": "dnf install xterm", "script": "dnf install util-linux-script", "ffmpeg": "dnf install ffmpeg"}
+        hint = {  # distro-neutral: the same package name is rarely the same on apt and dnf hosts
+            "xdotool": "dnf install xdotool | apt install xdotool",
+            "Xvfb": "dnf install xorg-x11-server-Xvfb | apt install xvfb",
+            "xterm": "dnf install xterm | apt install xterm",
+            "script": "dnf install util-linux-script | apt install util-linux",
+            "ffmpeg": "dnf install ffmpeg | apt install ffmpeg",
+            "ffprobe": "dnf install ffmpeg | apt install ffmpeg",
+        }
         raise RuntimeError("missing: " + ", ".join(f"{m} ({hint.get(m, 'install it')})" for m in missing))
+
+
+def _tail(p: Path | None, n: int = 400) -> str:
+    """Last *n* bytes of a log file, best effort (empty string when there is none)."""
+    if p is None:
+        return ""
+    try:
+        return p.read_bytes()[-n:].decode("utf-8", "replace").strip()
+    except OSError:
+        return ""
 
 
 def finalize(src: Path, out: Path, fps: int = 15) -> None:
@@ -163,6 +213,20 @@ def _until(pred, timeout: float, step: float = 0.1):
         time.sleep(step)
 
 
+def strip_ansi(s: str) -> str:
+    """Shell output with the escape sequences and carriage returns removed, as the user sees it."""
+    return ANSI.sub("", s).replace("\r", "")
+
+
+def text_matcher(needle: str, regex: bool = False):
+    """Predicate over (already stripped) output: re.search when *regex*, plain substring otherwise.
+    The pattern is multiline, so ^ and $ anchor a line of shell output rather than the whole take."""
+    if regex:
+        pat = re.compile(needle, re.MULTILINE)
+        return lambda text: bool(pat.search(text))
+    return lambda text: needle in text
+
+
 # ---------------------------------------------------------------------------
 # Virtual X display + xdotool (shared by `term` and `gui`)
 # ---------------------------------------------------------------------------
@@ -183,6 +247,8 @@ class XSession:
             raise RuntimeError("Xvfb did not start")
         self.display = f":{n}"
         self.home = tempfile.mkdtemp(prefix="screencapture-home-")  # keeps host dotfiles out of the take
+        self.ffmpeg_log: Path | None = None  # set by start_ffmpeg when a log file is requested
+        self._ff_stderr = None
         self.env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": self.home, "DISPLAY": self.display,
                     "TERM": "xterm-256color", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "PS1": "$ "}
         if os.environ.get("LD_LIBRARY_PATH"):  # a user-local xdotool (no root) needs its libxdo
@@ -208,13 +274,19 @@ class XSession:
         g = dict(ln.split("=", 1) for ln in self.xdo("getwindowgeometry", "--shell", win).split())
         return win, (int(g["X"]), int(g["Y"]), int(g["WIDTH"]) // 2 * 2, int(g["HEIGHT"]) // 2 * 2)
 
-    def start_ffmpeg(self, raw: Path, box: tuple[int, int, int, int], fps: int) -> subprocess.Popen:
+    def start_ffmpeg(self, raw: Path, box: tuple[int, int, int, int], fps: int, log: Path | None = None,
+                     ) -> subprocess.Popen:
+        """stderr goes to *log* (when given) so a dead capture can be explained instead of guessed at."""
         x, y, w, h = box
+        if log is not None:
+            self.ffmpeg_log = log
+            self._ff_stderr = log.open("wb")
         return subprocess.Popen(
             ["ffmpeg", "-y", "-loglevel", "error", "-f", "x11grab", "-framerate", str(fps), "-video_size", f"{w}x{h}",
              "-i", f"{self.display}+{x},{y}", *_h264(),
              "-pix_fmt", "yuv420p", str(raw)],
-            env=self.env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            env=self.env, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+            stderr=self._ff_stderr if log is not None else subprocess.DEVNULL)
 
     def run_steps(self, steps: list[dict], typer, wait_text=None, seed: int = 0, delay_ms: int = 60,
                   jitter_ms: int = 30) -> None:
@@ -241,15 +313,20 @@ class XSession:
                     raise ValueError("wait_for is not available for gui (no text stream): use hold_s")
                 if "text" not in s:
                     raise ValueError("wait_for needs 'text' on term (selectors are web-only)")
-                if not wait_text(s["text"], float(s.get("timeout_s", 8))):
+                if not wait_text(s["text"], float(s.get("timeout_s", 8)), bool(s.get("regex"))):
                     raise RuntimeError(f"wait_for {s['text']!r} timed out: no half clip shipped")
             elif ty == "hold_s":
-                time.sleep(max(0.0, float(s.get("s", 0.5))))
+                time.sleep(max(0.0, float(s.get("s", 0.5))))  # load_steps already rejected non-numbers
             else:
                 raise ValueError(f"step type {ty!r} is not valid here")
 
     def close(self) -> None:
         _kill(self.proc)
+        if self._ff_stderr is not None:
+            try:
+                self._ff_stderr.close()
+            except OSError:
+                pass
         shutil.rmtree(self.home, ignore_errors=True)
 
 
@@ -263,7 +340,7 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
         raise ValueError("'goto' is a web step")
     xs = XSession(1920, 1080)
     work = Path(tempfile.mkdtemp(prefix="screencapture-"))
-    log, raw = work / "pty.log", work / "raw.mp4"
+    log, raw, ff_log = work / "pty.log", work / "raw.mp4", work / "ffmpeg.log"
     xt = ff = None
     try:
         rc = work / "rc"
@@ -276,21 +353,27 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
             cwd=cwd, env=xs.env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             start_new_session=True)
         _, box = xs.window(title)
+        if box[0] < 0 or box[1] < 0 or box[0] + box[2] > 1920 or box[1] + box[3] > 1080:
+            raise ValueError(
+                f"the xterm window ({box[2]}x{box[3]} at {box[0]},{box[1]}) does not fit the 1920x1080 virtual "
+                f"screen, so the take would be cropped or empty: lower cols/rows or the font size "
+                f"(got cols={cols}, rows={rows}, font={font_size})")
         off = 0
 
-        def wait_text(needle: str, timeout_s: float) -> bool:
+        def wait_text(needle: str, timeout_s: float, regex: bool = False) -> bool:
             nonlocal off
+            match = text_matcher(needle, regex)
 
             def hit():
                 nonlocal off
                 chunk = log.read_bytes()[off:]
-                if needle in ANSI.sub("", chunk.decode("utf-8", "replace")).replace("\r", ""):
+                if match(strip_ansi(chunk.decode("utf-8", "replace"))):
                     off += len(chunk)
                     return True
             return bool(_until(hit, timeout_s, 0.05))
 
         time.sleep(0.5)  # let the prompt paint before the first frame
-        ff = xs.start_ffmpeg(raw, box, fps)
+        ff = xs.start_ffmpeg(raw, box, fps, ff_log)
         time.sleep(0.3)
         t0 = time.monotonic()
         xs.run_steps(steps, None, wait_text, seed, delay_ms, jitter_ms)
@@ -298,7 +381,13 @@ def record_term(steps: list[dict], out: Path, cols: int = 80, rows: int = 20, fo
         dur = time.monotonic() - t0
         _stop_ffmpeg(ff)
         ff = None
-        finalize(raw, out, fps)
+        if not raw.exists() or raw.stat().st_size < 1024:
+            # never let a missing capture surface as a bare 'No such file' from the encoder
+            raise RuntimeError(f"ffmpeg recorded no video from the virtual display: {_tail(ff_log) or 'no ffmpeg log'}")
+        try:
+            finalize(raw, out, fps)
+        except RuntimeError as e:
+            raise RuntimeError(f"{e} (ffmpeg capture log: {_tail(ff_log) or 'empty'})") from None
         with log.open("rb") as f:  # a runaway command can fill the log: only the tail is read
             f.seek(0, 2)
             f.seek(max(0, f.tell() - 200_000))
@@ -450,6 +539,8 @@ def record_web(url: str, steps: list[dict], out: Path, width: int = 1280, height
                     pg.mouse.wheel(0, float(s.get("dy", 300)))
                     pg.wait_for_timeout(400)
                 elif ty == "wait_for":
+                    if s.get("regex"):
+                        raise ValueError("wait_for regex is term-only: web pages have no text stream to match")
                     t = int(float(s.get("timeout_s", 8)) * 1000)
                     (pg.locator(s["selector"]).first.wait_for(timeout=t) if s.get("selector")
                      else pg.get_by_text(s["text"]).first.wait_for(timeout=t))
