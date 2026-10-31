@@ -8,8 +8,14 @@ FROM python:3.11-slim-bookworm AS build
 WORKDIR /app
 COPY pyproject.toml ./
 COPY faster_whisper_mcp ./faster_whisper_mcp
-RUN pip install --no-cache-dir . \
- && pip uninstall -y onnxruntime sympy mpmath coloredlogs humanfriendly flatbuffers
+# cryptography/cffi/pycparser arrive only through mcp -> pyjwt[crypto]; this stdio server signs nothing.
+# pip/setuptools/wheel are packaging tools the runtime never imports.
+RUN pip install --no-cache-dir --no-compile . \
+ && pip uninstall -y onnxruntime sympy mpmath coloredlogs humanfriendly flatbuffers cryptography cffi pycparser \
+ && SP=/usr/local/lib/python3.11/site-packages \
+ && rm -rf $SP/pip* $SP/setuptools* $SP/wheel* $SP/pkg_resources $SP/_distutils_hack $SP/distutils-precedence.pth \
+ && find $SP -name __pycache__ -prune -exec rm -rf {} + \
+ && find $SP -name '*.pyi' -delete
 
 # Runtime: distroless python3 instead of python:3.12-slim — 53 MB vs 120 MB, and it drops the
 # gcc/g++/dpkg-dev toolchain layer a runtime never uses. The console script is not copied; the

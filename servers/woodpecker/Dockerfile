@@ -5,7 +5,10 @@ FROM python:3.11-slim-bookworm AS build
 WORKDIR /app
 COPY pyproject.toml ./
 COPY woodpecker_mcp ./woodpecker_mcp
-RUN pip install --no-cache-dir --prefix=/install .
+RUN pip install --no-cache-dir --no-compile --prefix=/install . \
+ && rm -rf /install/lib/python3.11/site-packages/cryptography* /install/lib/python3.11/site-packages/cffi* /install/lib/python3.11/site-packages/_cffi_backend* /install/lib/python3.11/site-packages/pycparser* \
+ && find /install -name __pycache__ -prune -exec rm -rf {} + \
+ && find /install -name '*.pyi' -delete
 
 # Runtime: distroless python3 instead of python:3.12-slim — 53 MB vs 120 MB, and it drops the
 # gcc/g++/dpkg-dev toolchain layer a runtime never uses. The console script is not copied; the
