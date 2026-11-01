@@ -145,7 +145,8 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     changed = None if mode == "check" else set(_git("diff", "--cached", "--name-only", "--diff-filter=ACMR").split())
-    files = plan(ROOT, changed, lambda p: _git("show", f"HEAD:{p}"))
+    # check mode never bumps, so it needs no git (CI's python:slim image has none)
+    files = plan(ROOT, changed, (lambda p: "") if mode == "check" else lambda p: _git("show", f"HEAD:{p}"))
     stale = [rel for rel, new in files.items() if not (ROOT / rel).exists() or (ROOT / rel).read_text() != new]
     if mode == "check":
         for rel in stale:
