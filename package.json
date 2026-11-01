@@ -20,7 +20,8 @@
       ]
     },
     "extensions": [
-      "./extensions/tutor/index.js"
+      "./extensions/tutor/index.js",
+      "./extensions/safe-bash/index.js"
     ],
     "mcp": [
       "./pi-mcp.json"
