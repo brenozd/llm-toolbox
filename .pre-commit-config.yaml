@@ -26,9 +26,9 @@ repos:
     hooks:
       - id: release-sync
         name: link MCP/skill/plugin versions (bump + derive)
-        entry: scripts/release.py sync
+        entry: scripts/release.py amend
         language: script
-        stages: [commit-msg]  # needs the message: feat -> minor, ! -> major, else patch
+        stages: [post-commit]  # needs the final message: feat -> minor, ! -> major, else patch
         always_run: true
       - id: sync-agent-tools
         name: sync agent tools (Pi + Claude Code names)

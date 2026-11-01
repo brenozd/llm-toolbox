@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Keep MCP server, skill, plugin and package versions linked. No manual tagging.
 
-  release.py sync [MSGFILE]   commit-msg hook: bump what the staged changes touch (level from the
-                     Conventional Commit message: feat = minor, `!`/BREAKING CHANGE = major, else
-                     patch), rewrite every derived file, `git add` it
+  release.py amend   post-commit: bump what HEAD touched (level from its Conventional Commit message:
+                     feat = minor, `!`/BREAKING CHANGE = major, else patch), rewrite every derived
+                     file and amend HEAD with them (no git hook can edit the commit being made,
+                     and only post-commit sees the final message)
+  release.py sync    same bump from the staged changes, patch level, no amend (manual use)
   release.py check   CI: fail if any derived file is stale (no writes)
 
 Source of truth: servers/*/pyproject.toml `version` (MCP) and skills/*/SKILL.md `metadata.version` (skill).
@@ -151,13 +153,19 @@ def _git(*args: str) -> str:
 
 def main(argv: list[str]) -> int:
     mode = argv[1] if len(argv) > 1 else "sync"
-    if mode not in ("sync", "check"):
+    if mode not in ("sync", "check", "amend"):
         print(__doc__)
         return 2
-    lvl = level(Path(argv[2]).read_text()) if len(argv) > 2 else "patch"
-    changed = None if mode == "check" else set(_git("diff", "--cached", "--name-only", "--diff-filter=ACMR").split())
+    amend = mode == "amend"
+    lvl = level(_git("log", "-1", "--format=%B")) if amend else "patch"
+    changed = None
+    if mode == "sync":
+        changed = set(_git("diff", "--cached", "--name-only", "--diff-filter=ACMR").split())
+    elif amend:
+        changed = set(_git("diff-tree", "--no-commit-id", "--name-only", "-r", "--diff-filter=ACMR", "HEAD").split())
+    ref = "HEAD~1" if amend else "HEAD"
     # check mode never bumps, so it needs no git (CI's python:slim image has none)
-    files = plan(ROOT, changed, (lambda p: "") if mode == "check" else lambda p: _git("show", f"HEAD:{p}"), lvl)
+    files = plan(ROOT, changed, (lambda p: "") if mode == "check" else lambda p: _git("show", f"{ref}:{p}"), lvl)
     stale = [rel for rel, new in files.items() if not (ROOT / rel).exists() or (ROOT / rel).read_text() != new]
     if mode == "check":
         for rel in stale:
@@ -168,6 +176,8 @@ def main(argv: list[str]) -> int:
     if stale:
         _git("add", *stale)
         print("release.py updated:", ", ".join(stale))
+        if amend:
+            _git("commit", "--amend", "--no-verify", "--no-edit")
     return 0
 
 
