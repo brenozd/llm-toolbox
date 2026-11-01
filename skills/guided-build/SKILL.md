@@ -1,13 +1,13 @@
 ---
 name: guided-build
-description: "Goal-first, checkpoint-driven build: interviews you for the real goal, splits work into buckets, and verifies each with you before moving on. Use for: \"guided build\", \"interview me first\", \"break this into buckets\", \"plan before you code\", /guided-build."
+description: "Goal-first, checkpoint-driven build: interviews you for the real goal, researches the web, plans in buckets, stress-tests the plan with experts and an adversarial review, then verifies each bucket with you. Use when the user asks to plan, design or build something spanning multiple files/buckets, with an external dependency, or with several open decisions, or says: \"guided build\", \"entenda minha demanda\", \"planeje\", \"plan before you code\", /guided-build."
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 # guided-build
 
-Context-first → propose → confirm → execute bucket by bucket, with checkpoints.
+Context-first → propose → research → plan → expert/adversarial review → confirm → execute bucket by bucket, with checkpoints.
 
 ---
 
@@ -69,6 +69,12 @@ Then ask only about `? needs input` fields. If all fields are `✓ inferred`, as
 
 ---
 
+## Phase 1b — Web research (after the Goal Summary is confirmed)
+
+Skip if the work adds no new library, external API or unfamiliar technique. Otherwise delegate to the `researcher` agent (read-only, return ≤15 lines) with 2-4 distinct angles: what it is, how it is done, where it is used/documented, why (trade-offs, known pitfalls). Keep only sourced facts (URL) and carry them into Phase 2. If web search fails, say so and continue without sources; never invent citations.
+
+---
+
 ## Phase 2 — Decompose into buckets
 
 Break the work into small, independently deliverable buckets. Rules:
@@ -80,6 +86,14 @@ Break the work into small, independently deliverable buckets. Rules:
 **Before proposing buckets**, grep for existing related code:
 - Search for files/functions related to the goal to avoid duplicating work
 - Note which files will likely need changes (reference them in the bucket table)
+
+### Review before presenting
+
+Before showing the table, run ONE `workflow` with `runs.all` (never pass `model`). Same plan, distinct lens, both read-only, each returns ≤15 lines (files:lines + risks). `workflow: true` needs the ```js block in the same reply; otherwise write the script to a file and pass `workflow: "./script.js"`:
+- `reviewer` (expert lens): is the plan correct and complete for this domain? Cite Phase 1b sources if any, otherwise the codebase.
+- `devils-advocate` (adversarial lens): ask for its 5 strongest objections at once (it defaults to one at a time): how does it fail, which assumptions are false, what simpler alternative was ignored?
+
+Verify their claims and apply what is valid. Show the rejected objections, one line of reason each, under the table as "Objections considered". Skip the review for small goals: ≤2 buckets AND no schema/API/dependency change or other irreversible decision. If the workflow fails, present the buckets without review and say so.
 
 Present the decomposition:
 
