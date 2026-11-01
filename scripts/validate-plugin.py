@@ -2,6 +2,7 @@
 """Validate plugin structure: SKILL.md frontmatter, JSON config, and disk references."""
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -133,6 +134,36 @@ def check_json_file(json_path: Path) -> list[str]:
     return errors
 
 
+def check_mcp_versions(root: Path, plugin_data: dict) -> list[str]:
+    """A skill's `metadata.requires-mcp: "<server> <major.minor>"` must match the server's
+    pyproject version, and every plugin.json entry for that image must pin exactly that version."""
+    errors = []
+    for md in sorted((root / "skills").glob("*/SKILL.md")):
+        m = re.search(r'^\s+requires-mcp:\s*"?([\w-]+) (\d+\.\d+)"?\s*$', md.read_text(), re.M)
+        if not m:
+            continue
+        name, prefix = m.groups()
+        version = None
+        for pyproject in (root / "servers").glob("*/pyproject.toml"):
+            text = pyproject.read_text()
+            if re.search(rf'^name = "{re.escape(name)}"', text, re.M):
+                version = (re.search(r'^version = "([^"]+)"', text, re.M) or [None, None])[1]
+        label = f"Skill '{md.parent.name}' requires {name} {prefix}"
+        if version is None:
+            errors.append(f"  ✗ {label}: no server with that name/version in servers/*/pyproject.toml")
+            continue
+        if not version.startswith(prefix + "."):
+            errors.append(f"  ✗ {label}, but the server is {version}")
+        pins = [str(e.get("args", [""])[-1]) for e in plugin_data.get("mcpServers", {}).values()]
+        pins = [p for p in pins if f"/{name}:" in p]
+        bad = [p for p in pins if p.rsplit(":", 1)[1] != version]
+        if not pins or bad:
+            errors.append(f"  ✗ plugin.json must pin {name}:{version} in every entry (found {pins or 'none'})")
+        elif version.startswith(prefix + "."):
+            errors.append(f"  ✓ {label} = {version}, pinned in plugin.json")
+    return errors
+
+
 def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
     """Verify skills, servers, commands referenced in JSONs exist on disk."""
     errors = []
@@ -165,6 +196,8 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
             ))
         elif any("STORYBOARD_ALLOW_EXEC" in str(a) for a in entry.get("args", [])):
             errors.append(f"  ✗ MCP server '{server_name}' must not set STORYBOARD_ALLOW_EXEC")
+
+    errors.extend(check_mcp_versions(root, plugin_data))
 
     # Check referenced skills (from description parsing)
     desc = plugin_data.get("description", "")

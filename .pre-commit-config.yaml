@@ -24,11 +24,12 @@ repos:
       - id: gitleaks
   - repo: local
     hooks:
-      - id: bump-plugin-version
-        name: bump claude plugin version
-        entry: scripts/bump-plugin-version.sh
+      - id: release-sync
+        name: link MCP/skill/plugin versions (bump + derive)
+        entry: scripts/release.py sync
         language: script
         pass_filenames: false
+        always_run: true
       - id: sync-agent-tools
         name: sync agent tools (Pi + Claude Code names)
         entry: scripts/sync-agent-tools.py

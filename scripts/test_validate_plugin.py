@@ -151,6 +151,27 @@ class ReferencesTest(unittest.TestCase):
         self.assertTrue(any("not found in servers/" in m for m in messages), messages)
 
 
+class McpVersionTest(unittest.TestCase):
+    def _run(self, pin, requires="0.1", version="0.1.0"):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "servers/x").mkdir(parents=True)
+            (root / "servers/x/pyproject.toml").write_text(f'name = "x-mcp"\nversion = "{version}"\n')
+            (root / "skills/s").mkdir(parents=True)
+            (root / "skills/s/SKILL.md").write_text(
+                f'---\nname: s\ndescription: d\nmetadata:\n  requires-mcp: "x-mcp {requires}"\n---\n')
+            return load_module().check_mcp_versions(root, {"mcpServers": {"x": {"args": ["run", f"h/b/x-mcp:{pin}"]}}})
+
+    def test_matching_pin_passes(self):
+        self.assertFalse(any("✗" in m for m in self._run("0.1.0")))
+
+    def test_latest_pin_fails(self):
+        self.assertTrue(any("✗" in m for m in self._run("latest")))
+
+    def test_skill_range_mismatch_fails(self):
+        self.assertTrue(any("✗" in m for m in self._run("0.1.0", requires="0.2")))
+
+
 class RepoTreeTest(unittest.TestCase):
     def test_repo_plugin_json_passes(self):
         """The invariant holds for the real tree (guards against drift)."""
@@ -159,6 +180,38 @@ class RepoTreeTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("ALL CHECKS PASSED", result.stdout)
+
+
+class ReleaseBumpTest(unittest.TestCase):
+    """scripts/release.py: a server change bumps server + plugin once; unrelated edits bump nothing."""
+
+    def plan(self, changed):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("release", Path(__file__).parent / "release.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        root = mod.ROOT
+        # HEAD == working tree, so "cur == old" holds and a touched component must bump
+        return mod.plan(root, changed, lambda p: (root / p).read_text() if (root / p).exists() else "")
+
+    def test_no_change_no_bump(self):
+        files = self.plan(set())
+        root = Path(__file__).parent.parent
+        for rel, text in files.items():
+            self.assertEqual(text, (root / rel).read_text(), rel)
+
+    def test_server_change_bumps_server_and_plugin(self):
+        files = self.plan({"servers/vikunja/vikunja_mcp/x.py"})
+        root = Path(__file__).parent.parent
+        cur = json.loads((root / ".claude-plugin/plugin.json").read_text())["version"]
+        new = json.loads(files[".claude-plugin/plugin.json"])["version"]
+        self.assertNotEqual(cur, new)
+        self.assertRegex(files["servers/vikunja/pyproject.toml"], r'version = "\d+\.\d+\.\d+"')
+        self.assertNotIn("servers/woodpecker/pyproject.toml", files)
+
+    def test_tests_and_docs_do_not_bump(self):
+        files = self.plan({"servers/vikunja/tests/test_x.py", "servers/vikunja/README.md"})
+        self.assertNotIn("servers/vikunja/pyproject.toml", files)
 
 
 if __name__ == "__main__":

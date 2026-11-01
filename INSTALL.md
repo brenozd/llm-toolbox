@@ -67,8 +67,10 @@ pi install /path/to/llm-toolbox
 ```
 
 `pi list` confirms it's registered; `pi remove git:git.bzd.gg/bzd/llm-toolbox`
-uninstalls it. The MCP servers are a Claude Code plugin feature with no Pi
-package equivalent — only the skills install under Pi.
+uninstalls it. The MCP servers come from `pi-mcp.json` (`pi.mcp` in `package.json`), which
+needs the [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) extension and Docker;
+they show up as `llm-toolbox__<server>`. `pi-mcp.json` is generated from
+`.claude-plugin/plugin.json` by `scripts/release.py` (pre-commit hook), so edit the plugin file only.
 
 ## Other SKILL.md-compatible agents
 

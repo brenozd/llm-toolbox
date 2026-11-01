@@ -1,6 +1,8 @@
 ---
 name: tech-blog-post
 description: "Write a technical blog post (raw Markdown with frontmatter for Astro/Hugo) from something the user actually did, in a direct, opinionated senior-dev voice. Use for: \"write a blog post about\", \"turn this into a post\", \"write up what I did\", /tech-blog-post."
+metadata:
+  version: "0.1.0"
 ---
 
 # Tech Blog Post Skill

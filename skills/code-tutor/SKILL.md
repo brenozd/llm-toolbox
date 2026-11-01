@@ -8,6 +8,8 @@ allowed-tools:
   - Glob
   - WebFetch
   - WebSearch
+metadata:
+  version: "0.1.0"
 ---
 
 # code-tutor

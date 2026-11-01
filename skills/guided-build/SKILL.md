@@ -1,6 +1,8 @@
 ---
 name: guided-build
 description: "Goal-first, checkpoint-driven build: interviews you for the real goal, splits work into buckets, and verifies each with you before moving on. Use for: \"guided build\", \"interview me first\", \"break this into buckets\", \"plan before you code\", /guided-build."
+metadata:
+  version: "0.1.0"
 ---
 
 # guided-build

@@ -10,7 +10,7 @@ steps:
       context: servers/actual-budget
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.6.0"]
     when:
       - event: [push, manual]
         branch: master
@@ -29,7 +29,7 @@ steps:
       context: servers/woodpecker
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
     when:
       - event: [push, manual]
         branch: master
@@ -48,7 +48,7 @@ steps:
       context: servers/vikunja
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
     when:
       - event: [push, manual]
         branch: master
@@ -67,7 +67,7 @@ steps:
       context: servers/faster-whisper
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
     when:
       - event: [push, manual]
         branch: master
@@ -81,14 +81,13 @@ steps:
     image: python:3.12-slim
     commands:
       - python scripts/test_validate_plugin.py
+      - python scripts/release.py check
     when:
       - event: [push, manual]
         branch: master
-        path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", ".woodpecker/**"] }
+        path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", "servers/*/pyproject.toml", "package.json", "pi-mcp.json", ".woodpecker/**"] }
       - event: pull_request
-        path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", ".woodpecker/**"] }
-      - event: tag
-        ref: refs/tags/storyboard-video-v*
+        path: { include: ["scripts/**", ".claude-plugin/**", "skills/**", "servers/*/pyproject.toml", "package.json", "pi-mcp.json", ".woodpecker/**"] }
 
   # Offline tests (ffmpeg only; chromium/xterm-dependent tests skip themselves). Serial like
   # whatsapp-test: a failure aborts the pipeline before the image build below.
@@ -122,13 +121,11 @@ steps:
       context: servers/storyboard-video
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
     when:
       - event: [push, manual]
         branch: master
         path: { include: ["servers/storyboard-video/**", ".woodpecker/**"] }
-      - event: tag
-        ref: refs/tags/storyboard-video-v*
 
   # Offline Python tests: no Go toolchain, no WhatsApp account. libmagic1 because neonize
   # imports python-magic at import time (ffmpeg is not needed by the tests).
@@ -164,7 +161,7 @@ steps:
       context: servers/whatsapp
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
     when:
       - event: [push, manual]
         branch: master

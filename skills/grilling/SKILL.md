@@ -1,6 +1,8 @@
 ---
 name: grilling
 description: "Relentless interview to stress-test a plan, design or idea, one round of decision-tree questions at a time, each with a recommended answer. Use for: \"grill me\", \"me questione\", \"stress-test this plan\", /grilling."
+metadata:
+  version: "0.1.0"
 ---
 
 

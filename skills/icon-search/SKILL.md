@@ -3,6 +3,8 @@ name: icon-search
 description: "Search SVG icons by keyword with licenses (Iconify, OpenIconLibrary, Flaticon). Use for: \"find an icon for X\", \"search icons\", \"license of this icon\", /icon-search."
 allowed-tools:
   - Bash
+metadata:
+  version: "0.1.0"
 ---
 
 # icon-search

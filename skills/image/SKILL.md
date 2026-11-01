@@ -4,6 +4,8 @@ description: "Light image editing with Python + Pillow: crop, rotate, resize, bl
 allowed-tools:
   - Bash
   - Read
+metadata:
+  version: "0.1.0"
 ---
 
 # image

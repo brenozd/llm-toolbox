@@ -8,6 +8,8 @@ allowed-tools:
   - Bash
   - Grep
   - Glob
+metadata:
+  version: "0.1.0"
 ---
 
 # Wiki page writing

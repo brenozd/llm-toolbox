@@ -8,6 +8,8 @@ allowed-tools:
   - Glob
   - mcp__forgejo__pull_request_write
   - mcp__forgejo__pull_request_read
+metadata:
+  version: "0.1.0"
 ---
 
 # pr-opener

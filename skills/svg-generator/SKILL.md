@@ -7,6 +7,8 @@ allowed-tools:
   - Edit
   - Bash
   - WebSearch
+metadata:
+  version: "0.1.0"
 ---
 
 # svg-generator

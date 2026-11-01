@@ -4,6 +4,8 @@ description: "Capture screenshots, videos and GIFs of the desktop, a web page, o
 allowed-tools:
   - Bash
   - Read
+metadata:
+  version: "0.1.0"
 ---
 
 # screencapture

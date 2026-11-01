@@ -1,6 +1,9 @@
 ---
 name: storyboard-video
 description: "Turn the current repo (web app, CLI or GUI) into a short promo video from real captures, with every claim tied to file:line. Needs the storyboard-video MCP (storyboard-video-exec for CLI/GUI). Use for: \"make a promo video\", \"demo video of this project\", \"vídeo promocional\", /storyboard-video."
+metadata:
+  version: "0.1.0"
+  requires-mcp: "storyboard-video-mcp 0.1"
 ---
 
 # storyboard-video

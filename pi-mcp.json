@@ -1,0 +1,53 @@
+{
+  "mcpServers": {
+    "actual-budget": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/actual-budget.json:/config/config.json:ro\" -v actual-budget-data:/data harbor.bzd.gg/bzd/actual-budget-mcp:0.6.0"
+      ]
+    },
+    "woodpecker": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/woodpecker.json:/config/config.json:ro\" harbor.bzd.gg/bzd/woodpecker-mcp:0.1.0"
+      ]
+    },
+    "vikunja": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/vikunja.json:/config/config.json:ro\" harbor.bzd.gg/bzd/vikunja-mcp:0.1.0"
+      ]
+    },
+    "faster-whisper": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm -v \"${HOME}:${HOME}:ro\" -v \"${HOME}/.cache/huggingface:/root/.cache/huggingface\" harbor.bzd.gg/bzd/faster-whisper-mcp:0.1.0"
+      ]
+    },
+    "whatsapp": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/whatsapp.json:/config/config.json:ro\" -v whatsapp-data:/data -v \"${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro\" harbor.bzd.gg/bzd/whatsapp-mcp:0.1.0"
+      ]
+    },
+    "storyboard-video": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,exec --tmpfs /root --pids-limit 256 --add-host=host.docker.internal:host-gateway -v \"${PWD}:/repo:ro\" -v storyboard-video-work:/work -v \"${HOME}/.cache/storyboard-video/music:/music:ro\" -v \"${HOME}/.cache/storyboard-video/sfx:/sfx:ro\" harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.0"
+      ]
+    },
+    "storyboard-video-exec": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm --network none --cap-drop ALL --cap-add SETGID --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,exec --pids-limit 256 --tmpfs /root -e STORYBOARD_ALLOW_EXEC=1 -v \"${PWD}:/repo:ro\" -v storyboard-video-work:/work -v \"${HOME}/.cache/storyboard-video/music:/music:ro\" -v \"${HOME}/.cache/storyboard-video/sfx:/sfx:ro\" harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.0"
+      ]
+    }
+  }
+}

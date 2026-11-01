@@ -5,6 +5,8 @@ allowed-tools:
   - Bash
   - Read
   - AskUserQuestion
+metadata:
+  version: "0.1.0"
 ---
 
 # distrobox

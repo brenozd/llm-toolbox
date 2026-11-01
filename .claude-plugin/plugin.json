@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, svg-generator, storyboard-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.1.8",
+  "version": "1.1.9",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -17,7 +17,7 @@
         "${HOME}/.config/llm-toolbox/actual-budget.json:/config/config.json:ro",
         "-v",
         "actual-budget-data:/data",
-        "harbor.bzd.gg/bzd/actual-budget-mcp:latest"
+        "harbor.bzd.gg/bzd/actual-budget-mcp:0.6.0"
       ]
     },
     "woodpecker": {
@@ -28,7 +28,7 @@
         "--rm",
         "-v",
         "${HOME}/.config/llm-toolbox/woodpecker.json:/config/config.json:ro",
-        "harbor.bzd.gg/bzd/woodpecker-mcp:latest"
+        "harbor.bzd.gg/bzd/woodpecker-mcp:0.1.0"
       ]
     },
     "vikunja": {
@@ -39,7 +39,7 @@
         "--rm",
         "-v",
         "${HOME}/.config/llm-toolbox/vikunja.json:/config/config.json:ro",
-        "harbor.bzd.gg/bzd/vikunja-mcp:latest"
+        "harbor.bzd.gg/bzd/vikunja-mcp:0.1.0"
       ]
     },
     "faster-whisper": {
@@ -52,7 +52,7 @@
         "${HOME}:${HOME}:ro",
         "-v",
         "${HOME}/.cache/huggingface:/root/.cache/huggingface",
-        "harbor.bzd.gg/bzd/faster-whisper-mcp:latest"
+        "harbor.bzd.gg/bzd/faster-whisper-mcp:0.1.0"
       ]
     },
     "whatsapp": {
@@ -67,7 +67,7 @@
         "whatsapp-data:/data",
         "-v",
         "${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro",
-        "harbor.bzd.gg/bzd/whatsapp-mcp:latest"
+        "harbor.bzd.gg/bzd/whatsapp-mcp:0.1.0"
       ]
     },
     "storyboard-video": {
@@ -96,7 +96,7 @@
         "${HOME}/.cache/storyboard-video/music:/music:ro",
         "-v",
         "${HOME}/.cache/storyboard-video/sfx:/sfx:ro",
-        "harbor.bzd.gg/bzd/storyboard-video-mcp:latest"
+        "harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.0"
       ]
     },
     "storyboard-video-exec": {
@@ -130,7 +130,7 @@
         "${HOME}/.cache/storyboard-video/music:/music:ro",
         "-v",
         "${HOME}/.cache/storyboard-video/sfx:/sfx:ro",
-        "harbor.bzd.gg/bzd/storyboard-video-mcp:latest"
+        "harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.0"
       ]
     }
   }

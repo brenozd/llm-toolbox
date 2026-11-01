@@ -3,6 +3,8 @@ name: music-search
 description: "Find, license-gate and stage a music bed or a sound effect for storyboard-video (Openverse, Internet Archive; `--kind sfx` = CC0/PDM effects from Internet Archive). Use for: \"find music for this video\", \"soundtrack for the promo\", \"whoosh/impact sound effect\", \"license of this track\", /music-search."
 allowed-tools:
   - Bash
+metadata:
+  version: "0.1.0"
 ---
 
 # music-search
