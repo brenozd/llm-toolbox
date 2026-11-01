@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Keep MCP server, skill, plugin and package versions linked. No manual tagging.
 
-  release.py sync    pre-commit: bump what the staged changes touch, rewrite every derived file, `git add` it
+  release.py sync [MSGFILE]   commit-msg hook: bump what the staged changes touch (level from the
+                     Conventional Commit message: feat = minor, `!`/BREAKING CHANGE = major, else
+                     patch), rewrite every derived file, `git add` it
   release.py check   CI: fail if any derived file is stale (no writes)
 
 Source of truth: servers/*/pyproject.toml `version` (MCP) and skills/*/SKILL.md `metadata.version` (skill).
@@ -27,14 +29,22 @@ VERSION = re.compile(r'^version = "(\d+\.\d+\.\d+)"', re.M)
 JSON_VERSION = re.compile(r'^(  "version": ")[^"]+(")', re.M)
 
 
-def bump(v: str) -> str:
-    a, b, c = v.split(".")
-    return f"{a}.{b}.{int(c) + 1}"
+def level(msg: str) -> str:
+    """Conventional Commits -> semver level."""
+    subject = msg.strip().split("\n", 1)[0]
+    if re.match(r"^\w+(\([^)]*\))?!:", subject) or re.search(r"^BREAKING[ -]CHANGE:", msg, re.M):
+        return "major"
+    return "minor" if re.match(r"^feat(\([^)]*\))?:", subject) else "patch"
 
 
-def bumped(cur: str, old: str | None, touched: bool) -> str:
-    """Patch-bump `cur` once: only if its files changed and the version is not already ahead of HEAD."""
-    return bump(cur) if touched and cur == old else cur
+def bump(v: str, lvl: str = "patch") -> str:
+    a, b, c = (int(x) for x in v.split("."))
+    return {"major": f"{a + 1}.0.0", "minor": f"{a}.{b + 1}.0", "patch": f"{a}.{b}.{c + 1}"}[lvl]
+
+
+def bumped(cur: str, old: str | None, touched: bool, lvl: str = "patch") -> str:
+    """Bump `cur` once: only if its files changed and the version is not already ahead of HEAD."""
+    return bump(cur, lvl) if touched and cur == old else cur
 
 
 def frontmatter_set(text: str, key: str, value: str) -> str:
@@ -69,7 +79,7 @@ def pi_mcp(plugin: dict) -> dict:
     return {"mcpServers": servers}
 
 
-def plan(root: Path, changed: set[str] | None, head: Callable[[str], str]) -> dict[str, str]:
+def plan(root: Path, changed: set[str] | None, head: Callable[[str], str], lvl: str = "patch") -> dict[str, str]:
     """Desired content of every derived/bumped file. `changed` None = no bumps (check mode)."""
     files: dict[str, str] = {}
     changed = changed or set()
@@ -85,7 +95,7 @@ def plan(root: Path, changed: set[str] | None, head: Callable[[str], str]) -> di
         name = re.search(r'^name = "([^"]+)"', text, re.M)[1]
         cur = VERSION.search(text)[1]
         old = VERSION.search(head(rel))
-        new = bumped(cur, old and old[1], touched(rel.rsplit("/", 1)[0] + "/"))
+        new = bumped(cur, old and old[1], touched(rel.rsplit("/", 1)[0] + "/"), lvl)
         if new != cur:
             files[rel] = VERSION.sub(f'version = "{new}"', text, count=1)
         servers[name] = new
@@ -97,7 +107,7 @@ def plan(root: Path, changed: set[str] | None, head: Callable[[str], str]) -> di
         text = md.read_text()
         old = frontmatter_get(head(rel), "version") if head(rel) else None
         cur = frontmatter_get(text, "version") or "0.1.0"
-        new = bumped(cur, old, touched(rel.rsplit("/", 1)[0] + "/"))
+        new = bumped(cur, old, touched(rel.rsplit("/", 1)[0] + "/"), lvl)
         out = frontmatter_set(text, "version", new)
         req = re.search(r'requires-mcp: "([\w-]+) \d+\.\d+"', out)
         if req and req[1] in servers:
@@ -114,7 +124,7 @@ def plan(root: Path, changed: set[str] | None, head: Callable[[str], str]) -> di
     cur_v = re.search(r'"version": "([^"]+)"', text)[1]
     old = re.search(r'"version": "([^"]+)"', head(PLUGIN))
     dirty = skills_changed or bool(files) or any(c.startswith(PLUGIN_PREFIXES) for c in real)
-    plugin_v = bumped(cur_v, old and old[1], dirty)
+    plugin_v = bumped(cur_v, old and old[1], dirty, lvl)
     text = JSON_VERSION.sub(rf"\g<1>{plugin_v}\2", text, count=1)
     files[PLUGIN] = text
 
@@ -144,9 +154,10 @@ def main(argv: list[str]) -> int:
     if mode not in ("sync", "check"):
         print(__doc__)
         return 2
+    lvl = level(Path(argv[2]).read_text()) if len(argv) > 2 else "patch"
     changed = None if mode == "check" else set(_git("diff", "--cached", "--name-only", "--diff-filter=ACMR").split())
     # check mode never bumps, so it needs no git (CI's python:slim image has none)
-    files = plan(ROOT, changed, (lambda p: "") if mode == "check" else lambda p: _git("show", f"HEAD:{p}"))
+    files = plan(ROOT, changed, (lambda p: "") if mode == "check" else lambda p: _git("show", f"HEAD:{p}"), lvl)
     stale = [rel for rel, new in files.items() if not (ROOT / rel).exists() or (ROOT / rel).read_text() != new]
     if mode == "check":
         for rel in stale:

@@ -209,6 +209,18 @@ class ReleaseBumpTest(unittest.TestCase):
         self.assertRegex(files["servers/vikunja/pyproject.toml"], r'version = "\d+\.\d+\.\d+"')
         self.assertNotIn("servers/woodpecker/pyproject.toml", files)
 
+    def test_level_from_commit_message(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("release", Path(__file__).parent / "release.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.assertEqual(mod.level("fix: x"), "patch")
+        self.assertEqual(mod.level("feat(vikunja): x"), "minor")
+        self.assertEqual(mod.level("refactor!: x"), "major")
+        self.assertEqual(mod.level("fix: x\n\nBREAKING CHANGE: y"), "major")
+        self.assertEqual(mod.bump("0.1.7", "minor"), "0.2.0")
+        self.assertEqual(mod.bump("0.1.7", "major"), "1.0.0")
+
     def test_tests_and_docs_do_not_bump(self):
         files = self.plan({"servers/vikunja/tests/test_x.py", "servers/vikunja/README.md"})
         self.assertNotIn("servers/vikunja/pyproject.toml", files)

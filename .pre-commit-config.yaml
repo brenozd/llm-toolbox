@@ -28,7 +28,7 @@ repos:
         name: link MCP/skill/plugin versions (bump + derive)
         entry: scripts/release.py sync
         language: script
-        pass_filenames: false
+        stages: [commit-msg]  # needs the message: feat -> minor, ! -> major, else patch
         always_run: true
       - id: sync-agent-tools
         name: sync agent tools (Pi + Claude Code names)
