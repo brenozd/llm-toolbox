@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable agent skills: code-tutor, distrobox, grilling, guided-build, icon-search, image, music-search, pr-opener, storyboard-video, screencapture, svg-generator, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "keywords": [
     "pi-package"
   ],

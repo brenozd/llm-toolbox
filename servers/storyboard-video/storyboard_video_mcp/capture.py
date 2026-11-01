@@ -129,7 +129,9 @@ def _claim_display() -> tuple[str, Path]:
             fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
         except FileExistsError:
             try:  # a crashed take left it behind: take it over instead of leaking the display
-                if not _display_alive(int(lock.read_text() or 0)):
+                pid = lock.read_text()
+                # empty = the owner created it but has not written its pid yet: not stale
+                if pid and not _display_alive(int(pid)):
                     lock.unlink(missing_ok=True)
             except (OSError, ValueError):
                 pass

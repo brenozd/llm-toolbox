@@ -39,14 +39,14 @@
       "command": "sh",
       "args": [
         "-c",
-        "exec docker run -i --rm --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,exec --tmpfs /root --pids-limit 256 --add-host=host.docker.internal:host-gateway -v \"${PWD}:/repo:ro\" -v storyboard-video-work:/work -v \"${HOME}/.cache/storyboard-video/music:/music:ro\" -v \"${HOME}/.cache/storyboard-video/sfx:/sfx:ro\" harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.0"
+        "exec docker run -i --rm --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,exec --tmpfs /root --pids-limit 256 --add-host=host.docker.internal:host-gateway -v \"${PWD}:/repo:ro\" -v storyboard-video-work:/work -v \"${HOME}/.cache/storyboard-video/music:/music:ro\" -v \"${HOME}/.cache/storyboard-video/sfx:/sfx:ro\" harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.1"
       ]
     },
     "storyboard-video-exec": {
       "command": "sh",
       "args": [
         "-c",
-        "exec docker run -i --rm --network none --cap-drop ALL --cap-add SETGID --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,exec --pids-limit 256 --tmpfs /root -e STORYBOARD_ALLOW_EXEC=1 -v \"${PWD}:/repo:ro\" -v storyboard-video-work:/work -v \"${HOME}/.cache/storyboard-video/music:/music:ro\" -v \"${HOME}/.cache/storyboard-video/sfx:/sfx:ro\" harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.0"
+        "exec docker run -i --rm --network none --cap-drop ALL --cap-add SETGID --security-opt no-new-privileges --read-only --tmpfs /tmp:rw,exec --pids-limit 256 --tmpfs /root -e STORYBOARD_ALLOW_EXEC=1 -v \"${PWD}:/repo:ro\" -v storyboard-video-work:/work -v \"${HOME}/.cache/storyboard-video/music:/music:ro\" -v \"${HOME}/.cache/storyboard-video/sfx:/sfx:ro\" harbor.bzd.gg/bzd/storyboard-video-mcp:0.1.1"
       ]
     }
   }

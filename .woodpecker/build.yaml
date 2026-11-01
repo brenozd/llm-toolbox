@@ -121,7 +121,7 @@ steps:
       context: servers/storyboard-video
       platforms: linux/amd64
       provenance: false
-      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.1"]
     when:
       - event: [push, manual]
         branch: master
