@@ -25,12 +25,12 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 
 ## Servers
 
-- [`servers/actual-budget`](servers/actual-budget/) — integrates with [Actual Budget](https://actualbudget.org).
-- [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org).
-- [`servers/vikunja`](servers/vikunja/) — projects, tasks, comments and labels of a [Vikunja](https://vikunja.io) instance.
-- [`servers/faster-whisper`](servers/faster-whisper/) — speech-to-text transcription via faster-whisper.
-- [`servers/storyboard-video`](servers/storyboard-video/) — turns a repo (web, CLI or GUI) into an evidence-checked promo video: scan, capture, validate spec, render MP4, verify.
-- [`servers/whatsapp`](servers/whatsapp/) — read WhatsApp chats and (opt-in) send messages, through an in-process whatsmeow client (neonize).
+- [`servers/actual-budget`](servers/actual-budget/) — integrates with [Actual Budget](https://actualbudget.org). Image: [`harbor.bzd.gg/bzd/actual-budget-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/actual-budget-mcp).
+- [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org). Image: [`harbor.bzd.gg/bzd/woodpecker-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/woodpecker-mcp).
+- [`servers/vikunja`](servers/vikunja/) — projects, tasks, comments and labels of a [Vikunja](https://vikunja.io) instance. Image: [`harbor.bzd.gg/bzd/vikunja-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/vikunja-mcp).
+- [`servers/faster-whisper`](servers/faster-whisper/) — speech-to-text transcription via faster-whisper. Image: [`harbor.bzd.gg/bzd/faster-whisper-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/faster-whisper-mcp).
+- [`servers/storyboard-video`](servers/storyboard-video/) — turns a repo (web, CLI or GUI) into an evidence-checked promo video: scan, capture, validate spec, render MP4, verify. Image: [`harbor.bzd.gg/bzd/storyboard-video-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/storyboard-video-mcp).
+- [`servers/whatsapp`](servers/whatsapp/) — read WhatsApp chats and (opt-in) send messages, through an in-process whatsmeow client (neonize). Image: [`harbor.bzd.gg/bzd/whatsapp-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/whatsapp-mcp).
 
 ## Skills
 
