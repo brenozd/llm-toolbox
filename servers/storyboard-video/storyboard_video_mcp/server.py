@@ -6,10 +6,25 @@ import shutil
 import subprocess
 
 from mcp.server.fastmcp import FastMCP, Image
+from mcp.types import TextContent
 
-from . import capture as C, config, cutdown as CD, delivery as D, render as R, scan as SC, spec as S, tts as T, voices as V
+from . import patch as P, spec_schema as SS, capture as C, config, cutdown as CD, delivery as D, render as R, scan as SC, spec as S, tts as T, voices as V
 
-mcp = FastMCP("storyboard-video")
+class _Strict(FastMCP):
+    """FastMCP drops unknown arguments silently (render(profile=..) ran as a draft); fail loudly instead."""
+
+    async def call_tool(self, name, arguments):
+        tool = self._tool_manager.get_tool(name)
+        if tool is not None:
+            valid = set((tool.parameters or {}).get("properties", {}))
+            extra = sorted(set(arguments or {}) - valid)
+            if extra:
+                return [TextContent(type="text", text=json.dumps({
+                    "status": "error", "message": f"unknown argument(s) {extra} for {name}; valid: {sorted(valid)}"}))]
+        return await super().call_tool(name, arguments)
+
+
+mcp = _Strict("storyboard-video")
 
 
 async def _guard(fn, *a, **k):
@@ -170,6 +185,18 @@ async def stills(spec_hash: str, at_s: float | None = None) -> list:
         return [json.dumps({"status": "error", "message": f"{type(e).__name__}: {e}"})]
     warn = [f for r in res for f in r["findings"]]
     return [json.dumps({"status": "ok", "stills": res, "audit_warnings": len(warn)})] + [Image(path=r["path"]) for r in res]
+
+
+@mcp.tool()
+def get_spec_schema() -> object:
+    """JSON Schema of the spec (structure, enums, limits). Read it before writing a spec; validate_spec still owns the semantic lints."""
+    return SS.schema()
+
+
+@mcp.tool()
+async def patch_spec(spec_hash: str, ops: list[dict], dry_run: bool = True) -> object:
+    """Edit a validated spec by scene id. ops: {op: replace|add|remove|move, scene, field?, value?, after?}. dry_run (default) returns diff + findings + new_spec_hash without persisting; dry_run=false persists and returns the new hash."""
+    return await _guard(P.apply, spec_hash, ops, dry_run)
 
 
 @mcp.tool()

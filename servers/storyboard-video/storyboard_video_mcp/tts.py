@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import array
 import hashlib
+import shutil
 import json
 import random
 import re
@@ -153,6 +154,10 @@ def narrate(h: str, scratch: bool = False) -> dict:
         text = pronounce(sc["narration"], spec.get("say"))
         key = cache_key(text + (f"\x00beat{BEAT_S}" if S.BEAT.search(text) else ""), voice, lang)
         p = d / f"{sc['id']}-{key}.wav"  # scene id in the name: identical lines keep separate files
+        if not p.exists():  # same line, voice and engine narrated under another spec hash: copy, don't re-synthesize
+            old = next(iter(sorted(config.WORK.glob(f"audio/*/*-{key}.wav"))), None)
+            if old:
+                shutil.copy(old, p)
         if not p.exists():
             eng = eng or _engine()
             _write_pcm(p, *synthesize(eng, text, voice, lang))

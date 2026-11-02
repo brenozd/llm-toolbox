@@ -22,6 +22,7 @@ PAUSE_MAX_S = 2.0  # scene.pause_after_s
 LEAD_MAX_S = 0.4  # scene.audio_lead_s (J/L-cut)
 AUDIO_TAIL = 0.4  # silence after the spoken line: the scene never cuts on the last syllable
 MAX_WPS = 3.2  # words per second a TTS voice comfortably fits in a scene
+DENSE_LINE_CHARS = 60  # a captured terminal line wider than this is not read at a glance (any program, any shell)
 MIN_HOLD_S = 4.0  # the last line of a recorded terminal must stay on screen this long
 TTS_TOKEN = re.compile(r"\b(?:[A-Z]{2,}[A-Z0-9]*|[A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+|[a-z]+[A-Z][A-Za-z0-9]*|[A-Za-z]+\d[A-Za-z0-9]*)\b")
 # Symbols a voice cannot read back plainly: --flags, file:line, a/b, KEY=1 (never plain words).
@@ -109,6 +110,9 @@ def normalize(spec: dict) -> dict:
         s["music"] = {"volume_db": MUSIC_DEFAULTS["volume_db"], "duck": MUSIC_DEFAULTS["duck"], **s["music"]}
     plan_ = plan(s)
     for sc in s.get("scenes", []):
+        if sc.get("duration_s") == "auto":  # the voice sets the clock: timeline() stretches to the real audio
+            n = len(_narration(sc).split())
+            sc["duration_s"] = round(min(12.0, max(1.5, n / MAX_WPS)), 1)  # estimate until narrate() measures it
         sc.setdefault("duration_s", 3.0)
         p = plan_.get(sc.get("id"))
         p = p if isinstance(p, dict) else {}
@@ -735,6 +739,14 @@ def lint(spec: dict) -> list[dict]:
             continue
         if not (1.5 <= sc["duration_s"] <= 12):
             add("error", "duration", sid, f"{sc['duration_s']}s", "use 1.5..12 s")
+        it = sc.get("intent")
+        strict = isinstance((spec.get("direction") or {}), dict) and (spec.get("direction") or {}).get("strict_intent")
+        if it is not None and not (isinstance(it, dict) and all(isinstance(it.get(k), str) and it[k].strip()
+                                                                for k in ("sees", "understands"))):
+            add("error", "bad_intent", sid, f"intent {it!r}", 'intent = {"sees": "what is on screen", "understands": "what the viewer should take away"}')
+        elif it is None and strict:
+            add("error", "missing_intent", sid, "direction.strict_intent is on and this scene has no intent",
+                'add scene.intent = {"sees": ..., "understands": ...}')
         need = {"title": ["title"], "bullets": ["heading", "items"], "terminal": [], "image": ["image"], "code": ["code", "source"]}[ty]
         if ty == "image" and sc.get("video"):
             need = []  # a clip stands in for the still
@@ -744,6 +756,10 @@ def lint(spec: dict) -> list[dict]:
         if ty == "bullets" and len(sc.get("items") or []) > 5:
             add("error", "too_many_items", sid, "more than 5 bullets", "split the scene")
         if ty == "terminal":
+            wide = [l for l in (sc.get("lines") or []) if isinstance(l, str) and len(l) > DENSE_LINE_CHARS]
+            if wide:
+                add("warn", "dense_capture", sid, f"{len(wide)} terminal line(s) over {DENSE_LINE_CHARS} chars: '{wide[0][:40]}...'",
+                    "show one short labelled result per line: capture a small script that prints just what the viewer needs")
             n = len(sc.get("lines") or [])
             if not n and not sc.get("capture_id") and not sc.get("video"):
                 add("error", "missing_field", sid, "terminal needs 'lines', 'capture_id' or 'video'",
