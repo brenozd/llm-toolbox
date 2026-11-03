@@ -36,6 +36,7 @@ def test_rejects():
     bad({"max_media_bytes": 0}, "max_media_bytes")
     bad({"max_media_bytes": True}, "max_media_bytes")
     bad({"data_dir": 5}, "data_dir")
+    bad({"downloads_dir": ""}, "downloads_dir")
     bad({"allowed_recipients": "123456"}, "allowed_recipients")
     bad({"allowed_recipients": ["+55 11"]}, "invalid entries")
     bad({"allowed_recipients": ["5511999990000@example.com"]}, "invalid entries")

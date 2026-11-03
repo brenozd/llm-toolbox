@@ -1,11 +1,11 @@
 [project]
 name = "whatsapp-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server exposing WhatsApp chats and messages (read-only by default) through an in-process whatsmeow client."
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.9.0,<2",
-    "neonize==0.5.2",
+    "neonize==0.10.0",
     "segno>=1.6",
 ]
 

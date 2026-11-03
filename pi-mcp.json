@@ -32,14 +32,14 @@
       "command": "sh",
       "args": [
         "-c",
-        "exec docker run -i --rm --network none -e \"DOCUMENT_OCR_ROOTS=${HOME}/.config/llm-toolbox/whatsapp-downloads\" -v \"${HOME}/.config/llm-toolbox/whatsapp-downloads:${HOME}/.config/llm-toolbox/whatsapp-downloads:ro\" harbor.bzd.gg/bzd/document-ocr-mcp:0.1.0"
+        "exec docker run -i --rm --network none --group-add 1000 -e \"DOCUMENT_OCR_ROOTS=${HOME}/.config/llm-toolbox/whatsapp-downloads\" -v \"${HOME}/.config/llm-toolbox/whatsapp-downloads:${HOME}/.config/llm-toolbox/whatsapp-downloads:ro\" harbor.bzd.gg/bzd/document-ocr-mcp:0.1.0"
       ]
     },
     "whatsapp": {
       "command": "sh",
       "args": [
         "-c",
-        "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/whatsapp.json:/config/config.json:ro\" -v whatsapp-data:/data -v \"${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro\" harbor.bzd.gg/bzd/whatsapp-mcp:0.1.0"
+        "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/whatsapp.json:/config/config.json:ro\" -v whatsapp-data:/data -v \"${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro\" -v \"${HOME}/.config/llm-toolbox/whatsapp-downloads:${HOME}/.config/llm-toolbox/whatsapp-downloads\" --group-add 1000 harbor.bzd.gg/bzd/whatsapp-mcp:0.2.0"
       ]
     },
     "storyboard-video": {

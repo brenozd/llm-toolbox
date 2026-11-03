@@ -37,6 +37,9 @@ class FakeClient:
         self.sent.append((kind, jid, data, filename))
         return {"message_id": f"file-{len(self.sent)}"}
 
+    def request_history(self, chat_jid, message_id, from_me, timestamp, count) -> None:
+        self.history = (chat_jid, message_id, from_me, timestamp, count)
+
     def download(self, raw: bytes) -> bytes:
         self.downloaded.append(raw)
         return self.media

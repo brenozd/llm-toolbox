@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import audio, media
@@ -145,9 +146,27 @@ def download_media(config: WhatsAppConfig, store: Store, client, message_id: str
     if len(data) > config.max_media_bytes:
         raise ValueError("media exceeds max_media_bytes")
     name = ref["filename"] or ref["media_type"] or "file"
-    path = media.write_download(config.data_dir, message_id, name, data)
+    path = media.write_download(config.data_dir, message_id, name, data, config.downloads_dir)
     return {"path": str(path), "media_type": ref["media_type"], "filename": ref["filename"],
             "size": len(data), "content_is_untrusted": True}
+
+
+# -- history
+def request_history(store: Store, client, chat_jid: str, count: int = 50) -> dict:
+    if not chat_jid:
+        raise ValueError("chat_jid is required")
+    if not 1 <= count <= 200:
+        raise ValueError("count must be between 1 and 200")
+    with store.reader() as r:
+        anchor = r.get_oldest_message(chat_jid)
+    if anchor is None:
+        raise LookupError("no stored message in that chat to anchor the request on")
+    ts = int(datetime.fromisoformat(anchor["timestamp"].replace("Z", "+00:00")).timestamp())
+    client.request_history(chat_jid, anchor["id"], anchor["from_me"], ts, count)
+    # the phone answers asynchronously (and only while online): the new messages land in the store later
+    return {"requested": count, "anchor_message_id": anchor["id"], "anchor_timestamp": anchor["timestamp"],
+            "stored_before": anchor["stored"],
+            "note": "asynchronous: the phone must be online; call whatsapp_list_messages again in a few seconds"}
 
 
 # -- sends (only registered when allow_send is on)

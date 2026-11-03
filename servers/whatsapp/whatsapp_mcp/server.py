@@ -117,6 +117,12 @@ def build_server(config: WhatsAppConfig, client_factory: Callable | None = None)
         a = app(ctx)
         return t.download_media(a.config, a.store, a.client, message_id, chat_jid)
 
+    @read("Ask the phone for older messages of a chat (before the oldest stored one). Asynchronous: the phone must be "
+          "online, and the messages show up in whatsapp_list_messages shortly after. Call again to page further back.")
+    def whatsapp_request_history(ctx: Context, chat_jid: str, count: int = 50) -> dict:
+        a = app(ctx)
+        return t.request_history(a.store, a.client, chat_jid, count)
+
     if config.allow_send:
         @tool
         def whatsapp_send_message(ctx: Context, recipient: str, message: str) -> dict:

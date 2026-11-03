@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, svg-generator, storyboard-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -63,6 +63,8 @@
         "--rm",
         "--network",
         "none",
+        "--group-add",
+        "1000",
         "-e",
         "DOCUMENT_OCR_ROOTS=${HOME}/.config/llm-toolbox/whatsapp-downloads",
         "-v",
@@ -82,7 +84,11 @@
         "whatsapp-data:/data",
         "-v",
         "${HOME}/.config/llm-toolbox/whatsapp-media:/media:ro",
-        "harbor.bzd.gg/bzd/whatsapp-mcp:0.1.0"
+        "-v",
+        "${HOME}/.config/llm-toolbox/whatsapp-downloads:${HOME}/.config/llm-toolbox/whatsapp-downloads",
+        "--group-add",
+        "1000",
+        "harbor.bzd.gg/bzd/whatsapp-mcp:0.2.0"
       ]
     },
     "storyboard-video": {

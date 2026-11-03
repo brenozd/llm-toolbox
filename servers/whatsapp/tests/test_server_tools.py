@@ -5,7 +5,7 @@ from whatsapp_mcp.server import UNTRUSTED, build_server
 READ_TOOLS = (
     "whatsapp_search_contacts", "whatsapp_list_chats", "whatsapp_get_chat", "whatsapp_get_direct_chat_by_contact",
     "whatsapp_get_contact_chats", "whatsapp_get_last_interaction", "whatsapp_list_messages",
-    "whatsapp_get_message_context", "whatsapp_download_media",
+    "whatsapp_get_message_context", "whatsapp_download_media", "whatsapp_request_history",
 )
 SEND_TOOLS = ("whatsapp_send_message", "whatsapp_send_file", "whatsapp_send_audio_message")
 

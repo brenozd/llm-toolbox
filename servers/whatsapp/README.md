@@ -27,7 +27,8 @@ Copy `config.example.json` and mount it read-only into the container at
   "media_dir": "/media",
   "allow_send": false,
   "allowed_recipients": [],
-  "max_media_bytes": 67108864
+  "max_media_bytes": 67108864,
+  "downloads_dir": null
 }
 ```
 
@@ -36,6 +37,11 @@ Copy `config.example.json` and mount it read-only into the container at
   means any recipient, once `allow_send` is on. Set it.
 - `media_dir` — the only place outgoing files may come from. Mount it read-only.
 - `max_media_bytes` — size cap for sent and downloaded media (default 64 MiB).
+- `downloads_dir` — optional host directory for `whatsapp_download_media`, so the
+  files are reachable from the host and from other MCPs (e.g. `faster-whisper`
+  for voice notes). Mount it at the **same absolute path** as on the host so the
+  returned path works as-is. It must already exist; files are written `0640`.
+  Default `null`: `/data/downloads`, private to the container.
 - Unknown keys or wrong types are rejected with a clear error. Set
   `WHATSAPP_MCP_CONFIG` to read a different path.
 
@@ -46,7 +52,21 @@ The app writes with `umask 077`: the session and message history live in the
 |---|---|
 | `/data/whatsapp.db` | whatsmeow session store — the linked device's keys |
 | `/data/messages.db` | message store written by the event handlers (WAL) |
-| `/data/downloads/<message-id>-<name>` | media fetched by `whatsapp_download_media` |
+| `/data/downloads/<message-id>-<name>` | media fetched by `whatsapp_download_media` (unless `downloads_dir` is set) |
+
+### Sharing downloads with the host (voice-note transcription)
+
+The container runs as uid 10001, so give it the host user's group on the folder:
+
+```bash
+mkdir -p ~/.config/llm-toolbox/whatsapp-downloads
+chmod 2770 ~/.config/llm-toolbox/whatsapp-downloads   # group = your primary group
+```
+
+Set `"downloads_dir": "/home/<you>/.config/llm-toolbox/whatsapp-downloads"` in
+the config and add `-v D:D --group-add <your gid>` to the `docker run` (see
+`pi-mcp.json`). Then `whatsapp_download_media` → path under `$HOME` →
+`faster-whisper` `transcribe(audio_path=...)`, no extra server needed.
 
 ## Image
 
@@ -133,6 +153,7 @@ connection per linked device.
 | `whatsapp_get_last_interaction` | Most recent message with a contact |
 | `whatsapp_list_messages` | Messages filtered by time, sender, chat or text |
 | `whatsapp_get_message_context` | Messages around a given message |
+| `whatsapp_request_history` | Ask the phone for older messages of a chat (async, phone must be online) |
 | `whatsapp_download_media` | Download a message's media; returns the file path under `/data/downloads` |
 | `whatsapp_send_message` | Send a text message (needs `allow_send`) |
 | `whatsapp_send_file` | Send a file from `media_dir`, by relative path (needs `allow_send`) |
@@ -175,16 +196,20 @@ guessed phone number.
   lose; there is no support path if WhatsApp breaks or punishes the session.
 - neonize ships a **prebuilt third-party Go binary** (`neonize-<platform>.so`,
   whatsmeow inside) that runs in this process with full access to the session
-  and to the downloaded media. The version is pinned (`neonize==0.5.2`) but the
+  and to the downloaded media. The version is pinned (`neonize==0.10.0`) but the
   trust is fundamentally in that wheel's publisher and its build.
 - Prompt injection: an incoming message can contain text aimed at the model. The
   structured JSON output, the untrusted-content warning and the recipient
   allowlist reduce the blast radius; they do not remove it. Keep `allow_send`
   off, or `allowed_recipients` tight, when the same agent also reads chats.
 - Reading history depends on what WhatsApp's history sync hands over after
-  pairing; there is no backfill of older messages.
-- Not implemented by design: group management, history backfill, audio
-  transcription, image/video viewing, reactions and edits.
+  pairing; `whatsapp_request_history` asks the phone for more, anchored on the
+  oldest stored message. It is asynchronous, needs the phone online, and extra
+  requests are one more unofficial-protocol signal to WhatsApp.
+- Not implemented by design: group management, audio transcription and OCR
+  (do them on the host over `downloads_dir`: `faster-whisper` for audio,
+  `tesseract <img> - -l por+eng` for images, `pdftoppm -r 200 -png` first for PDFs),
+  image/video viewing, reactions and edits.
 - Known upgrade point: `mcp` 2.x renames `FastMCP` to `MCPServer`; the pin stays
   at `mcp<2` until that migration is done.
 

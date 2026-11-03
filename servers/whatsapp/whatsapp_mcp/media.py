@@ -33,27 +33,35 @@ def download_name(message_id: str, filename: str | None) -> str:
     return _clip(f"{sanitize_name(message_id, 'message')}-{sanitize_name(filename)}", NAME_MAX - 8)
 
 
-def downloads_dir(data_dir: str | Path) -> Path:
-    """The (created, 0700) downloads dir; refuses to follow a symlink planted there."""
-    d = Path(data_dir) / "downloads"
-    d.mkdir(parents=True, exist_ok=True, mode=0o700)
+def downloads_dir(data_dir: str | Path, shared_dir: str | Path | None = None) -> Path:
+    """The (created, 0700) downloads dir; refuses to follow a symlink planted there.
+
+    `shared_dir` is a host bind mount the operator owns: it must already exist and keeps its own mode."""
+    d = Path(shared_dir) if shared_dir else Path(data_dir) / "downloads"
+    if not shared_dir:
+        d.mkdir(parents=True, exist_ok=True, mode=0o700)
     if d.is_symlink() or not d.is_dir():
         raise RuntimeError("downloads dir is not a directory")
     return d
 
 
-def write_download(data_dir: str | Path, message_id: str, filename: str | None, data: bytes) -> Path:
-    """Write bytes to `<data_dir>/downloads/<unique name>` with O_EXCL|O_NOFOLLOW, 0600. Never overwrites."""
-    directory = downloads_dir(data_dir)
+def write_download(data_dir: str | Path, message_id: str, filename: str | None, data: bytes,
+                   shared_dir: str | Path | None = None) -> Path:
+    """Write bytes to `<data_dir>/downloads/<unique name>` with O_EXCL|O_NOFOLLOW, 0600. Never overwrites.
+
+    In a shared dir files are 0640 so the host user (via the dir's group) can read them."""
+    directory = downloads_dir(data_dir, shared_dir)
+    mode = 0o640 if shared_dir else 0o600
     base = download_name(message_id, filename)
     for attempt in range(100):
         candidate = directory / (base if attempt == 0 else f"{base}-{attempt}")
         try:
-            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)
+            fd = os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, mode)
         except FileExistsError:
             continue
         try:
             with os.fdopen(fd, "wb") as fh:
+                os.fchmod(fh.fileno(), mode)  # the process umask (077) would strip the group bit
                 fh.write(data)
         except BaseException:
             candidate.unlink(missing_ok=True)

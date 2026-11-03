@@ -1,3 +1,4 @@
+import os
 import stat
 import tempfile
 from pathlib import Path
@@ -49,6 +50,20 @@ def test_write_download_perms_and_no_overwrite():
         assert not (Path(d).parent / "evil").exists()
 
 
+def test_shared_dir_is_group_readable_and_not_created():
+    with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as shared:
+        os.umask(0o077)
+        p = media.write_download(d, "MSG1", "a.ogg", b"x", shared)
+        assert p.parent == Path(shared) and stat.S_IMODE(p.stat().st_mode) == 0o640
+        assert not (Path(d) / "downloads").exists()
+        try:
+            media.write_download(d, "MSG1", "a.ogg", b"x", str(Path(shared) / "missing"))
+        except (RuntimeError, OSError):
+            pass
+        else:
+            raise AssertionError("a missing shared dir must not be created")
+
+
 def test_symlinked_downloads_dir_is_rejected():
     with tempfile.TemporaryDirectory() as d:
         outside = Path(d) / "outside"
@@ -67,5 +82,6 @@ if __name__ == "__main__":
     test_sanitize_name()
     test_download_name_is_name_max_safe()
     test_write_download_perms_and_no_overwrite()
+    test_shared_dir_is_group_readable_and_not_created()
     test_symlinked_downloads_dir_is_rejected()
     print("ok")

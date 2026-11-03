@@ -83,6 +83,19 @@ def test_download_media(d):
     store.close()
 
 
+def test_request_history(d):
+    cfg = make_config(d)
+    store = Store(cfg.data_dir)
+    client = FakeClient()
+    expect(lambda: tools.request_history(store, client, CHAT), "no stored message")
+    for i, ts in enumerate(("2024-01-02T10:00:00Z", "2024-01-01T10:00:00Z")):
+        store.add_message(id=f"M{i}", chat_jid=CHAT, sender=CHAT, content="x", timestamp=ts)
+    out = tools.request_history(store, client, CHAT, 20)
+    assert client.history == (CHAT, "M1", False, 1704103200, 20), client.history
+    assert out["anchor_message_id"] == "M1" and out["stored_before"] == 2, out
+    expect(lambda: tools.request_history(store, client, CHAT, 0), "count")
+
+
 def test_download_media_size_cap_is_pre_download(d):
     cfg = make_config(d, max_media_bytes=8)
     store = Store(cfg.data_dir)
@@ -198,7 +211,7 @@ def test_check_connection(d):
 
 def main():
     with tempfile.TemporaryDirectory() as tmp:
-        for fn in (test_check_recipient_and_allowlist, test_resolve_media_containment, test_download_media,
+        for fn in (test_check_recipient_and_allowlist, test_resolve_media_containment, test_download_media, test_request_history,
                    test_download_media_size_cap_is_pre_download, test_download_media_refuses_unknown_length,
                    test_send_message_stores_outgoing,
                    test_send_file_kinds, test_send_audio_message_transcodes_in_tempdir,

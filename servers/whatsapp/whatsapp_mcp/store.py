@@ -316,6 +316,15 @@ class Reader:
         b, a = self._around(rows[0][1], rows[0][5], before, after)
         return {"message": self._msg(rows[0]), "before": b, "after": a}
 
+    def get_oldest_message(self, chat_jid: str) -> dict | None:
+        """The oldest stored message of a chat plus how many are stored: the anchor of a history request."""
+        rows = self._all("SELECT id, timestamp, is_from_me, (SELECT COUNT(*) FROM messages WHERE chat_jid = ?) "
+                         "FROM messages WHERE chat_jid = ? ORDER BY timestamp ASC, rowid ASC LIMIT 1",
+                         (chat_jid, chat_jid))
+        if not rows:
+            return None
+        return {"id": rows[0][0], "timestamp": rows[0][1], "from_me": bool(rows[0][2]), "stored": rows[0][3]}
+
     def get_media_ref(self, message_id: str, chat_jid: str) -> dict | None:
         rows = self._all("SELECT media_type, filename, file_length, raw FROM messages WHERE id = ? AND chat_jid = ?",
                          (message_id, chat_jid))

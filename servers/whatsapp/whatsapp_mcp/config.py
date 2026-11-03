@@ -25,6 +25,7 @@ class WhatsAppConfig:
     allow_send: bool = False
     allowed_recipients: tuple[str, ...] = ()
     max_media_bytes: int = 64 * 1024 * 1024
+    downloads_dir: str | None = None
 
     @classmethod
     def from_dict(cls, raw: dict) -> WhatsAppConfig:
@@ -33,7 +34,7 @@ class WhatsAppConfig:
         unknown = sorted(set(raw) - set(cls.__dataclass_fields__))
         if unknown:
             raise ConfigError(f"unknown config key(s): {', '.join(unknown)}")
-        for key in ("data_dir", "media_dir"):
+        for key in ("data_dir", "media_dir", "downloads_dir"):
             if key in raw and not (isinstance(raw[key], str) and raw[key]):
                 raise ConfigError(f"{key} must be a non-empty string")
         if "allow_send" in raw and not isinstance(raw["allow_send"], bool):

@@ -240,6 +240,9 @@ class NeonizeClient:
             resp = self._nc.send_document(to, data, filename=filename)
         return {"message_id": resp.ID}
 
+    def request_history(self, chat_jid: str, message_id: str, from_me: bool, timestamp: int, count: int) -> None:
+        self._nc.request_history_sync(self._to(chat_jid), message_id, from_me, timestamp, count)
+
     def download(self, raw: bytes) -> bytes:
         data = self._nc.download_any(Message.FromString(raw))
         if data is None:

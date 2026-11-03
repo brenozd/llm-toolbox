@@ -54,7 +54,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 COPY whatsapp_mcp ./whatsapp_mcp
 RUN pip install --no-cache-dir --no-compile --prefix=/install . \
- && rm -rf /install/lib/python3.11/site-packages/cryptography* /install/lib/python3.11/site-packages/cffi* /install/lib/python3.11/site-packages/_cffi_backend* /install/lib/python3.11/site-packages/pycparser* \
+ # neonize >=0.10 imports cryptography (and so cffi/pycparser) at import time: keep them. \
  && rm -rf /install/lib/python3.11/site-packages/phonenumbers/geodata /install/lib/python3.11/site-packages/phonenumbers/carrierdata \
  && find /install -name __pycache__ -prune -exec rm -rf {} + \
  && find /install -name '*.pyi' -delete
