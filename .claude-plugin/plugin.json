@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
   "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, svg-generator, storyboard-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -53,6 +53,21 @@
         "-v",
         "${HOME}/.cache/huggingface:/root/.cache/huggingface",
         "harbor.bzd.gg/bzd/faster-whisper-mcp:0.1.0"
+      ]
+    },
+    "document-ocr": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--network",
+        "none",
+        "-e",
+        "DOCUMENT_OCR_ROOTS=${HOME}/.config/llm-toolbox/whatsapp-downloads",
+        "-v",
+        "${HOME}/.config/llm-toolbox/whatsapp-downloads:${HOME}/.config/llm-toolbox/whatsapp-downloads:ro",
+        "harbor.bzd.gg/bzd/document-ocr-mcp:0.1.0"
       ]
     },
     "whatsapp": {

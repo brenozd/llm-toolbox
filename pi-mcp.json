@@ -28,6 +28,13 @@
         "exec docker run -i --rm -v \"${HOME}:${HOME}:ro\" -v \"${HOME}/.cache/huggingface:/root/.cache/huggingface\" harbor.bzd.gg/bzd/faster-whisper-mcp:0.1.0"
       ]
     },
+    "document-ocr": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "exec docker run -i --rm --network none -e \"DOCUMENT_OCR_ROOTS=${HOME}/.config/llm-toolbox/whatsapp-downloads\" -v \"${HOME}/.config/llm-toolbox/whatsapp-downloads:${HOME}/.config/llm-toolbox/whatsapp-downloads:ro\" harbor.bzd.gg/bzd/document-ocr-mcp:0.1.0"
+      ]
+    },
     "whatsapp": {
       "command": "sh",
       "args": [
