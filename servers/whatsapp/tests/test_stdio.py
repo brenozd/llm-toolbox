@@ -17,29 +17,43 @@ LIST = {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}
 
 
 def run_probe():
+    # stdin stays open until the tools/list answer arrives, like a real client; EOF would cancel it
     with tempfile.TemporaryDirectory() as d:
-        proc = subprocess.run([sys.executable, str(PROBE), d],
-                              input="\n".join(json.dumps(m) for m in (INIT, INITED, LIST)) + "\n",
-                              capture_output=True, text=True, timeout=120, check=False)
+        proc = subprocess.Popen([sys.executable, str(PROBE), d], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True)
+        out = []
+        try:
+            for m in (INIT, INITED, LIST):
+                proc.stdin.write(json.dumps(m) + "\n")
+                proc.stdin.flush()
+            for line in proc.stdout:
+                out.append(line)
+                if line.strip() and json.loads(line).get("id") == 2:
+                    break
+        finally:
+            proc.stdin.close()
+            rest, err = proc.communicate(timeout=60)
+    proc.stdout_text = "".join(out) + rest
+    proc.stderr_text = err
     return proc
 
 
 def test_stdout_is_pure_json_rpc():
     proc = run_probe()
-    assert proc.returncode == 0, proc.stderr
-    lines = [line for line in proc.stdout.splitlines() if line.strip()]
-    assert lines, f"no JSON-RPC response; stderr={proc.stderr}"
+    assert proc.returncode == 0, proc.stderr_text
+    lines = [line for line in proc.stdout_text.splitlines() if line.strip()]
+    assert lines, f"no JSON-RPC response; stderr={proc.stderr_text}"
     for line in lines:
         payload = json.loads(line)  # any junk on stdout fails here
         assert payload.get("jsonrpc") == "2.0", line
     for junk in JUNK:
-        assert junk not in proc.stdout, f"{junk} leaked into stdout"
-        assert junk in proc.stderr, f"{junk} was not redirected to stderr"
+        assert junk not in proc.stdout_text, f"{junk} leaked into stdout"
+        assert junk in proc.stderr_text, f"{junk} was not redirected to stderr"
 
 
 def test_handshake_lists_tools():
     proc = run_probe()
-    payloads = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+    payloads = [json.loads(line) for line in proc.stdout_text.splitlines() if line.strip()]
     listed = [p for p in payloads if p.get("id") == 2]
     assert listed, payloads
     names = [t["name"] for t in listed[0]["result"]["tools"]]
