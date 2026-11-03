@@ -31,8 +31,7 @@ def run_probe():
                 if line.strip() and json.loads(line).get("id") == 2:
                     break
         finally:
-            proc.stdin.close()
-            rest, err = proc.communicate(timeout=60)
+            rest, err = proc.communicate(timeout=60)  # closes stdin itself; closing it first breaks 3.12
     proc.stdout_text = "".join(out) + rest
     proc.stderr_text = err
     return proc
