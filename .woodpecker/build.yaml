@@ -75,6 +75,25 @@ steps:
       - event: tag
         ref: refs/tags/audio-transcribe-v*
 
+  - name: document-ocr
+    image: woodpeckerci/plugin-docker-buildx
+    settings:
+      registry: harbor.bzd.gg
+      username: { from_secret: harbor_registry_user }
+      password: { from_secret: harbor_registry_password }
+      repo: harbor.bzd.gg/bzd/document-ocr-mcp
+      dockerfile: servers/document-ocr/Dockerfile
+      context: servers/document-ocr
+      platforms: linux/amd64
+      provenance: false
+      tags: [latest, "sha-${CI_COMMIT_SHA}", "0.1.0"]
+    when:
+      - event: [push, manual]
+        branch: master
+        path: { include: ["servers/document-ocr/**", ".woodpecker/**"] }
+      - event: tag
+        ref: refs/tags/document-ocr-v*
+
   # The `-exec` entry invariant (M7) lives in scripts/validate-plugin.py: stdlib-only, no image
   # build and ~1 s, so it gates the pipeline before the storyboard-video steps below.
   - name: plugin-test
