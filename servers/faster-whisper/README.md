@@ -7,7 +7,7 @@ MCP server exposing speech-to-text transcription via
 > at server startup — the first transcription in a session is slower while
 > the model downloads/initializes.
 
-> **Non-obvious:** the image keeps `onnxruntime` (+65 MB) because VAD needs it; segment timestamps are relative to the audio after VAD cuts, so they can drift on files with long silences.
+> **Non-obvious:** VAD (`vad_filter`) is deliberately off: on 80 public pt-BR clips (FLEURS + Common Voice, `small`, int8) it raised WER from 0.093 to 0.121 (clean) and 0.114 to 0.150 (10 s silence in the middle), and needs `onnxruntime` (+65 MB). `large-v3-turbo` measured WER 0.049 on the same set at ~2.5x the CPU time.
 
 > **Non-obvious:** no weights are baked into the image. The model is downloaded
 > from Hugging Face on first use into `/root/.cache/huggingface` inside the
@@ -84,4 +84,4 @@ docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 faster-whisper-mcp
 
 | Tool | Description |
 |---|---|
-| `transcribe` | Transcribe a local audio file to text, with per-segment timestamps. Pass a BCP-47-ish `language` code (e.g. `en`, `pt`) to skip auto-detection. `initial_prompt` biases spelling of names/jargon; `output_format` is `json` (default) or `text`. Silence is skipped with Silero VAD and known silence hallucinations (e.g. "Legendas pela comunidade Amara.org") are dropped |
+| `transcribe` | Transcribe a local audio file to text, with per-segment timestamps. Pass a BCP-47-ish `language` code (e.g. `en`, `pt`) to skip auto-detection. `initial_prompt` biases spelling of names/jargon; `output_format` is `json` (default) or `text`. Known silence hallucinations (e.g. "Legendas pela comunidade Amara.org") are dropped |

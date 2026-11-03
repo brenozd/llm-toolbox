@@ -1,6 +1,6 @@
 [project]
 name = "faster-whisper-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server exposing speech-to-text transcription via faster-whisper."
 requires-python = ">=3.11"
 # Both pins are load-bearing:

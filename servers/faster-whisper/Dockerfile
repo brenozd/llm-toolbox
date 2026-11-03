@@ -2,15 +2,16 @@
 # compiled wheels (ctranslate2, av, tokenizers) match the interpreter that loads them.
 FROM python:3.11-slim-bookworm AS build
 
-# onnxruntime (and its sympy/coloredlogs deps) is kept: transcribe() runs Silero VAD to cut
-# silence, which is what stops Whisper hallucinating on pauses in WhatsApp voice notes.
+# onnxruntime only backs Silero VAD, and transcribe() never passes vad_filter — it is a 67 MB
+# transitive dependency we can leave out. Uninstalled here, in the builder's real site-packages
+# (a --prefix tree is not on sys.path, so an uninstall there would be a silent no-op).
 WORKDIR /app
 COPY pyproject.toml ./
 COPY faster_whisper_mcp ./faster_whisper_mcp
 # cryptography/cffi/pycparser arrive only through mcp -> pyjwt[crypto]; this stdio server signs nothing.
 # pip/setuptools/wheel are packaging tools the runtime never imports.
 RUN pip install --no-cache-dir --no-compile . \
- && pip uninstall -y cryptography cffi pycparser \
+ && pip uninstall -y onnxruntime sympy mpmath coloredlogs humanfriendly flatbuffers cryptography cffi pycparser \
  && SP=/usr/local/lib/python3.11/site-packages \
  && rm -rf $SP/pip* $SP/setuptools* $SP/wheel* $SP/pkg_resources $SP/_distutils_hack $SP/distutils-precedence.pth \
  && find $SP -name __pycache__ -prune -exec rm -rf {} + \
