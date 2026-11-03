@@ -1,8 +1,7 @@
-# faster-whisper-mcp
+# audio-transcribe-mcp
 
 MCP server exposing speech-to-text transcription via NVIDIA Parakeet-TDT 0.6B v3 running on
-[transcribe-cpp](https://github.com/handy-computer/transcribe.cpp) (ggml, CPU), over stdio. The
-name is historical: it used faster-whisper until 0.3.0.
+[transcribe-cpp](https://github.com/handy-computer/transcribe.cpp) (ggml, CPU), over stdio. Formerly `faster-whisper-mcp` (renamed in 0.3.0).
 
 > **Non-obvious:** the model loads lazily on the first `transcribe` call, not
 > at server startup — the first transcription in a session is slower while
@@ -37,13 +36,13 @@ inside the container.
 ## Image
 
 ```bash
-docker pull harbor.bzd.gg/bzd/faster-whisper-mcp:latest
+docker pull harbor.bzd.gg/bzd/audio-transcribe-mcp:latest
 ```
 
 To build locally instead:
 
 ```bash
-docker build -t harbor.bzd.gg/bzd/faster-whisper-mcp:latest .
+docker build -t harbor.bzd.gg/bzd/audio-transcribe-mcp:latest .
 ```
 
 ## Tests
@@ -53,8 +52,8 @@ image is distroless and has no Python tooling, so mount the tests into the
 image and run them with the runtime interpreter:
 
 ```bash
-docker build -t faster-whisper-mcp:dev .
-docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 faster-whisper-mcp:dev \
+docker build -t audio-transcribe-mcp:dev .
+docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 audio-transcribe-mcp:dev \
   -c "import sys; sys.path.insert(0,'/w'); import tests.test_contract as tc;
       [getattr(tc, n)() for n in dir(tc) if n.startswith('test_')]; print('ok')"
 ```
@@ -64,13 +63,13 @@ docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 faster-whisper-mcp
 ```json
 {
   "mcpServers": {
-    "faster-whisper": {
+    "audio-transcribe": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
         "-v", "${HOME}:${HOME}:ro",
         "-v", "${HOME}/.cache/huggingface:/root/.cache/huggingface",
-        "harbor.bzd.gg/bzd/faster-whisper-mcp:latest"
+        "harbor.bzd.gg/bzd/audio-transcribe-mcp:latest"
       ]
     }
   }

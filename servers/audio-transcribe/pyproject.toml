@@ -1,5 +1,5 @@
 [project]
-name = "faster-whisper-mcp"
+name = "audio-transcribe-mcp"
 version = "0.3.0"
 description = "MCP server exposing speech-to-text transcription via Parakeet (transcribe-cpp)."
 requires-python = ">=3.11"
@@ -16,11 +16,11 @@ dependencies = [
 test = ["pytest>=8"]
 
 [project.scripts]
-faster-whisper-mcp = "faster_whisper_mcp.server:main"
+audio-transcribe-mcp = "audio_transcribe_mcp.server:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["faster_whisper_mcp*"]
+include = ["audio_transcribe_mcp*"]

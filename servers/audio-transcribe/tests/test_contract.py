@@ -36,7 +36,7 @@ def test_native_engine_is_pinned() -> None:
 
 
 def test_default_model_is_parakeet_v3_and_overridable() -> None:
-    from faster_whisper_mcp.config import load_config
+    from audio_transcribe_mcp.config import load_config
 
     saved = os.environ.pop("ASR_MODEL_FILE", None)
     try:

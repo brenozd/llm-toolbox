@@ -4,7 +4,7 @@ FROM python:3.11-slim-bookworm AS build
 
 WORKDIR /app
 COPY pyproject.toml ./
-COPY faster_whisper_mcp ./faster_whisper_mcp
+COPY audio_transcribe_mcp ./audio_transcribe_mcp
 # cryptography/cffi/pycparser arrive only through mcp -> pyjwt[crypto]; this stdio server signs nothing.
 # pip/setuptools/wheel are packaging tools the runtime never imports.
 RUN pip install --no-cache-dir --no-compile . \
@@ -24,4 +24,4 @@ COPY --from=build /usr/local/lib/python3.11/site-packages /usr/lib/python3/dist-
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 VOLUME ["/audio"]
-ENTRYPOINT ["/usr/bin/python3", "-m", "faster_whisper_mcp.server"]
+ENTRYPOINT ["/usr/bin/python3", "-m", "audio_transcribe_mcp.server"]

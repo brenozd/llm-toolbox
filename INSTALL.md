@@ -81,7 +81,7 @@ shared `.agents/skills/` path above.
 ## MCP servers
 
 The plugin (`/plugin install llm-toolbox@llm-toolbox`) registers
-`actual-budget`, `woodpecker`, `vikunja`, `faster-whisper`, `storyboard-video`, `storyboard-video-exec`, and `whatsapp` MCPs automatically — no
+`actual-budget`, `woodpecker`, `vikunja`, `audio-transcribe`, `storyboard-video`, `storyboard-video-exec`, and `whatsapp` MCPs automatically — no
 need to hand-copy JSON. `actual-budget`, `woodpecker`, `vikunja` and `whatsapp` each need their own
 `config.json` (see
 [`servers/actual-budget/README.md`](servers/actual-budget/README.md#config)
@@ -102,9 +102,9 @@ fails to mount a config, so its tools won't appear — check `/mcp` in Claude
 Code to confirm they are connected. Skip a file for a server you don't need;
 that one just won't come up.
 
-`faster-whisper` needs no config file — it mounts your home directory
+`audio-transcribe` needs no config file — it mounts your home directory
 read-only instead, and is tuned with env vars if needed (see
-[`servers/faster-whisper/README.md`](servers/faster-whisper/README.md#config)).
+[`servers/audio-transcribe/README.md`](servers/audio-transcribe/README.md#config)).
 
 `whatsapp` also needs a one-time QR pairing (`docker run -it ... login`, see
 [`servers/whatsapp/README.md`](servers/whatsapp/README.md#login)), keeps its

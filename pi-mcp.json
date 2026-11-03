@@ -21,11 +21,11 @@
         "exec docker run -i --rm -v \"${HOME}/.config/llm-toolbox/vikunja.json:/config/config.json:ro\" harbor.bzd.gg/bzd/vikunja-mcp:0.1.0"
       ]
     },
-    "faster-whisper": {
+    "audio-transcribe": {
       "command": "sh",
       "args": [
         "-c",
-        "exec docker run -i --rm -v \"${HOME}:${HOME}:ro\" -v \"${HOME}/.cache/huggingface:/root/.cache/huggingface\" harbor.bzd.gg/bzd/faster-whisper-mcp:0.3.0"
+        "exec docker run -i --rm -v \"${HOME}:${HOME}:ro\" -v \"${HOME}/.cache/huggingface:/root/.cache/huggingface\" harbor.bzd.gg/bzd/audio-transcribe-mcp:0.3.0"
       ]
     },
     "document-ocr": {

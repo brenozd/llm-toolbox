@@ -38,7 +38,7 @@ Copy `config.example.json` and mount it read-only into the container at
 - `media_dir` — the only place outgoing files may come from. Mount it read-only.
 - `max_media_bytes` — size cap for sent and downloaded media (default 64 MiB).
 - `downloads_dir` — optional host directory for `whatsapp_download_media`, so the
-  files are reachable from the host and from other MCPs (e.g. `faster-whisper`
+  files are reachable from the host and from other MCPs (e.g. `audio-transcribe`
   for voice notes). Mount it at the **same absolute path** as on the host so the
   returned path works as-is. It must already exist; files are written `0640`.
   Default `null`: `/data/downloads`, private to the container.
@@ -66,7 +66,7 @@ chmod 2770 ~/.config/llm-toolbox/whatsapp-downloads   # group = your primary gro
 Set `"downloads_dir": "/home/<you>/.config/llm-toolbox/whatsapp-downloads"` in
 the config and add `-v D:D --group-add <your gid>` to the `docker run` (see
 `pi-mcp.json`). Then `whatsapp_download_media` → path under `$HOME` →
-`faster-whisper` `transcribe(audio_path=...)`, no extra server needed.
+`audio-transcribe` `transcribe(audio_path=...)`, no extra server needed.
 
 ## Image
 
@@ -207,7 +207,7 @@ guessed phone number.
   oldest stored message. It is asynchronous, needs the phone online, and extra
   requests are one more unofficial-protocol signal to WhatsApp.
 - Not implemented by design: group management, audio transcription and OCR
-  (do them on the host over `downloads_dir`: `faster-whisper` for audio,
+  (do them on the host over `downloads_dir`: `audio-transcribe` for audio,
   `tesseract <img> - -l por+eng` for images, `pdftoppm -r 200 -png` first for PDFs),
   image/video viewing, reactions and edits.
 - Known upgrade point: `mcp` 2.x renames `FastMCP` to `MCPServer`; the pin stays
