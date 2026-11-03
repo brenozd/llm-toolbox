@@ -29,9 +29,10 @@ def _model(ctx: Context) -> WhisperModel:
 
 
 @mcp.tool()
-def transcribe(ctx: Context, audio_path: str, language: str | None = None) -> object:
-    """Transcribe a local audio file to text using faster-whisper. Pass a BCP-47-ish language code (e.g. 'en', 'pt') to skip auto-detection."""
-    return t.transcribe(_model(ctx), audio_path, language)
+def transcribe(ctx: Context, audio_path: str, language: str | None = None,
+               initial_prompt: str | None = None, output_format: str = "json") -> object:
+    """Transcribe a local audio file to text using faster-whisper (silence is skipped with VAD). Pass a BCP-47-ish language code (e.g. 'en', 'pt') to skip auto-detection. initial_prompt: names/jargon to bias spelling. output_format: 'json' (segments with timestamps, default) or 'text'."""
+    return t.transcribe(_model(ctx), audio_path, language, initial_prompt, output_format)
 
 
 def main() -> None:

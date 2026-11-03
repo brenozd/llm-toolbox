@@ -7,6 +7,8 @@ MCP server exposing speech-to-text transcription via
 > at server startup — the first transcription in a session is slower while
 > the model downloads/initializes.
 
+> **Non-obvious:** the image keeps `onnxruntime` (+65 MB) because VAD needs it; segment timestamps are relative to the audio after VAD cuts, so they can drift on files with long silences.
+
 > **Non-obvious:** no weights are baked into the image. The model is downloaded
 > from Hugging Face on first use into `/root/.cache/huggingface` inside the
 > container, which is thrown away with `--rm`. On a slow link the first call can
@@ -82,4 +84,4 @@ docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 faster-whisper-mcp
 
 | Tool | Description |
 |---|---|
-| `transcribe` | Transcribe a local audio file to text, with per-segment timestamps. Pass a BCP-47-ish `language` code (e.g. `en`, `pt`) to skip auto-detection |
+| `transcribe` | Transcribe a local audio file to text, with per-segment timestamps. Pass a BCP-47-ish `language` code (e.g. `en`, `pt`) to skip auto-detection. `initial_prompt` biases spelling of names/jargon; `output_format` is `json` (default) or `text`. Silence is skipped with Silero VAD and known silence hallucinations (e.g. "Legendas pela comunidade Amara.org") are dropped |
