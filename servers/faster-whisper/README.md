@@ -1,29 +1,30 @@
 # faster-whisper-mcp
 
-MCP server exposing speech-to-text transcription via
-[faster-whisper](https://github.com/SYSTRAN/faster-whisper), over stdio.
+MCP server exposing speech-to-text transcription via NVIDIA Parakeet-TDT 0.6B v3 running on
+[transcribe-cpp](https://github.com/handy-computer/transcribe.cpp) (ggml, CPU), over stdio. The
+name is historical: it used faster-whisper until 0.3.0.
 
 > **Non-obvious:** the model loads lazily on the first `transcribe` call, not
 > at server startup — the first transcription in a session is slower while
 > the model downloads/initializes.
 
-> **Non-obvious:** VAD (`vad_filter`) is deliberately off: on 80 public pt-BR clips (FLEURS + Common Voice, `small`, int8) it raised WER from 0.093 to 0.121 (clean) and 0.114 to 0.150 (10 s silence in the middle), and needs `onnxruntime` (+65 MB). `large-v3-turbo` measured WER 0.049 on the same set at ~2.5x the CPU time.
+> **Non-obvious:** the model (`parakeet-tdt-0.6b-v3-Q8_0.gguf`, ~740 MB) is downloaded from
+> Hugging Face into the mounted cache on first use; the image has no weights.
 
-> **Non-obvious:** no weights are baked into the image. The model is downloaded
-> from Hugging Face on first use into `/root/.cache/huggingface` inside the
-> container, which is thrown away with `--rm`. On a slow link the first call can
-> take minutes; the plugin entry mounts `${HOME}/.cache/huggingface` (the host HF cache, shared)
-> so it is downloaded once. (`XDG_CACHE_HOME` is not expanded by the plugin launcher, so the path is fixed.)
+> **Non-obvious:** why Parakeet and not Whisper. On 80 public pt-BR clips (FLEURS + Common Voice,
+> read speech, ~12 min) plus 20 with 10 s of silence inserted, 12 CPU threads: Parakeet WER 0.055 / 0.057
+> in 46 s; faster-whisper `large-v3-turbo` 0.049 / 0.041 in 644 s; `small` 0.093 / 0.114 in 260 s.
+> Silero VAD made `small` worse (0.121). Not measured on noisy real-world audio.
 
-## Config
+> **Non-obvious:** audio is cut into fixed 60 s windows (a 640 s buffer segfaulted the native
+> engine), so a word on a boundary can be split; there is no `initial_prompt`/hotwords, Parakeet has none.
 
 No config file. Behavior is tuned with env vars, all optional:
 
 | Var | Default | Notes |
 |---|---|---|
-| `WHISPER_MODEL` | `small` | Any faster-whisper model size (`tiny`, `base`, `small`, `medium`, …). `tiny` is ~4x faster but garbles pt-BR accents and identifiers (WER 0.40 vs 0.00 on short accented lines) — use it only for throwaway checks |
-| `WHISPER_DEVICE` | `cpu` | `cpu` or `cuda` |
-| `WHISPER_COMPUTE_TYPE` | `int8` | e.g. `int8`, `float16` |
+| `ASR_MODEL_REPO` | `handy-computer/parakeet-tdt-0.6b-v3-gguf` | Hugging Face repo with the GGUF |
+| `ASR_MODEL_FILE` | `parakeet-tdt-0.6b-v3-Q8_0.gguf` | File in that repo (`Q4_K_M` is 485 MB, unmeasured) |
 
 The container mounts `${HOME}:${HOME}:ro` (see plugin manifest) so
 `audio_path` must be a host path under your home directory, readable from
@@ -31,11 +32,7 @@ inside the container.
 
 ## Dependency pins
 
-`pyproject.toml` pins `faster-whisper>=1.2.1,<1.3` and `av>=11,<19`. Both are
-load-bearing: faster-whisper 1.2.1 calls `av.open(..., metadata_errors="ignore")`
-and PyAV **19 removed that kwarg**, so with `av` 19 every `transcribe` fails with
-`open() got an unexpected keyword argument 'metadata_errors'`. Do not lift the
-`<19` ceiling until faster-whisper ships the fix.
+`transcribe-cpp==0.2.3` is pinned exactly: it is a 0.x API and the native library ships separately.
 
 ## Image
 
@@ -84,4 +81,4 @@ docker run --rm -v "$PWD:/w:ro" --entrypoint /usr/bin/python3 faster-whisper-mcp
 
 | Tool | Description |
 |---|---|
-| `transcribe` | Transcribe a local audio file to text, with per-segment timestamps. Pass a BCP-47-ish `language` code (e.g. `en`, `pt`) to skip auto-detection. `initial_prompt` biases spelling of names/jargon; `output_format` is `json` (default) or `text`. Known silence hallucinations (e.g. "Legendas pela comunidade Amara.org") are dropped |
+| `transcribe` | Transcribe a local audio file (ogg/opus, m4a, mp3, wav…) to text. `language` is optional (e.g. `pt`); `output_format` is `json` (60 s segments with timestamps, default) or `text` |
