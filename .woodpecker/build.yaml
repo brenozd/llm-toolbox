@@ -96,10 +96,12 @@ steps:
 
   # The `-exec` entry invariant (M7) lives in scripts/validate-plugin.py: stdlib-only, no image
   # build and ~1 s, so it gates the pipeline before the storyboard-video steps below.
+  # test_lazy_mcp.py fakes `docker` with a stdlib MCP server, so it needs no daemon either.
   - name: plugin-test
     image: python:3.12-slim
     commands:
       - python scripts/test_validate_plugin.py
+      - python scripts/test_lazy_mcp.py
       - python scripts/release.py check
     when:
       - event: [push, manual]
