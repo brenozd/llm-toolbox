@@ -15,7 +15,7 @@ MCP servers packaged as OCI containers (Python), plus reusable agent skills, sub
 - **Agents** — standalone subagents for isolated-context or async work.
 - **Extensions** — Pi extensions (`extensions/tutor`, `extensions/safe-bash`) shipped with the package.
 
-Everything here is deliberately small: each server is a single-purpose Python MCP server, each skill is a set of instructions, and no server runs longer than it is being used.
+Everything here is deliberately small: each server is a single-purpose Python MCP server, each skill is a set of instructions, and no server runs longer than it is being used — with one deliberate exception, `whatsapp`, which is never idle-stopped (its pairing session degrades on restart, so it runs with `LAZY_MCP_IDLE_SECONDS=0`; see [Resource usage](#resource-usage-and-lazy-loading)).
 
 ### Agents
 
