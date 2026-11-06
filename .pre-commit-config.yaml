@@ -5,13 +5,12 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-added-large-files
-        exclude: ^docs/reference/  # the reference video
       - id: check-toml
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.1
     hooks:
     - id: codespell
-      args: [-L, "actualpy,meu,te,oficial,erro,fo,nd,handel,anull,anullsrc,fase,fases,comando,dito,expresso", -S, "docs/storyboard-video-*.md"]
+      args: [-L, "actualpy,meu,te,oficial,erro,fo,nd,handel,anull,anullsrc,fase,fases,comando,dito,expresso"]
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.2
     hooks:
