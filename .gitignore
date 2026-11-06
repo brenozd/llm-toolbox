@@ -4,9 +4,21 @@ __pycache__/
 venv/
 *.egg-info/
 build/
+target/
+node_modules/
 dist/
 .pytest_cache/
-config.json
-data/
+.mypy_cache/
+.ruff_cache/
+
+# local config: only the *.example.json templates are versioned
+/config.json
+servers/*/config.json
+servers/*/data/
+
 .images/
 .screenshots/
+.claude/settings.local.json
+.env*
+*.log
+.DS_Store
