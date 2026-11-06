@@ -10,7 +10,8 @@
 
 Source of truth: servers/*/pyproject.toml `version` (MCP) and skills/*/SKILL.md `metadata.version` (skill).
 Derived: plugin.json image pins, skill `requires-mcp` (server major.minor), plugin/marketplace/package
-versions, pi-mcp.json (for Pi), and the image tags in .woodpecker/build.yaml (CI publishes on push to master).
+versions, pi-mcp.json (for Pi), the README version cells, and the image tags in .woodpecker/build.yaml
+(CI publishes on push to master).
 """
 import json
 import re
@@ -26,9 +27,12 @@ MARKET = ".claude-plugin/marketplace.json"
 PACKAGE = "package.json"
 PI_MCP = "pi-mcp.json"
 BUILD = ".woodpecker/build.yaml"
+README = "README.md"
 PLUGIN_PREFIXES = ("skills/", "servers/", "agents/", "commands/", "hooks/", "scripts/lazy-mcp.py")
 VERSION = re.compile(r'^version = "(\d+\.\d+\.\d+)"', re.M)
 JSON_VERSION = re.compile(r'^(  "version": ")[^"]+(")', re.M)
+# README server rows pin the image and carry the version in one backticked semver cell
+VERSION_CELL = re.compile(r"`\d+\.\d+\.\d+`")
 
 
 def level(msg: str) -> str:
@@ -94,6 +98,24 @@ def pi_mcp(plugin: dict) -> dict:
     return {"mcpServers": servers}
 
 
+def readme_versions(text: str, servers: dict[str, str]) -> str:
+    """Rewrite the version cell of every README row that pins a first-party image.
+
+    A row is any line naming `harbor.bzd.gg/bzd/<image>`; its single backticked semver is the
+    human-readable version, which must match the server's pyproject.toml.
+    """
+    if not servers:
+        return text
+    out = []
+    for line in text.splitlines(keepends=True):
+        for name, ver in servers.items():
+            if re.search(rf"harbor\.bzd\.gg/bzd/{re.escape(name)}(?![\w-])", line):
+                line = VERSION_CELL.sub(f"`{ver}`", line, count=1)
+                break
+        out.append(line)
+    return "".join(out)
+
+
 def plan(root: Path, changed: set[str] | None, head: Callable[[str], str], lvl: str = "patch") -> dict[str, str]:
     """Desired content of every derived/bumped file. `changed` None = no bumps (check mode)."""
     files: dict[str, str] = {}
@@ -147,6 +169,11 @@ def plan(root: Path, changed: set[str] | None, head: Callable[[str], str], lvl: 
     for rel in (MARKET, PACKAGE):
         files[rel] = JSON_VERSION.sub(rf"\g<1>{plugin_v}\2", (root / rel).read_text(), count=1)
     files[PI_MCP] = json.dumps(pi_mcp(json.loads(text)), indent=2) + "\n"
+
+    # 5. README server rows show the same versions (docs only: they never bump a version themselves)
+    readme = root / README
+    if readme.is_file():
+        files[README] = readme_versions(readme.read_text(), servers)
 
     build = (root / BUILD).read_text()
 

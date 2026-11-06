@@ -9,6 +9,7 @@ split). Run with `python3 -m pytest scripts/test_validate_plugin.py` or
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -256,14 +257,41 @@ class PiMcpTest(unittest.TestCase):
 class ReleaseBumpTest(unittest.TestCase):
     """scripts/release.py: a server change bumps server + plugin once; unrelated edits bump nothing."""
 
-    def plan(self, changed):
-        import importlib.util
+    @staticmethod
+    def release():
         spec = importlib.util.spec_from_file_location("release", Path(__file__).parent / "release.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
+        return mod
+
+    def plan(self, changed):
+        mod = self.release()
         root = mod.ROOT
         # HEAD == working tree, so "cur == old" holds and a touched component must bump
         return mod.plan(root, changed, lambda p: (root / p).read_text() if (root / p).exists() else "")
+
+    def test_readme_version_cell_tracks_the_server(self):
+        """README server rows show the pyproject version, so a bump rewrites the cell."""
+        mod = self.release()
+        files = self.plan({"servers/vikunja/vikunja_mcp/x.py"})
+        ver = re.search(r'^version = "([^"]+)"', files["servers/vikunja/pyproject.toml"], re.M)[1]
+        row = next(r for r in files["README.md"].splitlines() if "harbor.bzd.gg/bzd/vikunja-mcp" in r)
+        self.assertIn(f"`{ver}`", row)
+        self.assertEqual(files["README.md"].count(f"`{ver}`"), 1)
+        self.assertEqual(mod.readme_versions(files["README.md"], {"vikunja-mcp": ver}), files["README.md"])
+
+    def test_stale_readme_version_cell_is_rewritten(self):
+        """A hand-edited cell is stale: `check` sees it (plan differs) and a write fixes it."""
+        mod = self.release()
+        line = "| [`servers/vikunja`](servers/vikunja/) | tasks | [`harbor.bzd.gg/bzd/vikunja-mcp`](u) | `0.0.9` | x |\n"
+        fixed = mod.readme_versions(line, {"vikunja-mcp": "0.1.0"})
+        self.assertIn("`0.1.0`", fixed)
+        self.assertNotIn("0.0.9", fixed)
+        self.assertEqual(fixed.count("`0.1.0`"), 1)
+        # rows of other servers, and lines without an image pin, are left alone
+        other = "| [`servers/woodpecker`](servers/woodpecker/) | x | [`harbor.bzd.gg/bzd/woodpecker-mcp`](u) | `0.0.9` |\n"
+        self.assertEqual(mod.readme_versions(other, {"vikunja-mcp": "0.1.0"}), other)
+        self.assertEqual(mod.readme_versions("`0.0.9`\n", {"vikunja-mcp": "0.1.0"}), "`0.0.9`\n")
 
     def test_no_change_no_bump(self):
         files = self.plan(set())
