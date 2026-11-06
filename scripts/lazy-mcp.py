@@ -134,7 +134,12 @@ class Cache:
         self._drop_stale()
 
     def _drop_stale(self) -> None:
-        """One cache file per entry: a new image tag invalidates the old one."""
+        """One cache file per entry: a new image tag invalidates the old one.
+
+        The file name is only a cheap prefilter. Whether a file belongs to this entry
+        is decided by the `name` field inside it, because entries whose names share a
+        prefix (`storyboard-video` vs `storyboard-video-exec`) share this directory.
+        """
         prefix = _slot(self.name) + "-"
         try:
             names = os.listdir(self.dir)
@@ -142,11 +147,22 @@ class Cache:
             return
         for name in names:
             path = os.path.join(self.dir, name)
-            if name.startswith(prefix) and name.endswith(".json") and path != self.path:
+            if not (name.startswith(prefix) and name.endswith(".json")) or path == self.path:
+                continue
+            if self._belongs_to_us(path):
                 try:
                     os.unlink(path)
                 except OSError:
                     pass
+
+    def _belongs_to_us(self, path: str) -> bool:
+        """Read the cache file's own `name`; never trust the file name alone."""
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return False  # unreadable: leave it, it may be another entry's cache
+        return isinstance(data, dict) and data.get("name") == self.name
 
 
 class Shim:
@@ -296,7 +312,8 @@ class Shim:
                 if slot is not None:
                     slot[0] = msg
                     self.cond.notify_all()
-            return
+                    return
+            # not ours: a client id that merely shares the prefix, forwarded below
         if "method" in msg:
             if msg.get("method") == "notifications/tools/list_changed":
                 # shortcut: the real server changed under us; stop trusting the cached
@@ -462,8 +479,7 @@ class Shim:
         try:
             initialize, lists = self._handshake(params)
         except SpawnError as exc:
-            with self.lock:
-                self.state = "idle"
+            self._stop_child("handshake")  # a half-initialized child must not linger
             tail = self._tail()
             self.fail(rid, f"lazy-mcp: cannot start the MCP server: {exc}{tail_of(tail)}")
             return
@@ -494,8 +510,8 @@ class Shim:
             initialize, lists = self._handshake(params)
         except SpawnError as exc:
             with self.lock:
-                self.state = "idle"
                 queued, self.queue = self.queue, []
+            self._stop_child("handshake")  # a half-initialized child must not linger
             tail = self._tail()
             message = f"lazy-mcp: cannot start the MCP server: {exc}{tail_of(tail)}"
             for msg, _ in queued:
@@ -530,11 +546,21 @@ class Shim:
             self.fail(rid, "lazy-mcp: the MCP server is not available")
 
     def _enqueue(self, msg: dict, raw: str, start: bool) -> None:
+        """Queue for a spawn in flight, or deliver if the flush finished meanwhile.
+
+        The caller's state check races with `_spawn_then_flush` draining the queue and
+        flipping to "running", so it is re-checked under the lock here: queueing after
+        that point would leave the request without an answer forever.
+        """
         with self.lock:
-            self.queue.append((msg, raw))
-            if start:
-                self.state = "starting"
-        if start:
+            deliver = self.state == "running"
+            if not deliver:
+                self.queue.append((msg, raw))
+                if start:
+                    self.state = "starting"
+        if deliver:
+            self._deliver(msg, raw)
+        elif start:
             threading.Thread(target=self._spawn_then_flush, daemon=True).start()
 
     def _forward(self, msg: dict, raw: str) -> None:
@@ -595,7 +621,7 @@ class Shim:
                     continue
                 try:
                     self.handle(msg, raw)
-                except Exception as exc:  # never take the session down on one bad message
+                except Exception as exc:  # noqa: BLE001 - one bad message must not end the session
                     sys.stderr.write(f"lazy-mcp: {exc}\n")
         except (OSError, KeyboardInterrupt):
             pass

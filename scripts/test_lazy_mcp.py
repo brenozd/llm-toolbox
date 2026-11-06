@@ -5,8 +5,9 @@ The shim runs as a real subprocess and is driven over stdio. `docker` on PATH is
 throwaway wrapper that execs this same file in `--fake-child` mode: a tiny MCP
 server that appends one line per start to a counter file (so a test can assert how
 many containers were really started) and whose behaviour is switched by a flag file
-(die mid-call, exit on start, changed tool list).
+(die mid-call, exit on start, refuse the handshake, changed tool list).
 """
+import importlib.util
 import json
 import os
 import pathlib
@@ -17,6 +18,7 @@ import tempfile
 import threading
 import time
 import unittest
+from unittest import mock
 
 HERE = pathlib.Path(__file__).resolve().parent
 SHIM = HERE / "lazy-mcp.py"
@@ -34,6 +36,14 @@ TOOLS_V2 = TOOLS + [
 def _write(msg):
     sys.stdout.write(json.dumps(msg, separators=(",", ":")) + "\n")
     sys.stdout.flush()
+
+
+def load_shim():
+    """The shim module loaded in-process, for the white-box tests (no subprocess)."""
+    spec = importlib.util.spec_from_file_location("lazy_mcp_shim", SHIM)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _note(text):
@@ -70,6 +80,10 @@ def fake_child() -> int:
             _note(f"{method} {json.dumps(msg.get('params'))}")
             continue
         if method == "initialize":
+            if mode == "fail-init":  # start fine, then refuse the handshake and stay up
+                _write({"jsonrpc": "2.0", "id": rid,
+                        "error": {"code": -32603, "message": "handshake refused"}})
+                continue
             params = msg.get("params") or {}
             result = {
                 "protocolVersion": params.get("protocolVersion", "2024-11-05"),
@@ -234,6 +248,18 @@ class Harness:
 
     def cache_files(self) -> list:
         return sorted(self.cache_dir.glob("*.json")) if self.cache_dir.exists() else []
+
+    def write_cache(self, filename: str, entry: str) -> pathlib.Path:
+        """A cache file as another shim entry would have written it."""
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        path = self.cache_dir / filename
+        path.write_text(json.dumps({
+            "schema": 1, "name": entry, "image": f"{IMAGE}:0.9", "saved": 0,
+            "initialize": {"protocolVersion": "2024-11-05", "capabilities": {},
+                           "serverInfo": {"name": entry, "version": "0.9"}},
+            "tools": [], "resources": None, "resourceTemplates": None, "prompts": None,
+        }), encoding="utf-8")
+        return path
 
     def stop(self, timeout: float = 25.0):
         if self.proc is None:
@@ -483,6 +509,82 @@ class LazyShimTest(unittest.TestCase):
         self.assertEqual(harness.starts(), 1)
         pid = harness.pids()[-1]
         self.assertIsNotNone(wait_until(lambda: not alive(pid), timeout=8))
+
+    def test_stale_cleanup_spares_sibling_entry_cache(self) -> None:
+        """`demo` must not delete `demo-exec`'s cache just because the names share a prefix."""
+        harness = self.shim()
+        sibling = harness.write_cache("demo-exec-1.0.json", "demo-exec")
+        harness.start()
+        self.assertIn("result", harness.initialize())
+        self.assertTrue(wait_until(lambda: (harness.cache_dir / "demo-1.0.json").exists()))
+        self.assertTrue(sibling.exists(), "the sibling entry lost its cache")
+        self.assertEqual(json.loads(sibling.read_text(encoding="utf-8"))["name"], "demo-exec")
+        self.assertEqual(harness.stop(), 0)
+
+    def test_stale_cleanup_drops_old_tag_of_same_entry(self) -> None:
+        harness = self.shim()
+        old = harness.write_cache("demo-0.9.json", "demo")
+        harness.start()
+        self.assertIn("result", harness.initialize())
+        self.assertTrue(wait_until(lambda: (harness.cache_dir / "demo-1.0.json").exists()))
+        self.assertFalse(old.exists(), "the cache of the previous tag was kept")
+        self.assertEqual(harness.stop(), 0)
+
+    def test_handshake_failure_stops_child_and_recovers(self) -> None:
+        harness = self.shim()
+        harness.set_mode("fail-init")
+        harness.start()
+        failed = harness.initialize()
+        self.assertEqual(failed["error"]["code"], -32603)
+        self.assertEqual(harness.starts(), 1)
+        pid = harness.pids()[-1]
+        self.assertIsNotNone(wait_until(lambda: not alive(pid), timeout=10),
+                            "the child survived a failed handshake")
+        harness.set_mode("")
+        self.assertEqual(harness.call(2, "echo")["result"]["content"][0]["text"], "echo done")
+        self.assertNotEqual(harness.pids()[-1], pid)
+        self.assertEqual(harness.stop(), 0)
+
+    def test_flush_handshake_failure_stops_child(self) -> None:
+        harness = self.warm()
+        harness.initialize()
+        harness.set_mode("fail-init")
+        failed = harness.call(2, "echo")
+        self.assertEqual(failed["error"]["code"], -32603)
+        pid = harness.pids()[-1]
+        self.assertIsNotNone(wait_until(lambda: not alive(pid), timeout=10),
+                            "the child survived a failed handshake")
+        harness.set_mode("")
+        self.assertEqual(harness.call(3, "echo")["result"]["content"][0]["text"], "echo done")
+        self.assertNotEqual(harness.pids()[-1], pid)
+        self.assertEqual(harness.stop(), 0)
+
+    def test_client_id_sharing_internal_prefix_is_answered(self) -> None:
+        harness = self.warm()
+        harness.initialize()
+        res = harness.call("lazy-mcp:client-1", "echo", timeout=12)
+        self.assertEqual(res["id"], "lazy-mcp:client-1")
+        self.assertEqual(res["result"]["content"][0]["text"], "echo done")
+        self.assertEqual(harness.stop(), 0)
+
+    def test_request_arriving_as_the_flush_ends_is_answered(self) -> None:
+        """`_forward`'s state check races with the flush; `_enqueue` re-checks it under the lock."""
+        mod = load_shim()
+        with mock.patch.dict(os.environ, {"LAZY_MCP_CACHE_DIR": str(self.tmp / "unit-cache")}):
+            shim = mod.Shim("demo", ["docker", "run", "-i", "--rm", f"{IMAGE}:1.0"])
+        delivered = []
+        shim._deliver = lambda msg, raw: delivered.append(msg["id"])
+        shim.state = "starting"  # a spawn + flush is in flight
+        queue_it = shim._enqueue
+
+        def flush_finished_first(msg, raw, start):
+            shim.state = "running"  # the flush drained the queue between the check and here
+            return queue_it(msg, raw, start)
+
+        shim._enqueue = flush_finished_first
+        shim._forward({"jsonrpc": "2.0", "id": 5, "method": "tools/call"}, '{"id":5}')
+        self.assertEqual(delivered, [5], "the request was queued after the flush and lost")
+        self.assertEqual(shim.queue, [])
 
     def test_help_exits_zero(self) -> None:
         out = subprocess.run([sys.executable, "-I", str(SHIM), "--help"],
