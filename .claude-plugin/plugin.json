@@ -8,8 +8,13 @@
   },
   "mcpServers": {
     "actual-budget": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "actual-budget",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -21,8 +26,13 @@
       ]
     },
     "woodpecker": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "woodpecker",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -32,8 +42,13 @@
       ]
     },
     "vikunja": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "vikunja",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -43,8 +58,13 @@
       ]
     },
     "audio-transcribe": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "audio-transcribe",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -56,8 +76,13 @@
       ]
     },
     "document-ocr": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "document-ocr",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -73,8 +98,13 @@
       ]
     },
     "whatsapp": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "whatsapp",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -89,11 +119,19 @@
         "--group-add",
         "1000",
         "harbor.bzd.gg/bzd/whatsapp-mcp:0.2.0"
-      ]
+      ],
+      "env": {
+        "LAZY_MCP_IDLE_SECONDS": "0"
+      }
     },
     "storyboard-video": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "storyboard-video",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
@@ -121,8 +159,13 @@
       ]
     },
     "storyboard-video-exec": {
-      "command": "docker",
+      "command": "python3",
       "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py",
+        "--name",
+        "storyboard-video-exec",
+        "--",
+        "docker",
         "run",
         "-i",
         "--rm",
