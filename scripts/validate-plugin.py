@@ -15,6 +15,80 @@ EXEC_NETWORK = ("--network", "none")
 # the base has network (add-host) and the exec twin needs SETGID to drop privs.
 EXEC_ONLY_ARGS = (EXEC_FLAG, EXEC_NETWORK, ("--cap-add", "SETGID"))
 BASE_ONLY_ARGS = (("--add-host=host.docker.internal:host-gateway",),)
+# An entry may be wrapped in the lazy shim (scripts/lazy-mcp.py --name <key> -- docker run ...).
+# Everything after `--` is the real command; checks below run on that, not on the wrapper.
+SHIM_SUFFIX = "lazy-mcp.py"
+PLUGIN_ROOT_VARS = ("${CLAUDE_PLUGIN_ROOT}", "$CLAUDE_PLUGIN_ROOT")
+
+
+def real_argv(entry: dict) -> list[str]:
+    """The command line that actually runs: what follows `--` if present, else [command, *args]."""
+    args = [str(a) for a in entry.get("args", [])]
+    if "--" in args:
+        return args[args.index("--") + 1:]
+    return [str(entry.get("command", "")), *args]
+
+
+def _shim_parts(entry: dict) -> tuple[list[str], list[str]] | None:
+    """(args before `--`, args after it) when the entry runs the lazy shim, else None."""
+    args = [str(a) for a in entry.get("args", [])]
+    tokens = [str(entry.get("command", "")), *args]
+    if not any(t.endswith(SHIM_SUFFIX) for t in tokens):
+        return None
+    if "--" not in args:
+        return args, []
+    return args[:args.index("--")], args[args.index("--") + 1:]
+
+
+def check_shim_entry(name: str, entry: dict, root: Path) -> list[str]:
+    """A shim entry must name the entry key, keep `--`, and point at a script that exists."""
+    parts = _shim_parts(entry)
+    if parts is None:
+        return []
+    head, tail = parts
+    errors = []
+    if "--" not in [str(a) for a in entry.get("args", [])]:
+        errors.append(f"  ✗ MCP server '{name}' shim has no '--' before the command it wraps")
+    at = head.index("--name") if "--name" in head else None
+    given = head[at + 1] if at is not None and at + 1 < len(head) else None
+    if given != name:
+        errors.append(f"  ✗ MCP server '{name}' shim must pass '--name {name}' (got {given!r})")
+    if not tail:
+        errors.append(f"  ✗ MCP server '{name}' shim has nothing after '--' to run")
+    tokens = [str(entry.get("command", "")), *[str(a) for a in entry.get("args", [])]]
+    script = next(t for t in tokens if t.endswith(SHIM_SUFFIX))
+    for var in PLUGIN_ROOT_VARS:
+        script = script.replace(var, str(root))
+    path = Path(script)
+    if not path.is_absolute():
+        path = root / path
+    if not path.is_file():
+        errors.append(f"  ✗ MCP server '{name}' shim script '{path}' not found")
+    if not errors:
+        errors.append(f"  ✓ MCP server '{name}' runs the lazy shim with '--name {name}'")
+    return errors
+
+
+def check_readme(root: Path, plugin_data: dict) -> list[str]:
+    """README.md must link every shipped server (`servers/<key>`) and every skill (`skills/<dir>`)."""
+    readme = root / "README.md"
+    if not readme.is_file():
+        return [f"  ✗ README.md not found at {readme}"]
+    text = readme.read_text()
+    errors = []
+    keys = plugin_data.get("mcpServers", {})
+    names = sorted({n.removesuffix(EXEC_SUFFIX) for n in keys})
+    for name in names:
+        if not re.search(rf"servers/{re.escape(name)}(?![\w-])", text):
+            errors.append(f"  ✗ README.md does not link 'servers/{name}'")
+    skills = sorted(p.name for p in (root / "skills").iterdir() if p.is_dir()) \
+        if (root / "skills").is_dir() else []
+    for name in skills:
+        if not re.search(rf"skills/{re.escape(name)}(?![\w-])", text):
+            errors.append(f"  ✗ README.md does not link 'skills/{name}'")
+    if not errors:
+        errors.append(f"  ✓ README.md lists all {len(names)} servers and {len(skills)} skills")
+    return errors
 
 
 def _has_arg(tokens: list[str], arg: tuple[str, ...]) -> bool:
@@ -154,7 +228,8 @@ def check_mcp_versions(root: Path, plugin_data: dict) -> list[str]:
             continue
         if not version.startswith(prefix + "."):
             errors.append(f"  ✗ {label}, but the server is {version}")
-        pins = [str(e.get("args", [""])[-1]) for e in plugin_data.get("mcpServers", {}).values()]
+        # the image is the last element of the real command, shim wrapper or not
+        pins = [real_argv(e)[-1] for e in plugin_data.get("mcpServers", {}).values() if real_argv(e)]
         pins = [p for p in pins if f"/{name}:" in p]
         bad = [p for p in pins if p.rsplit(":", 1)[1] != version]
         if not pins or bad:
@@ -188,13 +263,14 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
             errors.append(f"  ✗ MCP server '{server_name}' not found in servers/")
         else:
             errors.append(f"  ✓ MCP server '{server_name}' exists")
+        argv = real_argv(entry)  # the shim keeps the docker argv after `--`
+        errors.extend(check_shim_entry(server_name, entry, root))
         if is_exec:
             errors.extend(_check_exec_twin(
                 server_name, dir_name, dir_name in mcp_servers,
-                [str(a) for a in entry.get("args", [])],
-                [str(a) for a in mcp_servers.get(dir_name, {}).get("args", [])],
+                argv, real_argv(mcp_servers.get(dir_name, {})),
             ))
-        elif any("STORYBOARD_ALLOW_EXEC" in str(a) for a in entry.get("args", [])):
+        elif any("STORYBOARD_ALLOW_EXEC" in a for a in argv):
             errors.append(f"  ✗ MCP server '{server_name}' must not set STORYBOARD_ALLOW_EXEC")
 
     errors.extend(check_mcp_versions(root, plugin_data))
@@ -218,6 +294,9 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
                 skill_md = skill_dir / "SKILL.md"
                 if not skill_md.exists():
                     errors.append(f"  ✗ Skill '{skill_dir.name}' missing SKILL.md")
+
+    # README documents everything this plugin ships (servers minus `-exec`, and every skill)
+    errors.extend(check_readme(root, plugin_data))
 
     return errors
 
@@ -270,8 +349,8 @@ def main():
         if "✗" in err:
             has_failures = True
 
-    # 3. Check references
-    print("\n[REFERENCES] Checking disk references...")
+    # 3. Check references (servers, skills, README)
+    print("\n[REFERENCES] Checking disk and README references...")
     ref_errors = check_references(plugin_json, marketplace_json)
     for err in ref_errors:
         print(err)

@@ -33,12 +33,24 @@ ESCAPES = ("--privileged", "--userns=host", "--pid=host", "--ipc=host", "--publi
 ENTRIES = ("storyboard-video", "storyboard-video-exec")
 
 
+def _real_argv(entry):
+    """The docker command line the entry actually runs.
+
+    Entries may be wrapped in the lazy shim (`... --name <key> -- docker run ...`): everything after
+    `--` is the real command, and that is what these tests care about.
+    """
+    args = [str(a) for a in entry["args"]]
+    if "--" in args:
+        return args[args.index("--") + 1:]
+    return [str(entry["command"]), *args]
+
+
 def _args(name):
     with PLUGIN.open() as f:
         servers = json.load(f)["mcpServers"]
-    args = servers[name]["args"]
-    assert servers[name]["command"] == "docker", name
-    return args
+    argv = _real_argv(servers[name])
+    assert argv and argv[0] == "docker", f"{name}: expected a docker command, got {argv[:1]}"
+    return argv[1:]
 
 
 def _flag(args, flag):

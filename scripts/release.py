@@ -26,7 +26,7 @@ MARKET = ".claude-plugin/marketplace.json"
 PACKAGE = "package.json"
 PI_MCP = "pi-mcp.json"
 BUILD = ".woodpecker/build.yaml"
-PLUGIN_PREFIXES = ("skills/", "servers/", "agents/", "commands/", "hooks/")
+PLUGIN_PREFIXES = ("skills/", "servers/", "agents/", "commands/", "hooks/", "scripts/lazy-mcp.py")
 VERSION = re.compile(r'^version = "(\d+\.\d+\.\d+)"', re.M)
 JSON_VERSION = re.compile(r'^(  "version": ")[^"]+(")', re.M)
 
@@ -72,11 +72,24 @@ def quote(arg: str) -> str:
     return f'"{arg}"' if "${" in arg else shlex.quote(arg)
 
 
+def real_argv(entry: dict) -> list[str]:
+    """The command line that actually runs: what follows `--` if present, else [command, *args].
+
+    plugin.json entries may be wrapped in the lazy shim (`python3 scripts/lazy-mcp.py --name n --
+    docker run ...`); the wrapper is a plugin detail, so everything derived (pi-mcp.json) is built
+    from the real argv and stays byte-identical to the unwrapped form.
+    """
+    args = [str(a) for a in entry.get("args", [])]
+    if "--" in args:
+        return args[args.index("--") + 1:]
+    return [str(entry["command"]), *args]
+
+
 def pi_mcp(plugin: dict) -> dict:
     """Pi's adapter does not expand ${HOME}/${PWD} in args, so run docker through `sh -c`."""
     servers = {}
     for name, e in plugin["mcpServers"].items():
-        cmd = " ".join(quote(str(a)) for a in [e["command"], *e.get("args", [])])
+        cmd = " ".join(quote(a) for a in real_argv(e))
         servers[name] = {"command": "sh", "args": ["-c", f"exec {cmd}"]}
     return {"mcpServers": servers}
 

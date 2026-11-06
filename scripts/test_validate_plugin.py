@@ -57,23 +57,31 @@ class ReferencesTest(unittest.TestCase):
         self.root = Path(self._tmp.name)
         (self.root / ".claude-plugin").mkdir()
         (self.root / "servers").mkdir()
+        (self.root / "scripts").mkdir()
+        (self.root / "scripts" / "lazy-mcp.py").write_text("")
         self.marketplace = self.root / ".claude-plugin" / "marketplace.json"
         self.marketplace.write_text("{}")
 
-    def check(self, mcp_servers, server_dirs=("storyboard-video",)):
+    @staticmethod
+    def wrap(name, args):
+        """An entry in the shipped shim form: `lazy-mcp.py --name <key> -- docker run ...`."""
+        return {
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py", "--name", name, "--", "docker", *args],
+        }
+
+    def check(self, mcp_servers, server_dirs=("storyboard-video",), readme=None):
         """Build a tmp tree and run check_references on it."""
         for name in server_dirs:
             (self.root / "servers" / name).mkdir(exist_ok=True)
-        plugin = {
-            "name": "test",
-            "description": "",
-            "mcpServers": {
-                name: {"command": "docker", "args": list(args)}
-                for name, args in mcp_servers.items()
-            },
-        }
+        entries = {name: (e if isinstance(e, dict) else {"command": "docker", "args": list(e)})
+                   for name, e in mcp_servers.items()}
+        plugin = {"name": "test", "description": "", "mcpServers": entries}
         plugin_json = self.root / ".claude-plugin" / "plugin.json"
         plugin_json.write_text(json.dumps(plugin))
+        keys = sorted({n.removesuffix("-exec") for n in entries})
+        (self.root / "README.md").write_text(
+            readme if readme is not None else "".join(f"- [`servers/{k}`](servers/{k}/)\n" for k in keys))
         return self.mod.check_references(plugin_json, self.marketplace)
 
     @staticmethod
@@ -100,6 +108,46 @@ class ReferencesTest(unittest.TestCase):
     def test_plain_entry_passes(self):
         messages = self.check({"storyboard-video": BASE_ARGS})
         self.assertEqual(self.failures(messages), [])
+
+    # --- the lazy shim form: everything after `--` is the entry's real command -------
+
+    def test_wrapped_exec_pair_passes(self):
+        """Both entries wrapped in the shim: the twin invariant is checked on the unwrapped argv."""
+        messages = self.check({
+            "storyboard-video": self.wrap("storyboard-video", BASE_ARGS),
+            "storyboard-video-exec": self.wrap("storyboard-video-exec", EXEC_ARGS),
+        })
+        self.assertEqual(self.failures(messages), [])
+        self.assertIn(
+            "  ✓ MCP server 'storyboard-video' runs the lazy shim with '--name storyboard-video'", messages)
+
+    def test_wrapped_exec_twin_with_other_image_fails(self):
+        exec_args = list(EXEC_ARGS)
+        exec_args[-1] = "harbor.bzd.gg/bzd/other-mcp:latest"
+        messages = self.check({
+            "storyboard-video": self.wrap("storyboard-video", BASE_ARGS),
+            "storyboard-video-exec": self.wrap("storyboard-video-exec", exec_args),
+        })
+        self.assertTrue(any("image" in m and "✗" in m for m in messages), messages)
+
+    def test_shim_name_mismatch_fails(self):
+        messages = self.check({"storyboard-video": self.wrap("video", BASE_ARGS)})
+        self.assertTrue(any("--name storyboard-video" in m and "✗" in m for m in messages), messages)
+
+    def test_shim_without_double_dash_fails(self):
+        entry = self.wrap("storyboard-video", BASE_ARGS)
+        entry["args"].remove("--")
+        messages = self.check({"storyboard-video": entry})
+        self.assertTrue(any("no '--'" in m and "✗" in m for m in messages), messages)
+
+    def test_shim_script_must_exist(self):
+        (self.root / "scripts" / "lazy-mcp.py").unlink()
+        messages = self.check({"storyboard-video": self.wrap("storyboard-video", BASE_ARGS)})
+        self.assertTrue(any("shim script" in m and "✗" in m for m in messages), messages)
+
+    def test_readme_must_link_every_server(self):
+        messages = self.check({"storyboard-video": BASE_ARGS}, readme="# nothing here\n")
+        self.assertTrue(any("servers/storyboard-video" in m and "✗" in m for m in messages), messages)
 
     # --- bad cases -------------------------------------------------------
 
@@ -182,6 +230,29 @@ class RepoTreeTest(unittest.TestCase):
         self.assertIn("ALL CHECKS PASSED", result.stdout)
 
 
+class PiMcpTest(unittest.TestCase):
+    """pi-mcp.json stays byte-identical: Pi's adapter gets the unwrapped docker command, never the shim."""
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location("release", Path(__file__).parent / "release.py")
+        self.mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.mod)
+
+    def test_wrapped_entry_builds_the_same_pi_command(self):
+        plain = {"mcpServers": {"storyboard-video": {"command": "docker", "args": list(BASE_ARGS)}}}
+        wrapped = {"mcpServers": {"storyboard-video": {
+            "command": "python3",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py", "--name", "storyboard-video", "--",
+                     "docker", *BASE_ARGS],
+        }}}
+        old = self.mod.pi_mcp(plain)
+        self.assertEqual(self.mod.pi_mcp(wrapped), old)
+        command = old["mcpServers"]["storyboard-video"]["args"][1]
+        self.assertTrue(command.startswith("exec docker run -i --rm "), command)
+        self.assertTrue(command.endswith(" " + IMAGE), command)
+        self.assertNotIn("lazy-mcp", command)
+
+
 class ReleaseBumpTest(unittest.TestCase):
     """scripts/release.py: a server change bumps server + plugin once; unrelated edits bump nothing."""
 
@@ -224,6 +295,20 @@ class ReleaseBumpTest(unittest.TestCase):
     def test_tests_and_docs_do_not_bump(self):
         files = self.plan({"servers/vikunja/tests/test_x.py", "servers/vikunja/README.md"})
         self.assertNotIn("servers/vikunja/pyproject.toml", files)
+
+    def test_shim_change_bumps_plugin_version(self):
+        """The shim is shipped by the plugin, so a change to it cuts a new plugin version."""
+        root = Path(__file__).parent.parent
+        cur = json.loads((root / ".claude-plugin/plugin.json").read_text())["version"]
+        files = self.plan({"scripts/lazy-mcp.py"})
+        self.assertNotEqual(json.loads(files[".claude-plugin/plugin.json"])["version"], cur)
+        self.assertNotIn("servers/vikunja/pyproject.toml", files)
+
+    def test_other_scripts_do_not_bump_plugin_version(self):
+        root = Path(__file__).parent.parent
+        files = self.plan({"scripts/release.py"})
+        self.assertEqual(json.loads(files[".claude-plugin/plugin.json"])["version"],
+                         json.loads((root / ".claude-plugin/plugin.json").read_text())["version"])
 
 
 if __name__ == "__main__":

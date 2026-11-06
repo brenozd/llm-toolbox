@@ -2,6 +2,8 @@
 # storyboard-e2e.sh -- the whole shipped path, unattended (U5): read `.claude-plugin/plugin.json`, expand
 # `${PWD}`/`${HOME}` the way Claude Code's launcher does, run that entry's verbatim `docker run` argv and
 # drive the MCP server over stdio. Nothing is mocked: real container, real image, real ffmpeg/Pocket TTS.
+# An entry wrapped in the lazy shim is unwrapped first (everything after `--`): the container is what
+# this script tests, not the shim in front of it.
 #
 #     scripts/storyboard-e2e.sh                          # the `storyboard-video` entry
 #     STORYBOARD_E2E_ENTRY=storyboard-video-exec scripts/...  # the air-gapped entry (same code path)
@@ -87,11 +89,20 @@ class Fail(Exception):
 
 
 def docker_argv(entry):
-    """The entry's argv with `${VAR}` expanded, exactly as the launcher hands it to docker."""
+    """The entry's real docker argv with `${VAR}` expanded, exactly as the launcher hands it to docker.
+
+    An entry may be wrapped in the lazy shim (`lazy-mcp.py --name <key> -- docker run ...`); this e2e
+    drives the container itself, so it skips the wrapper and runs what comes after `--`.
+    """
     plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text())
     cfg = plugin["mcpServers"].get(entry)
     if cfg is None:
         raise Fail(f"no mcpServers[{entry!r}] in .claude-plugin/plugin.json")
+    raw = [str(a) for a in cfg.get("args", [])]
+    if "--" in raw:  # shim form
+        raw = raw[raw.index("--") + 1:]
+    else:
+        raw = [str(cfg["command"]), *raw]
     known = {"PWD": str(Path(os.environ.get("STORYBOARD_E2E_REPO") or ROOT).resolve()), "HOME": os.environ.get("HOME", "")}
 
     def sub(m):
@@ -102,7 +113,7 @@ def docker_argv(entry):
             return os.environ[name]
         raise Fail(f"cannot expand ${{{name}}} in plugin.json: not set in this shell")
 
-    argv = [cfg["command"]] + [re.sub(r"\$\{(\w+)\}|\$(\w+)", sub, a) for a in cfg["args"]]
+    argv = [re.sub(r"\$\{(\w+)\}|\$(\w+)", sub, a) for a in raw]
     if os.environ.get("STORYBOARD_E2E_IMAGE"):
         argv[-1] = os.environ["STORYBOARD_E2E_IMAGE"]
     return argv
