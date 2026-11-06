@@ -586,6 +586,50 @@ class LazyShimTest(unittest.TestCase):
         self.assertEqual(delivered, [5], "the request was queued after the flush and lost")
         self.assertEqual(shim.queue, [])
 
+    def test_request_queued_while_the_failed_flush_stops_is_answered(self) -> None:
+        """The drain and `_stop_child` cannot share a lock hold; a late arrival must not linger."""
+        mod = load_shim()
+        with mock.patch.dict(os.environ, {"LAZY_MCP_CACHE_DIR": str(self.tmp / "unit-cache")}):
+            shim = mod.Shim("demo", ["docker", "run", "-i", "--rm", f"{IMAGE}:1.0"])
+        replied = []
+        shim.fail = lambda rid, message: replied.append(rid)
+        shim._handshake = mock.Mock(side_effect=mod.SpawnError("boom"))
+        shim.state = "starting"
+        shim.queue = [({"jsonrpc": "2.0", "id": 1, "method": "tools/call"}, '{"id":1}')]
+        stop_child = shim._stop_child
+
+        def stop_with_a_late_request(reason="idle"):
+            # lands in the window between the queue drain and the state reset
+            shim.queue.append(({"jsonrpc": "2.0", "id": 99, "method": "tools/call"},
+                               '{"id":99}'))
+            return stop_child(reason)
+
+        shim._stop_child = stop_with_a_late_request
+        shim._spawn_then_flush()
+        self.assertEqual(replied, [1, 99], "the late request was left without an answer")
+        self.assertEqual(shim.queue, [])
+
+    def test_late_internal_response_without_a_slot_is_dropped(self) -> None:
+        """After the init timeout pops the slot, the child's answer is not the client's to see."""
+        mod = load_shim()
+        with mock.patch.dict(os.environ, {"LAZY_MCP_CACHE_DIR": str(self.tmp / "unit-cache")}):
+            shim = mod.Shim("demo", ["docker", "run", "-i", "--rm", f"{IMAGE}:1.0"])
+        forwarded = []
+        shim._write_raw = forwarded.append
+        # a live internal id is still matched to its slot, never forwarded
+        slot = [None]
+        shim.internal[mod.INTERNAL + "3"] = slot
+        shim._from_child({"jsonrpc": "2.0", "id": mod.INTERNAL + "3", "result": {}}, "live")
+        self.assertEqual(slot[0]["result"], {})
+        self.assertEqual(forwarded, [])
+        # the same shape with the slot gone (init timeout) is dropped
+        shim._from_child({"jsonrpc": "2.0", "id": mod.INTERNAL + "7", "result": {}}, "late")
+        self.assertEqual(forwarded, [], "a late handshake answer reached the client")
+        # a client id that only shares the prefix still belongs to the client
+        shim._from_child({"jsonrpc": "2.0", "id": mod.INTERNAL + "client-7", "result": {}},
+                         "client")
+        self.assertEqual(forwarded, ["client"])
+
     def test_help_exits_zero(self) -> None:
         out = subprocess.run([sys.executable, "-I", str(SHIM), "--help"],
                              capture_output=True, text=True, check=False)

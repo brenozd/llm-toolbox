@@ -30,6 +30,8 @@ import time
 
 SCHEMA = 1
 INTERNAL = "lazy-mcp:"
+# our own request ids: INTERNAL followed by digits only (client ids may share the prefix)
+INTERNAL_ID = re.compile(re.escape(INTERNAL) + r"[0-9]+")
 DEFAULT_IDLE = 600.0
 INIT_TIMEOUT = 180.0
 LIST_TIMEOUT = 60.0
@@ -313,6 +315,11 @@ class Shim:
                     slot[0] = msg
                     self.cond.notify_all()
                     return
+                if INTERNAL_ID.fullmatch(rid):
+                    # our own id whose slot is gone: the handshake gave up on it (init
+                    # timeout), so the client never saw the request and must not get
+                    # an answer it cannot map to anything
+                    return
             # not ours: a client id that merely shares the prefix, forwarded below
         if "method" in msg:
             if msg.get("method") == "notifications/tools/list_changed":
@@ -514,7 +521,12 @@ class Shim:
             self._stop_child("handshake")  # a half-initialized child must not linger
             tail = self._tail()
             message = f"lazy-mcp: cannot start the MCP server: {exc}{tail_of(tail)}"
+            # the stop above flips back to "idle"; until it does, a request is queued and
+            # left without a flush thread, so it is collected here and failed, not stranded
             for msg, _ in queued:
+                if msg.get("id") is not None:
+                    self.fail(msg["id"], message)
+            for msg in self._take_stranded():
                 if msg.get("id") is not None:
                     self.fail(msg["id"], message)
             return
@@ -530,6 +542,19 @@ class Shim:
                     return
             for msg, raw in queued:
                 self._deliver(msg, raw)
+
+    def _take_stranded(self) -> list:
+        """Requests queued while the failed flush was stopping the child.
+
+        Draining the queue and flipping to "idle" cannot share one lock hold (the stop
+        waits on the child), so a request can land in between with no flush thread left
+        to send it. It is taken here, under the lock, and answered with an error.
+        """
+        with self.lock:
+            if self.state != "idle" or not self.queue:
+                return []  # a spawn started meanwhile and flushes its own queue
+            queued, self.queue = self.queue, []
+        return [msg for msg, _ in queued]
 
     def _deliver(self, msg: dict, raw: str) -> None:
         """Send a client request to the child, tracked so its death cannot lose the answer."""
