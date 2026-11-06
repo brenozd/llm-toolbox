@@ -2,25 +2,26 @@
 
 <img src="icon.svg" width="64" height="64" alt="llm-toolbox icon">
 
-[![status-badge](https://woodpecker.bzd.gg/api/badges/6/status.svg)](https://woodpecker.bzd.gg/repos/6)
-
 MCP servers packaged as OCI containers, in Python, plus reusable Claude Code skills.
+
+> This repository is a public mirror. The origin is self-hosted: CI runs on a
+> self-hosted Woodpecker instance and the OCI images are published to
+> `harbor.bzd.gg`.
 
 ## Install
 
 ```
-/plugin marketplace add https://git.bzd.gg/bzd/llm-toolbox.git
+/plugin marketplace add https://github.com/brenozd/llm-toolbox.git
 /plugin install llm-toolbox@llm-toolbox
 ```
 
-`owner/repo` shorthand only works for github.com — this repo is self-hosted
-Forgejo, so use the full clone URL above. See [INSTALL.md](INSTALL.md) for
-local-checkout, manual-symlink, Gemini CLI, Pi, and MCP server setups.
+See [INSTALL.md](INSTALL.md) for local-checkout, manual-symlink, Gemini CLI,
+Pi, and MCP server setups.
 
 For [Pi](https://pi.dev):
 
 ```
-pi install git:git.bzd.gg/bzd/llm-toolbox
+pi install git:github.com/brenozd/llm-toolbox
 ```
 
 ## Servers
@@ -28,8 +29,9 @@ pi install git:git.bzd.gg/bzd/llm-toolbox
 - [`servers/actual-budget`](servers/actual-budget/) — integrates with [Actual Budget](https://actualbudget.org). Image: [`harbor.bzd.gg/bzd/actual-budget-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/actual-budget-mcp).
 - [`servers/woodpecker`](servers/woodpecker/) — integrates with [Woodpecker CI/CD](https://woodpecker-ci.org). Image: [`harbor.bzd.gg/bzd/woodpecker-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/woodpecker-mcp).
 - [`servers/vikunja`](servers/vikunja/) — projects, tasks, comments and labels of a [Vikunja](https://vikunja.io) instance. Image: [`harbor.bzd.gg/bzd/vikunja-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/vikunja-mcp).
-- [`servers/audio-transcribe`](servers/audio-transcribe/) — speech-to-text transcription via Parakeet (transcribe-cpp). Image: [`harbor.bzd.gg/bzd/audio-transcribe-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/faster-whisper-mcp).
+- [`servers/audio-transcribe`](servers/audio-transcribe/) — speech-to-text transcription via Parakeet (transcribe-cpp). Image: [`harbor.bzd.gg/bzd/audio-transcribe-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/audio-transcribe-mcp).
 - [`servers/storyboard-video`](servers/storyboard-video/) — turns a repo (web, CLI or GUI) into an evidence-checked promo video: scan, capture, validate spec, render MP4, verify. Image: [`harbor.bzd.gg/bzd/storyboard-video-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/storyboard-video-mcp).
+- [`servers/document-ocr`](servers/document-ocr/) — reads text from PDFs and images (document photos, scans): embedded text layer when it looks real, Tesseract otherwise; one tool, `ocr_document`. Image: [`harbor.bzd.gg/bzd/document-ocr-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/document-ocr-mcp). Depends on the `~/.config/llm-toolbox/whatsapp-downloads` dir (the whatsapp server's download root), which it mounts read-only.
 - [`servers/whatsapp`](servers/whatsapp/) — read WhatsApp chats and (opt-in) send messages, through an in-process whatsmeow client (neonize). Image: [`harbor.bzd.gg/bzd/whatsapp-mcp`](https://harbor.bzd.gg/harbor/projects/bzd/repositories/whatsapp-mcp).
 
 ## Skills
@@ -70,7 +72,7 @@ These skills are written for and depend on the following plugin (install it sepa
   they load from `agents/` automatically as plugin subagents. Under [Pi](https://pi.dev), they
   require the [pi-subagents](https://github.com/nicobailon/pi-subagents) extension installed
   separately; this package declares them via `pi.subagents.agents` in `package.json`, so once
-  pi-subagents is installed, `pi install git:git.bzd.gg/bzd/llm-toolbox` picks them up.
+  pi-subagents is installed, `pi install git:github.com/brenozd/llm-toolbox` picks them up.
 
 Agent `tools:` lines list both Claude Code and Pi names. Edit only the lowercase
 (Pi) names, then run `scripts/sync-agent-tools.py` (also a pre-commit hook) to

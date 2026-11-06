@@ -6,11 +6,11 @@ Recommended — add this repo as a plugin marketplace, then install the
 plugin (pulls all skills at once, updates with `/plugin marketplace update`):
 
 ```
-/plugin marketplace add https://git.bzd.gg/bzd/llm-toolbox.git
+/plugin marketplace add https://github.com/brenozd/llm-toolbox.git
 /plugin install llm-toolbox@llm-toolbox
 ```
 
-(`owner/repo` shorthand only work for github.com — self-hosted Forgejo need full clone URL.)
+(`owner/repo` shorthand also works here, since the repo lives on github.com.)
 
 Local checkout instead of a remote add:
 
@@ -57,7 +57,7 @@ read `.agents/skills/` yet, so use the Claude Code steps above for that tool.
 this repo already declares one, so a plain package install pulls all skills:
 
 ```
-pi install git:git.bzd.gg/bzd/llm-toolbox
+pi install git:github.com/brenozd/llm-toolbox
 ```
 
 Or from a local checkout:
@@ -66,7 +66,7 @@ Or from a local checkout:
 pi install /path/to/llm-toolbox
 ```
 
-`pi list` confirms it's registered; `pi remove git:git.bzd.gg/bzd/llm-toolbox`
+`pi list` confirms it's registered; `pi remove git:github.com/brenozd/llm-toolbox`
 uninstalls it. The MCP servers come from `pi-mcp.json` (`pi.mcp` in `package.json`), which
 needs the [pi-mcp-adapter](https://github.com/nicobailon/pi-mcp-adapter) extension and Docker;
 they show up as `llm-toolbox__<server>`. `pi-mcp.json` is generated from
@@ -81,7 +81,7 @@ shared `.agents/skills/` path above.
 ## MCP servers
 
 The plugin (`/plugin install llm-toolbox@llm-toolbox`) registers
-`actual-budget`, `woodpecker`, `vikunja`, `audio-transcribe`, `storyboard-video`, `storyboard-video-exec`, and `whatsapp` MCPs automatically — no
+`actual-budget`, `woodpecker`, `vikunja`, `audio-transcribe`, `storyboard-video`, `storyboard-video-exec`, `document-ocr`, and `whatsapp` MCPs automatically — no
 need to hand-copy JSON. `actual-budget`, `woodpecker`, `vikunja` and `whatsapp` each need their own
 `config.json` (see
 [`servers/actual-budget/README.md`](servers/actual-budget/README.md#config)
@@ -90,6 +90,7 @@ dropped at a fixed path, no env vars needed:
 
 ```bash
 mkdir -p ~/.config/llm-toolbox
+mkdir -p ~/.config/llm-toolbox/whatsapp-downloads   # document-ocr reads documents from here
 cp servers/actual-budget/config.example.json ~/.config/llm-toolbox/actual-budget.json
 cp servers/woodpecker/config.example.json ~/.config/llm-toolbox/woodpecker.json
 cp servers/vikunja/config.example.json ~/.config/llm-toolbox/vikunja.json
@@ -105,6 +106,11 @@ that one just won't come up.
 `audio-transcribe` needs no config file — it mounts your home directory
 read-only instead, and is tuned with env vars if needed (see
 [`servers/audio-transcribe/README.md`](servers/audio-transcribe/README.md#config)).
+
+`document-ocr` needs no config file either, but it only reads documents inside
+`~/.config/llm-toolbox/whatsapp-downloads` (the folder the `whatsapp` server
+downloads media to), mounted read-only — `mkdir -p` it first, see
+[`servers/document-ocr/README.md`](servers/document-ocr/README.md).
 
 `whatsapp` also needs a one-time QR pairing (`docker run -it ... login`, see
 [`servers/whatsapp/README.md`](servers/whatsapp/README.md#login)), keeps its

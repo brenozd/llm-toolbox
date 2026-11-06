@@ -83,6 +83,9 @@ docker run -i --rm \
 | `create_new_transaction` | Create a transaction |
 | `update_existing_transaction` | Update payee/category/amount/notes/cleared on a transaction |
 | `set_category_budget_amount` | Set the budgeted amount for a category in a given month |
+| `mark_transaction_transfer` | Link two existing transactions (one per account) as a transfer pair, clearing their category |
+| `create_payee_rule` | Create a rule setting a category on any transaction whose imported description contains a string (`run_immediately` applies it to existing matches) |
+| `create_transfer_rule` | Create a rule marking transactions whose imported description contains a string as transfers to/from an account (`run_immediately` applies it to existing matches) |
 
 ## Tests
 
