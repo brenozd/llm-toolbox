@@ -2,12 +2,18 @@
 name: guided-build
 description: "Goal-first, checkpoint-driven build: interviews you for the real goal, researches the web, plans in buckets, stress-tests the plan with experts and an adversarial review, then verifies each bucket with you. Use when the user asks to plan, design or build something spanning multiple files/buckets, with an external dependency, or with several open decisions, or says: \"guided build\", \"entenda minha demanda\", \"planeje\", \"plan before you code\", /guided-build."
 metadata:
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # guided-build
 
 Context-first → propose → research → plan → expert/adversarial review → confirm → execute bucket by bucket, with checkpoints.
+
+## Delegation defaults (every `workflow` / `subagent` call)
+
+- Pass `timeoutMs: 1200000` (~20 min) and `toolBudget: {soft: 40, hard: 60}` on every call. Without them a child dies on a short inherited default, mid-task.
+- A reviewer brief must name: the files to review, exactly ONE criterion, and the command that verifies it. A brief without the file list makes the reviewer wander the repo.
+- On timeout, the retry gets the partial diff and the child's last report — never restart from zero.
 
 ---
 
@@ -15,9 +21,9 @@ Context-first → propose → research → plan → expert/adversarial review �
 
 If the goal is large or ambiguous (many open decisions, not just 2 unknowns), run the `grilling` skill after the recon below instead of the 2-question limit, then build the Goal Summary from its answers.
 
-Before presenting anything to the user, do the following silently:
+Before presenting anything to the user, dispatch ONE `scout` subagent (read-only, ≤15 lines back) with the brief below. You are the orchestrator here: do not read, grep, or scan the repo yourself — your context is the one that must stay clean for planning.
 
-**1. Read available context:**
+**1. The scout's brief (pass these verbatim):**
 - Check memory files (MEMORY.md + any linked memories) for project history, prior decisions, known constraints
 - Check CLAUDE.md for project conventions
 - Scan codebase: `find . -maxdepth 3 -name "*.mod" -o -name "package.json" -o -name "go.mod" -o -name "Cargo.toml" -o -name "pyproject.toml" -o -name "*.proto" | head -20` to identify stack

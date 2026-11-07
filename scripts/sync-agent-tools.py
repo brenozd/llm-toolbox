@@ -9,6 +9,8 @@ Write the Pi (lowercase) names in `tools:`; this script rewrites it to
     stripped from the allowlist first.
 Verified 2026-10-04 (Claude Code 2.1.289, pi-subagents). Re-verify on major
 upgrades: if Claude Code ever adds `excludeTools` semantics, this breaks.
+`timeoutMs`/`maxTurns` are shared by Pi and Claude Code but live outside the
+`tools` block, so they are checked here (positive integer) and left untouched.
 Exits 1 when it changed a file (pre-commit idiom) or finds an unknown name.
 """
 import re
@@ -39,6 +41,11 @@ def main() -> int:
             print(f"{path}: unknown tool(s) {unknown}; add to PI_TO_CLAUDE")
             bad = True
             continue
+        for badge in ("timeoutMs", "maxTurns"):
+            value = re.search(rf"^{badge}:\s*(\S+)", fm, re.M)
+            if value and not value[1].isdigit():
+                print(f"{path}: {badge} must be a positive integer, got {value[1]!r}")
+                bad = True
         claude = [PI_TO_CLAUDE[t] for t in pi if PI_TO_CLAUDE[t]]
         both = ", ".join(claude + pi)
         new = re.sub(r"^tools:.*$", f"tools: {both}", fm, flags=re.M)
