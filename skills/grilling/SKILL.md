@@ -2,7 +2,7 @@
 name: grilling
 description: "Relentless interview to stress-test a plan, design or idea, one round of decision-tree questions at a time, each with a recommended answer. Use for: \"grill me\", \"me questione\", \"stress-test this plan\", /grilling."
 metadata:
-  version: "0.1.0"
+  version: "0.2.0"
 ---
 
 
@@ -10,7 +10,9 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 
 Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
 
-Format a round like so:
+If a structured-question tool is available (e.g. `ask_user_question`), use it for every round instead of the text format below: one call per round, at most 4 questions per call (more decisions → further rounds). The recommended option goes **first**, with a "(Recommended)" marker at the end of its label, written in the user's language (label ≤60 chars, header ≤16 chars, 2–4 options, no "Other"/"Type something" option — the tool adds it; each option's description explains the trade-off; `multiSelect` only when the choices aren't exclusive). Wait for the answer before the next round.
+
+The text format below is only the fallback, when no such tool exists:
 
 ```
 ❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
