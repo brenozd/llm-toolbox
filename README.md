@@ -73,6 +73,7 @@ Local checkouts, manual skill symlinks, Gemini CLI, Cursor, Codex CLI, and the J
 | [`skills/icon-search`](skills/icon-search/) | Search SVG icons by keyword with licenses (Iconify, OpenIconLibrary, Flaticon). |
 | [`skills/image`](skills/image/) | Light image editing with Python + Pillow: crop, rotate, resize, blur, grayscale, watermark, format conversion (PNG/JPEG/WebP). |
 | [`skills/music-search`](skills/music-search/) | Finds a licence-cleared music bed (Openverse, Internet Archive; `--kind sfx` for CC0 sound effects), verifies the licence at the origin and stages it for storyboard-video. |
+| [`skills/openscad-part`](skills/openscad-part/) | Models a 3D-printable (FDM) part in OpenSCAD: interview, spec in mm, `.scad` with minimal inputs, then gate checks (mesh, bbox, volume, overhang) plus an adversarial review. |
 | [`skills/pr-opener`](skills/pr-opener/) | Opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates a draft PR (forge-agnostic: gh/tea/glab/Forgejo). |
 | [`skills/screencapture`](skills/screencapture/) | Captures desktop/web screenshots and scripted videos/GIFs (terminal, web, desktop) on Linux, macOS and Windows. |
 | [`skills/storyboard-video`](skills/storyboard-video/) | Workflow for the storyboard-video MCP: honest storyboard from the code, review stills, render, verify. |

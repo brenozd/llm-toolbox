@@ -10,7 +10,7 @@ repos:
     rev: v2.4.1
     hooks:
     - id: codespell
-      args: [-L, "actualpy,meu,te,oficial,erro,fo,nd,handel,anull,anullsrc,fase,fases,comando,dito,expresso"]
+      args: [-L, "actualpy,meu,te,oficial,erro,fo,nd,handel,anull,anullsrc,fase,fases,comando,dito,expresso,copie,separe,responde,vai,lits,argumentos,instale,pares,nome"]
   - repo: https://github.com/commitizen-tools/commitizen
     rev: v4.8.2
     hooks:

@@ -22,3 +22,8 @@ servers/*/data/
 .env*
 *.log
 .DS_Store
+
+# openscad-part: saídas geradas localmente
+skills/openscad-part/**/out/
+skills/openscad-part/**/*.stl
+skills/openscad-part/**/*.png
