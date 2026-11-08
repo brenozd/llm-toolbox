@@ -76,6 +76,9 @@ Local checkouts, manual skill symlinks, Gemini CLI, Cursor, Codex CLI, and the J
 | [`skills/openscad-part`](skills/openscad-part/) | Models a 3D-printable (FDM) part in OpenSCAD: interview, spec in mm, `.scad` with minimal inputs, then gate checks (mesh, bbox, volume, overhang) plus an adversarial review. |
 | [`skills/pr-opener`](skills/pr-opener/) | Opens a PR: verifies work, drafts title/body from the diff vs base, pushes, creates a draft PR (forge-agnostic: gh/tea/glab/Forgejo). |
 | [`skills/screencapture`](skills/screencapture/) | Captures desktop/web screenshots and scripted videos/GIFs (terminal, web, desktop) on Linux, macOS and Windows. |
+| [`skills/security-review`](skills/security-review/) | Orchestrates an authorized review: takes a signed scope, routes to the web/API or C profile, and ships only reports whose PoCs a validator re-executed. |
+| [`skills/security-review-binary-c`](skills/security-review-binary-c/) | Memory-safety review of local C: ASan builds, AFL++ campaigns, gdb/frida triage and a re-executable PoC per finding. |
+| [`skills/security-review-web-api`](skills/security-review-web-api/) | HTTP/API review (curl, nuclei, sqlmap) with a PoC plus negative control per finding, emitted as a closed JSON report. |
 | [`skills/storyboard-video`](skills/storyboard-video/) | Workflow for the storyboard-video MCP: honest storyboard from the code, review stills, render, verify. |
 | [`skills/svg-generator`](skills/svg-generator/) | Hand-writes SVG markup in a write, render, self-evaluate, revise loop. |
 | [`skills/tech-blog-post`](skills/tech-blog-post/) | Writes a technical blog post (raw Markdown with frontmatter for Astro/Hugo) from something you actually did, in a direct, opinionated senior-dev voice. |

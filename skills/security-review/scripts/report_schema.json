@@ -1,0 +1,35 @@
+{
+  "$comment": "Closed envelope for a security-review findings report. Unknown keys are rejected everywhere and every free-text field is length-capped, so text taken from the target cannot reach the orchestrator as prose or as an instruction.",
+  "description": "The negative control proves that the PoC produces a signal different from a benign command. It does not prove that the PoC contacted the target nor that the signal depends on the flaw; a PoC that only prints the expected signal passes.",
+  "schemaVersion": 1,
+  "limits": {
+    "title": 500,
+    "location": 500,
+    "coverageItem": 200,
+    "commandArg": 300,
+    "expectSubstring": 200,
+    "maxFindings": 200
+  },
+  "report": {
+    "required": ["schemaVersion", "itemsInspected", "coverage", "findings"],
+    "optional": ["notApplicableReason"],
+    "forbidden": ["verified", "confirmed", "proof", "validated"],
+    "notApplicableReason": {
+      "enum": ["target-unreachable", "out-of-scope", "no-attack-surface"]
+    },
+    "coverage": {
+      "required": ["inspected", "excluded"],
+      "excludedReason": {
+        "enum": ["out-of-scope", "needs-credentials", "time-budget", "target-unreachable", "not-applicable"]
+      }
+    }
+  },
+  "finding": {
+    "required": ["id", "severity", "title", "location", "pocVerifyCommand", "negativeControlCommand", "pocSha256", "expect", "evidenceFiles", "confidence"],
+    "forbidden": ["verified", "confirmed", "proof", "validated"],
+    "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+    "confidence": { "enum": ["high", "medium", "low"] },
+    "evidence": { "required": ["path", "sha256"] },
+    "expect": { "allowed": ["exitCode", "stdoutContains", "stderrContains", "httpStatus"] }
+  }
+}

@@ -275,10 +275,14 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
 
     errors.extend(check_mcp_versions(root, plugin_data))
 
-    # Check referenced skills (from description parsing)
+    # Check referenced skills (from description parsing). Whole names only: 'security-review'
+    # must not be credited by the 'security-review-web-api' entry of the same description.
     desc = plugin_data.get("description", "")
-    for skill_name in ["deep-clean", "doc-audit", "guided-build", "image", "screencapture", "tech-blog-post", "refactor", "icon-search", "music-search", "pr-opener"]:
-        if skill_name in desc:
+    for skill_name in ["deep-clean", "doc-audit", "guided-build", "icon-search", "image",
+                       "music-search", "pr-opener", "refactor", "screencapture",
+                       "security-review", "security-review-binary-c", "security-review-web-api",
+                       "tech-blog-post"]:
+        if re.search(rf"(?<![\w-]){re.escape(skill_name)}(?![\w-])", desc):
             skill_path = skills_dir / skill_name
             if not skill_path.is_dir():
                 errors.append(f"  ✗ Skill '{skill_name}' referenced but not found")

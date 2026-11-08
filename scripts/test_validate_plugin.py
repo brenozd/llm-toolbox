@@ -71,18 +71,25 @@ class ReferencesTest(unittest.TestCase):
             "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/lazy-mcp.py", "--name", name, "--", "docker", *args],
         }
 
-    def check(self, mcp_servers, server_dirs=("storyboard-video",), readme=None):
+    def check(self, mcp_servers, server_dirs=("storyboard-video",), readme=None,
+              description="", skill_dirs=()):
         """Build a tmp tree and run check_references on it."""
         for name in server_dirs:
             (self.root / "servers" / name).mkdir(exist_ok=True)
+        for name in skill_dirs:
+            skill = self.root / "skills" / name
+            skill.mkdir(parents=True, exist_ok=True)
+            (skill / "SKILL.md").write_text(f"---\nname: {name}\ndescription: d\n---\n")
         entries = {name: (e if isinstance(e, dict) else {"command": "docker", "args": list(e)})
                    for name, e in mcp_servers.items()}
-        plugin = {"name": "test", "description": "", "mcpServers": entries}
+        plugin = {"name": "test", "description": description, "mcpServers": entries}
         plugin_json = self.root / ".claude-plugin" / "plugin.json"
         plugin_json.write_text(json.dumps(plugin))
         keys = sorted({n.removesuffix("-exec") for n in entries})
-        (self.root / "README.md").write_text(
-            readme if readme is not None else "".join(f"- [`servers/{k}`](servers/{k}/)\n" for k in keys))
+        if readme is None:
+            readme = "".join(f"- [`servers/{k}`](servers/{k}/)\n" for k in keys)
+            readme += "".join(f"- [`skills/{s}`](skills/{s}/)\n" for s in skill_dirs)
+        (self.root / "README.md").write_text(readme)
         return self.mod.check_references(plugin_json, self.marketplace)
 
     @staticmethod
@@ -149,6 +156,31 @@ class ReferencesTest(unittest.TestCase):
     def test_readme_must_link_every_server(self):
         messages = self.check({"storyboard-video": BASE_ARGS}, readme="# nothing here\n")
         self.assertTrue(any("servers/storyboard-video" in m and "✗" in m for m in messages), messages)
+
+    def test_readme_skill_link_matches_whole_name(self):
+        """`skills/security-review` is not credited by a `skills/security-review-web-api` link."""
+        messages = self.check(
+            {"storyboard-video": BASE_ARGS}, readme="[web-api](skills/security-review-web-api/)\n",
+            skill_dirs=("security-review",))
+        self.assertTrue(any("skills/security-review" in m and "✗" in m for m in messages), messages)
+
+    # --- skill names in the plugin description: whole-word matches only ---------
+
+    def test_description_skill_name_is_not_matched_by_a_longer_sibling(self):
+        """'security-review-web-api' in the description must not require 'security-review'."""
+        messages = self.check({"storyboard-video": BASE_ARGS},
+                              description="skills: security-review-web-api.",
+                              skill_dirs=("security-review-web-api",))
+        self.assertEqual(self.failures(messages), [])
+        self.assertNotIn("Skill 'security-review' referenced", "\n".join(messages))
+
+    def test_description_skill_name_is_checked_on_its_own(self):
+        """Naming `security-review` alone must still be verified against disk."""
+        messages = self.check({"storyboard-video": BASE_ARGS},
+                              description="skills: security-review.",
+                              skill_dirs=("security-review-web-api",))
+        self.assertTrue(any("Skill 'security-review' referenced" in m and "✗" in m
+                            for m in messages), messages)
 
     # --- bad cases -------------------------------------------------------
 

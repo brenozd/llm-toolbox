@@ -1,0 +1,23 @@
+# frida-tools 14.13.0 + every transitive dependency, pinned with hashes so
+# `pip install --require-hashes` rejects a tampered or silently-changed wheel.
+#
+# shortcut: hashes are for cp311 / manylinux_x86_64 wheels only -- the image is
+# amd64-only anyway (nuclei ships an amd64 binary). Regenerate when the base
+# image's Python or the frida version changes:
+#   pip download --only-binary=:all: --platform manylinux2014_x86_64 \
+#     --python-version 311 --implementation cp --abi cp311 -d /tmp/wheels \
+#     frida-tools==14.13.0 && pip hash /tmp/wheels/*.whl
+colorama==0.4.6 \
+    --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6  # colorama-0.4.6-py2.py3-none-any.whl
+frida==17.26.2 \
+    --hash=sha256:81bf85d0657eefb9ae5ef932a7618e460534a6bafc1bde0a6aa77d7f5752eb5a  # frida-17.26.2-cp37-abi3-manylinux1_x86_64.whl
+frida_tools==14.13.0 \
+    --hash=sha256:7dbf25e52b5308e0c3e10f922a61207a35a74a92555b84c08e1b537604d0ce77  # frida_tools-14.13.0-py3-none-any.whl
+prompt_toolkit==3.0.53 \
+    --hash=sha256:01c0891d7f9237d5e339f7d3e42cdae80b7534abb1c7c0e3352efba6231492f2  # prompt_toolkit-3.0.53-py3-none-any.whl
+pygments==2.21.0 \
+    --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9  # pygments-2.21.0-py3-none-any.whl
+wcwidth==0.9.4 \
+    --hash=sha256:b185c8b927b23af2721be1783499d1cfa5c028b098b0858951b4ae224477f1c2  # wcwidth-0.9.4-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+websockets==13.1 \
+    --hash=sha256:87c6e35319b46b99e168eb98472d6c7d8634ee37750d7693656dc766395df096  # websockets-13.1-cp311-cp311-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl
