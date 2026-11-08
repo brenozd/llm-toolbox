@@ -1,0 +1,6 @@
+apiVersion: v2
+name: billing
+description: Billing API chart (eval fixture; renders offline, no cluster needed)
+type: application
+version: 0.1.0
+appVersion: "1.4.0"

@@ -1,6 +1,7 @@
 # security-review sandbox
 
-Containment for the tools the skill runs. One shared image, two profiles:
+Containment for the tools the skill runs. One shared image, two runnable profiles (the
+skill's two static profiles run no sandbox):
 
 | profile | script | network | tools |
 |---|---|---|---|
@@ -9,6 +10,9 @@ Containment for the tools the skill runs. One shared image, two profiles:
 
 Both run with `--cap-drop ALL`, `--security-opt no-new-privileges`, `--read-only`,
 `--pids-limit 256`; the C profile also limits CPUs, shm and the `/work` tmpfs.
+
+Static artifact reviews (`artifact://` targets, containers and kubernetes) use no sandbox
+profile: the checker only reads the artifact (read-only, no network), under the guard on the host.
 
 ## Build
 

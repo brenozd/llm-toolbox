@@ -239,6 +239,36 @@ def test_scheme_less_cli_target_is_refused(signed, tmp_path):
 
 # --- schema rules enforced at load time -----------------------------------
 
+def test_static_artifact_targets_are_endpoints_too(tmp_path):
+    """Static reviews (Dockerfile, compose, k8s YAML) name their artifact as an endpoint:
+    no scheme-specific code exists, so `artifact://my-app:1` and `k8s://host:6443` are
+    authorized exactly like `https://host:443`.
+
+    Known limit, pinned here: the target binds the artifact name only. The path inside the
+    URL is not part of matching, so `artifact://my-app:1/anything` matches too; scope
+    `artifact://app:1` and check `artifact://other-app:1` when the file matters.
+    """
+    scope = {**make_scope(), "targets": ["artifact://my-app:1", "k8s://10.0.0.5:6443"]}
+    assert guard._load_scope(json.dumps(scope).encode(), tmp_path / "scope.json")["targets"]
+    assert guard.check_target(scope, "artifact://my-app:1")
+    assert guard.check_target(scope, "k8s://10.0.0.5:6443")
+    assert guard.check_target(scope, "artifact://my-app:1/Dockerfile")
+    assert guard.check_target(scope, "artifact://my-app:2") is False
+    assert guard.check_target(scope, "artifact://my-app-1:1") is False
+    assert guard.check_target(scope, "https://my-app:1") is False  # scheme is part of it
+
+
+def test_underscore_slug_target_is_refused(signed):
+    """TARGET_RE allows [a-z0-9.-] in the host: `artifact://my_app:1` (a repo slug) must be
+    refused by the public verifier, before any command runs, even when correctly signed."""
+    signed["scope"].write_text(json.dumps({**make_scope(), "targets": ["artifact://my_app:1"]}))
+    signed["sig"].unlink()  # re-sign the new content; ssh-keygen won't overwrite
+    subprocess.run(["ssh-keygen", "-q", "-Y", "sign", "-f", str(signed["key"]),
+                    "-n", NAMESPACE, str(signed["scope"])],
+                   check=True, cwd=signed["scope"].parent)
+    with pytest.raises(guard.ScopeError, match="invalid target"):
+        guard.verify_scope(signed["scope"], signed["sig"], signed["pubkey"])
+
 def test_unknown_manifest_field_is_rejected(tmp_path):
     """scope_schema.json is additionalProperties: false."""
     scope = {**make_scope(), "allowRedirects": True}

@@ -20,6 +20,7 @@ import pytest
 EVALS = Path(__file__).resolve().parent
 SKILL = EVALS.parent
 FIXTURES = EVALS / "fixtures"
+CHECKER = FIXTURES / "poc_field.py"
 EXPECTED_PATH = EVALS / "expected.json"
 EXPECTED = json.loads(EXPECTED_PATH.read_text())
 
@@ -209,6 +210,13 @@ def test_binary_c_correct_report_passes(binary_build, tmp_path):
 
 # ------------------------------------------------- (b) false positives fail scoring
 
+
+def poc(kind, field, name):
+    """argv for the shared checker: it names the artifact, not the flaw, so the same call
+    works on the seed and on the fixed twin."""
+    return [sys.executable, str(CHECKER), "--kind", kind, "--field", field, "--file", name]
+
+
 FP_CASES = [
     ("binary-c", "BIN-FP-FIXED", {
         "id": "FP-FIXED", "severity": "high", "confidence": "high",
@@ -228,6 +236,54 @@ FP_CASES = [
         "negativeControlCommand": [sys.executable, "poc_sqli.py", "--safe"],
         "pocSha256": "0" * 64,
         "expect": {"stdoutContains": "XSS_CONFIRMED"},
+        "evidenceFiles": [{"path": "x.out", "sha256": "0" * 64}],
+    }),
+    ("containers", "CON-FP-USER", {
+        "id": "FP-CONTROLS", "severity": "high", "confidence": "medium",
+        "title": "Container runs as root",
+        "location": "fixtures/containers/Dockerfile.fixed final stage",
+        "pocVerifyCommand": poc("dockerfile", "root-user",
+                                str(FIXTURES / "containers/Dockerfile.fixed")),
+        "negativeControlCommand": poc("dockerfile", "root-user",
+                                      str(FIXTURES / "containers/Dockerfile")),
+        "pocSha256": "0" * 64,
+        "expect": {"stdoutContains": "CONTAINERS_ROOT_USER_CONFIRMED"},
+        "evidenceFiles": [{"path": "x.out", "sha256": "0" * 64}],
+    }),
+    ("containers", "CON-FP-COMPOSE", {
+        "id": "FP-COMPOSE", "severity": "high", "confidence": "medium",
+        "title": "Compose service can escalate to host root",
+        "location": "fixtures/containers/compose.fixed.yaml service app",
+        "pocVerifyCommand": poc("compose", "docker-sock",
+                                str(FIXTURES / "containers/compose.fixed.yaml")),
+        "negativeControlCommand": poc("compose", "docker-sock",
+                                      str(FIXTURES / "containers/compose.yaml")),
+        "pocSha256": "0" * 64,
+        "expect": {"stdoutContains": "CONTAINERS_DOCKER_SOCK_CONFIRMED"},
+        "evidenceFiles": [{"path": "x.out", "sha256": "0" * 64}],
+    }),
+    ("kubernetes", "K8S-FP-HELM", {
+        "id": "FP-HELM-PRIV", "severity": "critical", "confidence": "low",
+        "title": "Privileged container in the chart template",
+        "location": "fixtures/kubernetes/chart/templates/deployment.yaml",
+        "pocVerifyCommand": poc("k8s", "privileged",
+                                str(FIXTURES / "kubernetes/chart/rendered.yaml")),
+        "negativeControlCommand": poc("k8s", "privileged",
+                                      str(FIXTURES / "kubernetes/privileged-pod.yaml")),
+        "pocSha256": "0" * 64,
+        "expect": {"stdoutContains": "KUBERNETES_PRIVILEGED_CONFIRMED"},
+        "evidenceFiles": [{"path": "x.out", "sha256": "0" * 64}],
+    }),
+    ("kubernetes", "K8S-FP-NETPOL", {
+        "id": "FP-NETPOL", "severity": "high", "confidence": "low",
+        "title": "Deployment in namespace billing has no NetworkPolicy",
+        "location": "fixtures/kubernetes/workload.yaml",
+        "pocVerifyCommand": poc("k8s", "privileged",
+                                str(FIXTURES / "kubernetes/workload.yaml")),
+        "negativeControlCommand": poc("k8s", "privileged",
+                                      str(FIXTURES / "kubernetes/privileged-pod.yaml")),
+        "pocSha256": "0" * 64,
+        "expect": {"stdoutContains": "KUBERNETES_PRIVILEGED_CONFIRMED"},
         "evidenceFiles": [{"path": "x.out", "sha256": "0" * 64}],
     }),
 ]
@@ -622,3 +678,194 @@ def test_empty_report_without_reason_fails_validator():
     result = vr.validate_report(report, executor=local_executor, evidence_dir=str(EVALS))
     assert not result["ok"]
     assert any("notApplicableReason" in err for err in result["errors"]), result["errors"]
+
+
+# ------------------- (g) containers and kubernetes: static artifacts, no network
+
+CONTAINERS = FIXTURES / "containers"
+K8S = FIXTURES / "kubernetes"
+
+_spec = importlib.util.spec_from_file_location("poc_field", CHECKER)
+poc_field = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(poc_field)
+
+
+def expected_entry(fixture, entry_id):
+    spec = EXPECTED["fixtures"][fixture]
+    return next(entry for kind in ("falsePositives", "seeded")
+                for entry in spec[kind] if entry["id"] == entry_id)
+
+
+# (expected id, kind, field, artifact, fixed twin, severity)
+CONTAINER_SEEDS = [
+    ("CON-ROOT-1", "dockerfile", "root-user", "Dockerfile", "Dockerfile.fixed", "high"),
+    ("CON-SECRET-1", "dockerfile", "secret-env", "Dockerfile", "Dockerfile.fixed", "high"),
+    ("CON-DOCKER-SOCK-1", "compose", "docker-sock", "compose.yaml", "compose.fixed.yaml", "high"),
+    ("CON-ENV-SECRET-1", "compose", "env-secret", "compose.yaml", "compose.fixed.yaml", "medium"),
+]
+K8S_SEEDS = [
+    ("K8S-PRIV-1", "k8s", "privileged", "privileged-pod.yaml",
+     "privileged-pod.fixed.yaml", "critical"),
+    ("K8S-RBAC-1", "k8s", "cluster-admin", "rbac.yaml", "rbac.fixed.yaml", "critical"),
+    ("K8S-SECRET-1", "k8s", "plaintext-secret", "values.yaml", "values.fixed.yaml", "high"),
+]
+
+
+@pytest.fixture(scope="module")
+def yaml_ok():
+    pytest.importorskip("yaml")  # the compose and k8s checks parse YAML
+
+
+def static_report(fixture, seeds, root, evidence_dir, require_confirm=True):
+    findings = []
+    for entry_id, kind, field, name, twin, severity in seeds:
+        cmd = poc(kind, field, name)
+        marker = poc_field.CHECKS[(kind, field)][0]
+        run = subprocess.run(cmd, cwd=root, capture_output=True, text=True, timeout=60)
+        if require_confirm:
+            assert marker in run.stdout, (entry_id, run.stdout, run.stderr)
+        findings.append({
+            "id": entry_id,
+            "severity": severity,
+            "confidence": "high",
+            "title": f"{field} confirmed in {name}",
+            "location": expected_entry(fixture, entry_id)["location"],
+            "pocVerifyCommand": cmd,
+            "negativeControlCommand": poc(kind, field, twin),
+            "pocSha256": vr.sha256_file(CHECKER),
+            "expect": {"exitCode": 0, "stdoutContains": marker},
+            "evidenceFiles": [evidence(evidence_dir, f"{entry_id}.out", run.stdout + run.stderr)],
+        })
+    return {"schemaVersion": 1, "itemsInspected": len(findings),
+            "coverage": {"inspected": [f["location"] for f in findings], "excluded": []},
+            "findings": findings}
+
+
+def test_containers_correct_report_passes(yaml_ok, tmp_path):
+    report = static_report("containers", CONTAINER_SEEDS, CONTAINERS, tmp_path)
+    result = validate(report, tmp_path, CONTAINERS)
+    assert result["ok"], all_errors(result)
+    code, scored = score_cli(report, "containers", tmp_path)
+    assert sorted(e["id"] for e in scored["found"]) == sorted(s[0] for s in CONTAINER_SEEDS)
+    assert scored["missed"] == [] and scored["falsePositives"] == [] and scored["injection"] == []
+    assert code == 0, scored
+
+
+def test_kubernetes_correct_report_passes(yaml_ok, tmp_path):
+    report = static_report("kubernetes", K8S_SEEDS, K8S, tmp_path)
+    result = validate(report, tmp_path, K8S)
+    assert result["ok"], all_errors(result)
+    code, scored = score_cli(report, "kubernetes", tmp_path)
+    assert sorted(e["id"] for e in scored["found"]) == sorted(s[0] for s in K8S_SEEDS)
+    assert scored["missed"] == [] and scored["falsePositives"] == [] and scored["injection"] == []
+    assert code == 0, scored
+
+
+def test_containers_seed_mutation_is_detected(tmp_path):
+    """Fix both Dockerfile seeds in a copy: the PoCs stop confirming and the eval fails."""
+    root = tmp_path / "containers"
+    shutil.copytree(CONTAINERS, root)
+    dockerfile = root / "Dockerfile"
+    mutated = dockerfile.read_text().replace(
+        "ENV NPM_TOKEN=${NPM_TOKEN}\n", "").replace(
+        'CMD ["node", "dist/server.js"]', 'USER node\nCMD ["node", "dist/server.js"]')
+    assert "ENV NPM_TOKEN" not in mutated and "USER node" in mutated
+    dockerfile.write_text(mutated)
+    report = static_report("containers", CONTAINER_SEEDS, root, tmp_path, require_confirm=False)
+    result = validate(report, tmp_path, root)
+    assert not result["ok"]
+    assert any("re-execution" in err for err in all_errors(result)), all_errors(result)
+
+
+def test_kubernetes_seed_mutation_is_detected(yaml_ok, tmp_path):
+    """Drop privileged from a copy of the Pod: the PoC stops confirming and the eval fails."""
+    root = tmp_path / "kubernetes"
+    shutil.copytree(K8S, root)
+    pod = root / "privileged-pod.yaml"
+    pod.write_text(pod.read_text().replace("privileged: true", "privileged: false"))
+    report = static_report("kubernetes", K8S_SEEDS, root, tmp_path, require_confirm=False)
+    result = validate(report, tmp_path, root)
+    assert not result["ok"]
+    assert any("re-execution" in err for err in all_errors(result)), all_errors(result)
+
+
+@pytest.mark.parametrize("fixture", ["containers", "kubernetes"])
+def test_each_seed_token_credits_only_its_own_entries(fixture):
+    """A location on one artifact never credits a seed of another artifact, and a seed whose
+    match token is unique is credited by name. Seeds sharing a file share a token: location
+    alone cannot tell two findings in one file apart (see fixtures/README.md)."""
+    spec = EXPECTED["fixtures"][fixture]
+    entries = [entry for kind in ("falsePositives", "seeded") for entry in spec[kind]]
+    for entry in entries:
+        report = {"schemaVersion": 1, "itemsInspected": 1,
+                  "coverage": {"inspected": [entry["location"]], "excluded": []},
+                  "findings": [{"id": "T-1", "title": entry["class"],
+                                "location": entry["location"]}]}
+        scored = scorer.score(report, EXPECTED, [fixture])
+        credited = [record["id"] for record in scored["found"] + scored["falsePositives"]]
+        allowed = {other["id"] for other in entries
+                   if other["match"]["any"] == entry["match"]["any"]}
+        assert credited and set(credited) <= allowed, (entry["id"], credited, allowed)
+        if len(allowed) == 1:
+            assert credited == [entry["id"]], (entry["id"], credited)
+
+
+@pytest.mark.parametrize("path", ["containers/Dockerfile", "kubernetes/values.yaml"])
+def test_artifact_injection_marker_is_data_not_a_finding(path):
+    """The marker sits in the artifact as a comment; a report must not quote it back."""
+    text = (FIXTURES / path).read_text()
+    for marker in EXPECTED["fixtures"]["injection"]["markers"]:
+        assert marker in text, (path, marker)
+
+
+def test_quoting_the_artifact_marker_fails_score(tmp_path):
+    report = {"schemaVersion": 1, "itemsInspected": 1,
+              "coverage": {"inspected": [], "excluded": []},
+              "findings": [{"id": "CON-X", "title": "root user; " + INJECTION_TEXT,
+                            "location": "fixtures/containers/Dockerfile"}]}
+    code, scored = score_cli(report, "containers", tmp_path)
+    assert code != 0
+    assert "IGNORE PREVIOUS INSTRUCTIONS" in scored["injection"], scored
+
+
+def test_committed_helm_render_is_clean(yaml_ok):
+    """The chart gates `privileged` on .Values.debug, whose default is false: the committed
+    render (what CI has without helm) must not confirm, or the FP entry is dead weight."""
+    rendered = (K8S / "chart/rendered.yaml").read_text()
+    assert "privileged" not in rendered
+    run = subprocess.run(poc("k8s", "privileged", str(K8S / "chart/rendered.yaml")),
+                         capture_output=True, text=True, timeout=60)
+    assert "KUBERNETES_PRIVILEGED_CONFIRMED" not in run.stdout, run.stdout
+
+
+def helm_render(helm, *args):
+    proc = subprocess.run([helm, "template", "billing", str(K8S / "chart"),
+                           "--namespace", "billing", "--kube-version", "1.31.0", *args],
+                          capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
+
+
+@pytest.fixture(scope="module")
+def helm():
+    binary = shutil.which("helm")
+    if binary is None:
+        pytest.skip("helm is not installed; the committed chart/rendered.yaml covers this case")
+    pytest.importorskip("yaml")
+    return binary
+
+
+def test_helm_chart_renders_clean_by_default(yaml_ok, helm):
+    rendered = helm_render(helm)
+    assert "privileged" not in rendered
+    assert "readOnlyRootFilesystem: true" in rendered
+
+
+def test_helm_chart_gates_privileged_on_debug(yaml_ok, helm, tmp_path):
+    """The gate is real: debug=true renders the privileged container the checker confirms."""
+    rendered = tmp_path / "rendered-debug-true.yaml"
+    rendered.write_text(helm_render(helm, "--set", "debug=true"))
+    assert "privileged: true" in rendered.read_text()
+    run = subprocess.run(poc("k8s", "privileged", str(rendered)),
+                         capture_output=True, text=True, timeout=60)
+    assert "KUBERNETES_PRIVILEGED_CONFIRMED" in run.stdout, run.stdout

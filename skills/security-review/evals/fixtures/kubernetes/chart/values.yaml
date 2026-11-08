@@ -1,0 +1,6 @@
+replicaCount: 1
+image:
+  repository: registry.example.com/billing-api
+  tag: "1.4.0"
+# Debug pods are only for break-glass work: the chart must render a hardened pod when false.
+debug: false

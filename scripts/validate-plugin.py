@@ -280,7 +280,8 @@ def check_references(plugin_json: Path, marketplace_json: Path) -> list[str]:
     desc = plugin_data.get("description", "")
     for skill_name in ["deep-clean", "doc-audit", "guided-build", "icon-search", "image",
                        "music-search", "pr-opener", "refactor", "screencapture",
-                       "security-review", "security-review-binary-c", "security-review-web-api",
+                       "security-review", "security-review-binary-c", "security-review-containers",
+                       "security-review-kubernetes", "security-review-web-api",
                        "tech-blog-post"]:
         if re.search(rf"(?<![\w-]){re.escape(skill_name)}(?![\w-])", desc):
             skill_path = skills_dir / skill_name

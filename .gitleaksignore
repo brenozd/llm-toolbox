@@ -1,0 +1,3 @@
+# Intentional fake secrets: seeded flaws in security-review eval fixtures
+skills/security-review/evals/fixtures/containers/compose.yaml:generic-api-key:19
+skills/security-review/evals/fixtures/kubernetes/values.yaml:generic-api-key:12

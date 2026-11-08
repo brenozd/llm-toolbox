@@ -1,0 +1,17 @@
+# Fixed twin of ../Dockerfile: root builder stage, non-root final stage, no secret in a layer.
+FROM node:20.11.1-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+ARG TOKEN_URL=https://auth.example.com/oauth/token
+ENV TOKEN_URL=${TOKEN_URL}
+RUN --mount=type=secret,id=npmrc npm ci
+COPY . .
+RUN npm run build
+
+FROM node:20.11.1-bookworm-slim
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/node_modules ./node_modules
+USER node
+EXPOSE 3000
+CMD ["node", "dist/server.js"]

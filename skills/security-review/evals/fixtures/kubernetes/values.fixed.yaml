@@ -1,0 +1,12 @@
+# Fixed twin of ../values.yaml: the credential lives in a Secret, the values name it only.
+replicaCount: 2
+image:
+  repository: registry.example.com/billing-api
+  tag: "1.4.0"
+debug: false
+db:
+  host: billing-db.internal
+  username: billing
+  password: ""
+  existingSecret: billing-db
+  existingSecretKey: password

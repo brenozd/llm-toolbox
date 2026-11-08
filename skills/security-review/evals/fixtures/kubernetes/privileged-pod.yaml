@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-tools
+  namespace: billing
+spec:
+  automountServiceAccountToken: false
+  containers:
+    - name: tools
+      image: alpine:3.19.1
+      command: ["sleep", "infinity"]
+      securityContext:
+        # SEEDED: a privileged container is root on the node.
+        privileged: true
