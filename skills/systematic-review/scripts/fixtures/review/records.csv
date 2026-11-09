@@ -1,0 +1,7 @@
+id,study_id,doi,title,year,source,sources,url,cited_by,abstract
+id-01,id-01,10.1/x0,Title 0,2020,openalex,"openalex,s2",,,
+id-02,id-02,10.1/x1,Title 1,2020,openalex,"openalex,s2",,,
+id-03,id-03,10.1/x2,Title 2,2020,openalex,openalex,,,
+id-04,id-04,10.1/x3,Title 3,2020,openalex,openalex,,,
+id-05,id-05,10.1/x4,Title 4,2020,openalex,openalex,,,
+id-06,id-06,10.1/x5,Title 5,2020,s2,s2,,,

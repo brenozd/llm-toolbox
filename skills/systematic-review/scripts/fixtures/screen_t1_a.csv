@@ -1,0 +1,6 @@
+id,decision,reason
+id-01,include,
+id-02,include,
+id-03,exclude,not graphene
+id-04,include,
+id-05,exclude,opinion piece

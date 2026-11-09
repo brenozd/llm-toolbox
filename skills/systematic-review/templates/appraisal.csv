@@ -1,0 +1,7 @@
+study_id,study_type,criteria_source,q1,q2,q3,q4,q5,q6,q7,q8,overall,notes,appraised_by,appraised_on
+# Academic (Kitchenham-style): q1 rationale, q2 aims stated, q3 context described, q4 design justified,
+#   q5 data collection described, q6 analysis described, q7 threats to validity, q8 findings supported.
+# Grey literature (Garousi-style): q1 authority, q2 accuracy, q3 date/currency, q4 objectivity, q5.. free.
+# criteria_source: the publication the checklist wording was copied from (do not paraphrase).
+# Values: yes | partial | no | n/a. overall: high | medium | low.
+# Appraised by a researcher other than the extractor; <n>% of rows re-appraised, discrepancies in disagreements.md.

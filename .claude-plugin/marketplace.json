@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "llm-toolbox",
   "description": "MCP servers and reusable Claude Code skills from llm-toolbox.",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "owner": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"
@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "llm-toolbox",
-      "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, security-review, security-review-binary-c, security-review-containers, security-review-kubernetes, security-review-web-api, svg-generator, tech-blog-post, ui-review, wiki-writing.",
+      "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, security-review, security-review-binary-c, security-review-containers, security-review-kubernetes, security-review-web-api, svg-generator, systematic-review, tech-blog-post, ui-review, wiki-writing.",
       "source": "./",
       "category": "productivity"
     }

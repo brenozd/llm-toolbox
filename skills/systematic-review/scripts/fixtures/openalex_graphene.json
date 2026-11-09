@@ -1,0 +1,290 @@
+{
+ "meta": {
+  "count": 824774
+ },
+ "results": [
+  {
+   "title": "Raman Spectrum of Graphene and Graphene Layers",
+   "display_name": "Raman Spectrum of Graphene and Graphene Layers",
+   "doi": "https://doi.org/10.1103/physrevlett.97.187401",
+   "publication_year": 2006,
+   "cited_by_count": 15208,
+   "abstract_inverted_index": {
+    "Graphene": [
+     0
+    ],
+    "is": [
+     1,
+     19,
+     78
+    ],
+    "the": [
+     2,
+     29,
+     51,
+     54
+    ],
+    "two-dimensional": [
+     3
+    ],
+    "building": [
+     4
+    ],
+    "block": [
+     5
+    ],
+    "for": [
+     6,
+     44
+    ],
+    "carbon": [
+     7
+    ],
+    "allotropes": [
+     8
+    ],
+    "of": [
+     9,
+     31,
+     48,
+     74
+    ],
+    "every": [
+     10
+    ],
+    "other": [
+     11
+    ],
+    "dimensionality.": [
+     12
+    ],
+    "We": [
+     13
+    ],
+    "show": [
+     14
+    ],
+    "that": [
+     15,
+     25
+    ],
+    "its": [
+     16,
+     22
+    ],
+    "electronic": [
+     17
+    ],
+    "structure": [
+     18
+    ],
+    "captured": [
+     20
+    ],
+    "in": [
+     21,
+     39,
+     53,
+     81
+    ],
+    "Raman": [
+     23,
+     61
+    ],
+    "spectrum": [
+     24
+    ],
+    "clearly": [
+     26
+    ],
+    "evolves": [
+     27
+    ],
+    "with": [
+     28
+    ],
+    "number": [
+     30,
+     47
+    ],
+    "layers.": [
+     32
+    ],
+    "The": [
+     33,
+     63
+    ],
+    "D": [
+     34
+    ],
+    "peak": [
+     35,
+     65
+    ],
+    "second": [
+     36
+    ],
+    "order": [
+     37
+    ],
+    "changes": [
+     38
+    ],
+    "shape,": [
+     40
+    ],
+    "width,": [
+     41
+    ],
+    "and": [
+     42
+    ],
+    "position": [
+     43
+    ],
+    "an": [
+     45
+    ],
+    "increasing": [
+     46
+    ],
+    "layers,": [
+     49,
+     76
+    ],
+    "reflecting": [
+     50
+    ],
+    "change": [
+     52
+    ],
+    "electron": [
+     55
+    ],
+    "bands": [
+     56
+    ],
+    "via": [
+     57
+    ],
+    "a": [
+     58
+    ],
+    "double": [
+     59
+    ],
+    "resonant": [
+     60
+    ],
+    "process.": [
+     62
+    ],
+    "G": [
+     64
+    ],
+    "slightly": [
+     66
+    ],
+    "down-shifts.": [
+     67
+    ],
+    "This": [
+     68
+    ],
+    "allows": [
+     69
+    ],
+    "unambiguous,": [
+     70
+    ],
+    "high-throughput,": [
+     71
+    ],
+    "nondestructive": [
+     72
+    ],
+    "identification": [
+     73
+    ],
+    "graphene": [
+     75
+    ],
+    "which": [
+     77
+    ],
+    "critically": [
+     79
+    ],
+    "lacking": [
+     80
+    ],
+    "this": [
+     82
+    ],
+    "emerging": [
+     83
+    ],
+    "research": [
+     84
+    ],
+    "area.": [
+     85
+    ]
+   },
+   "best_oa_location": {
+    "id": "pmh:oai:arXiv.org:cond-mat/0606284",
+    "doi": null,
+    "is_oa": true,
+    "landing_page_url": "http://arxiv.org/abs/cond-mat/0606284",
+    "pdf_url": "https://arxiv.org/pdf/cond-mat/0606284",
+    "source": {
+     "id": "https://openalex.org/S4306400194",
+     "display_name": "arXiv (Cornell University)",
+     "issn_l": "2331-8422",
+     "issn": [
+      "2331-8422"
+     ],
+     "is_oa": true,
+     "is_in_doaj": false,
+     "is_core": false,
+     "listed_in": [],
+     "host_organization": "https://openalex.org/I205783295",
+     "host_organization_name": "Cornell University",
+     "host_organization_lineage": [
+      "https://openalex.org/I205783295"
+     ],
+     "host_organization_lineage_names": [],
+     "type": "repository"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "text"
+   },
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "green",
+    "oa_url": "https://arxiv.org/pdf/cond-mat/0606284",
+    "any_repository_has_fulltext": true
+   }
+  },
+  {
+   "title": "Nanotoxicity of Graphene and Graphene Oxide",
+   "display_name": "Nanotoxicity of Graphene and Graphene Oxide",
+   "doi": "https://doi.org/10.1021/tx400385x",
+   "publication_year": 2014,
+   "cited_by_count": 901,
+   "abstract_inverted_index": null,
+   "best_oa_location": null,
+   "open_access": {
+    "is_oa": false,
+    "oa_status": "closed",
+    "oa_url": null,
+    "any_repository_has_fulltext": false
+   }
+  }
+ ]
+}

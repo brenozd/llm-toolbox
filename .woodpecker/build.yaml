@@ -107,6 +107,7 @@ steps:
       - python scripts/release.py check
       # docker and gcc tests skip themselves with an explicit reason on this bare image
       - python -m pytest -q skills/security-review
+      - python -m pytest -q skills/systematic-review
     when:
       - event: [push, manual]
         branch: master

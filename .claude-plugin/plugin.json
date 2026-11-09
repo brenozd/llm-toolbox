@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
-  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, security-review, security-review-binary-c, security-review-containers, security-review-kubernetes, security-review-web-api, svg-generator, storyboard-video, tech-blog-post, ui-review, wiki-writing.",
-  "version": "2.5.0",
+  "description": "Reusable Claude Code skills: code-tutor, distrobox, guided-build, icon-search, image, music-search, pr-opener, screencapture, security-review, security-review-binary-c, security-review-containers, security-review-kubernetes, security-review-web-api, svg-generator, storyboard-video, systematic-review, tech-blog-post, ui-review, wiki-writing.",
+  "version": "2.6.0",
   "author": {
     "name": "Breno Zanato Detomini",
     "email": "brenozd@gmail.com"

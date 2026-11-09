@@ -1,0 +1,32 @@
+{
+ "total": 824774,
+ "offset": 0,
+ "next": 2,
+ "data": [
+  {
+   "paperId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "externalIds": {
+    "DOI": "10.1103/PhysRevLett.97.187401",
+    "ArXiv": null
+   },
+   "title": "Raman Spectrum of Graphene and Graphene Layers",
+   "abstract": "We report the Raman spectrum of graphene.",
+   "year": 2006,
+   "citationCount": 15208,
+   "openAccessPdf": {
+    "url": "https://example.org/ram.pdf"
+   }
+  },
+  {
+   "paperId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "externalIds": {
+    "DOI": null
+   },
+   "title": "Graphene: a two-dimensional material",
+   "abstract": null,
+   "year": 2007,
+   "citationCount": 3,
+   "openAccessPdf": null
+  }
+ ]
+}

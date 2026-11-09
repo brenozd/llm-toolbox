@@ -1,7 +1,7 @@
 {
   "name": "llm-toolbox",
-  "description": "Reusable agent skills: code-tutor, distrobox, grilling, guided-build, icon-search, image, music-search, pr-opener, storyboard-video, screencapture, security-review, security-review-binary-c, security-review-containers, security-review-kubernetes, security-review-web-api, svg-generator, tech-blog-post, ui-review, wiki-writing.",
-  "version": "2.5.0",
+  "description": "Reusable agent skills: code-tutor, distrobox, grilling, guided-build, icon-search, image, music-search, pr-opener, storyboard-video, screencapture, security-review, security-review-binary-c, security-review-containers, security-review-kubernetes, security-review-web-api, svg-generator, systematic-review, tech-blog-post, ui-review, wiki-writing.",
+  "version": "2.6.0",
   "keywords": [
     "pi-package"
   ],

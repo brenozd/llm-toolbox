@@ -1,0 +1,27 @@
+{
+ "hitCount": 176566,
+ "resultList": {
+  "result": [
+   {
+    "id": "42953560",
+    "source": "MED",
+    "title": "Improved interfacial-bonding strength and electronic structure properties of graphene-reinforced Al composites by Cu coating.",
+    "doi": "10.1039/d6ra04391g",
+    "pubYear": "2026",
+    "citedByCount": 0,
+    "isOpenAccess": "Y",
+    "abstractText": "Cu-coated graphene-reinforced aluminum matrix composites (AMCs) are studied using first-principles calculations. Using Cu-coated graphene, the reinforced AMCs exhibit 1.5 times stronger interfacial bonding than the non-Cu-coated derivative due to hybridization between the 3d orbital of Cu and \u03c0 orbital of graphene. Our work provides atomic insight into improved interfacial-bonding strength and electronic structure properties of graphene-reinforced AMCs by Cu-coating."
+   },
+   {
+    "id": "42992450",
+    "source": "MED",
+    "title": "Coupling Plasma-Synthesized N-Doped Graphene With Ice Templated Porous Electrode for Enhanced Aluminum Battery Performance.",
+    "doi": "10.1002/smll.76627",
+    "pubYear": "2026",
+    "citedByCount": 0,
+    "isOpenAccess": "N",
+    "abstractText": "Rechargeable aluminum batteries are promising for next-generation energy storage owing to the low cost and abundance of aluminum. Graphene is an attractive cathode due to its high surface area and electrical conductivity, but its performance is limited by difficult production and sheet aggregation, which restrict electrolyte accessibility and ion transport. This study employs a plasma-enabled synthesis approach to produce both pristine graphene and nitrogen-doped graphene (N-graphene), followed by an ice templating strategy to directly construct a three-dimensional porous N-graphene electrode. The effects of nitrogen doping and porous electrode architecture are systematically investigated by comparing dense and porous electrodes. Nitrogen-doping increases the specific capacity by \u223c50%, from 36.24 to 54.4 mAh/g at a current density of 0.1 A/g. Furthermore, introducing porous structure provides an additional \u223c20% improvement, achieving a capacity of 65.5 mAh/g under the same conditions. This enhanced performance of porous electrode is attributed to its interconnected pores and partially aligned graphene sheets, which improve electrolyte accessibility and facilitate the adsorption and transport of AlCl<sub>4</sub> <sup>-</sup> anions. The robust porous structure of N-graphene ensures excellent cycling stability, with no noticeable capacity decay over 5000 cycles. Coupling nitrogen doping with porous electrode architecture provides an effective strategy to enhance graphene-based aluminum batteries."
+   }
+  ]
+ }
+}

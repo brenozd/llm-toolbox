@@ -1,0 +1,6 @@
+study_id,id,title,year,venue,authors,doi,url,study_type,population,intervention,comparison,outcome,context,key_findings,limitations,quotes,rq1,rq2,rq3,appraisal_flag,extracted_by,extracted_on
+# study_id is the key (records.csv study_id groups preprint/published reports of the same study).
+# One row per study. Unreadable/absent full text -> key_findings = "TBD: no full text" (never a guess).
+# quotes: verbatim snippet + page/section, used by the synthesis.
+# rq1/rq2/rq3: RQ ids this study bears on, "none" if none.
+# appraisal_flag: filled from appraisal.csv during synthesis, not at extraction time.

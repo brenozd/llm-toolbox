@@ -83,6 +83,7 @@ Local checkouts, manual skill symlinks, Gemini CLI, Cursor, Codex CLI, and the J
 | [`skills/security-review-web-api`](skills/security-review-web-api/) | HTTP/API review (curl, nuclei, sqlmap) with a PoC plus negative control per finding, emitted as a closed JSON report. |
 | [`skills/storyboard-video`](skills/storyboard-video/) | Workflow for the storyboard-video MCP: honest storyboard from the code, review stills, render, verify. |
 | [`skills/svg-generator`](skills/svg-generator/) | Hand-writes SVG markup in a write, render, self-evaluate, revise loop. |
+| [`skills/systematic-review`](skills/systematic-review/) | PRISMA-informed, LLM-assisted systematic literature review end to end: protocol, multi-source search, dedupe, two-pass screening with human arbitration, extraction, appraisal, snowballing, synthesis and a citation-verified report. |
 | [`skills/tech-blog-post`](skills/tech-blog-post/) | Writes a technical blog post (raw Markdown with frontmatter for Astro/Hugo) from something you actually did, in a direct, opinionated senior-dev voice. |
 | [`skills/ui-review`](skills/ui-review/) | Full multi-agent web UI review (UX, visual, a11y, responsiveness) consolidated into one prioritized P0-P3 report. |
 | [`skills/wiki-writing`](skills/wiki-writing/) | Writes or audits dense, verified technical wiki pages (reference, explanation, runbook, ADR, postmortem) with a numbers-consistency check and an independent review. |
